@@ -1,0 +1,14 @@
+/Users/Bella/StudyAssist/bin/Debug/net10.0/StudyAssist
+/Users/Bella/StudyAssist/bin/Debug/net10.0/StudyAssist.deps.json
+/Users/Bella/StudyAssist/bin/Debug/net10.0/StudyAssist.runtimeconfig.json
+/Users/Bella/StudyAssist/bin/Debug/net10.0/StudyAssist.dll
+/Users/Bella/StudyAssist/bin/Debug/net10.0/StudyAssist.pdb
+/Users/Bella/StudyAssist/obj/Debug/net10.0/StudyAssist.GeneratedMSBuildEditorConfig.editorconfig
+/Users/Bella/StudyAssist/obj/Debug/net10.0/StudyAssist.AssemblyInfoInputs.cache
+/Users/Bella/StudyAssist/obj/Debug/net10.0/StudyAssist.AssemblyInfo.cs
+/Users/Bella/StudyAssist/obj/Debug/net10.0/StudyAssist.csproj.CoreCompileInputs.cache
+/Users/Bella/StudyAssist/obj/Debug/net10.0/StudyAssist.dll
+/Users/Bella/StudyAssist/obj/Debug/net10.0/refint/StudyAssist.dll
+/Users/Bella/StudyAssist/obj/Debug/net10.0/StudyAssist.pdb
+/Users/Bella/StudyAssist/obj/Debug/net10.0/StudyAssist.genruntimeconfig.cache
+/Users/Bella/StudyAssist/obj/Debug/net10.0/ref/StudyAssist.dll
