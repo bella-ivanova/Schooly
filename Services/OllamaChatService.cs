@@ -69,24 +69,38 @@ public class OllamaChatService
         _messages.Add(new ChatMessage
         {
             Role = "assistant",
-            Content = assistantReply
+            Content = assistantReply ?? ""
         });
 
-        return assistantReply;
+        return assistantReply ?? "";
     }
 
-    public async Task StreamMessageAsync(string userMessage)
+    // historyMessage is stored in conversation history.
+    // apiMessage (if provided) is what actually gets sent to the model — used by RAG to inject context.
+    public async Task StreamMessageAsync(string historyMessage, string? apiMessage = null)
     {
     _messages.Add(new ChatMessage
     {
         Role = "user",
-        Content = userMessage
+        Content = historyMessage
     });
+
+    // Build the message list for the API: replace the last user message with apiMessage if provided
+    List<ChatMessage> apiMessages;
+    if (apiMessage != null)
+    {
+        apiMessages = [.._messages.Take(_messages.Count - 1),
+            new ChatMessage { Role = "user", Content = apiMessage }];
+    }
+    else
+    {
+        apiMessages = _messages;
+    }
 
     var requestBody = new
     {
         model = _model,
-        messages = _messages,
+        messages = apiMessages,
         options = new
         {
             temperature = Temperature
@@ -113,9 +127,9 @@ public class OllamaChatService
 
     StringBuilder fullResponse = new StringBuilder();
 
-    while (!reader.EndOfStream)
+    string? line;
+    while ((line = await reader.ReadLineAsync()) != null)
     {
-        var line = await reader.ReadLineAsync();
 
         if (string.IsNullOrWhiteSpace(line))
             continue;

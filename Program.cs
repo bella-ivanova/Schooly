@@ -32,5 +32,5 @@ while (true)
         break;
 
     Console.Write("AI: ");
-    await chat.StreamMessageAsync(input);
+    await chat.StreamMessageAsync(input ?? "");
 }

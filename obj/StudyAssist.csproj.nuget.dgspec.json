@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/Users/Bella/StudyAssist/StudyAssist.csproj": {}
+    "/Users/Bella/Documents/StudyAssist/StudyAssist.csproj": {}
   },
   "projects": {
-    "/Users/Bella/StudyAssist/StudyAssist.csproj": {
+    "/Users/Bella/Documents/StudyAssist/StudyAssist.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/Bella/StudyAssist/StudyAssist.csproj",
+        "projectUniqueName": "/Users/Bella/Documents/StudyAssist/StudyAssist.csproj",
         "projectName": "StudyAssist",
-        "projectPath": "/Users/Bella/StudyAssist/StudyAssist.csproj",
+        "projectPath": "/Users/Bella/Documents/StudyAssist/StudyAssist.csproj",
         "packagesPath": "/Users/Bella/.nuget/packages/",
-        "outputPath": "/Users/Bella/StudyAssist/obj/",
+        "outputPath": "/Users/Bella/Documents/StudyAssist/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/Users/Bella/.nuget/NuGet/NuGet.Config"
@@ -43,6 +43,16 @@
       "frameworks": {
         "net10.0": {
           "targetAlias": "net10.0",
+          "dependencies": {
+            "Tesseract": {
+              "target": "Package",
+              "version": "[5.2.0, )"
+            },
+            "UglyToad.PdfPig": {
+              "target": "Package",
+              "version": "[1.7.0-custom-5, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
