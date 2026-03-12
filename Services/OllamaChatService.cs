@@ -77,12 +77,12 @@ public class OllamaChatService
 
     // historyMessage is stored in conversation history.
     // apiMessage (if provided) is what actually gets sent to the model — used by RAG to inject context.
-    public async Task StreamMessageAsync(string historyMessage, string? apiMessage = null)
+    public async Task StreamMessageAsync(string newUserMessage, string? apiMessage = null)
     {
     _messages.Add(new ChatMessage
     {
         Role = "user",
-        Content = historyMessage
+        Content = newUserMessage
     });
 
     // Build the message list for the API: replace the last user message with apiMessage if provided

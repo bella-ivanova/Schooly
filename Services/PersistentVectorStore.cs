@@ -22,19 +22,30 @@ public class PersistentVectorStore
 
     public void SetEmbeddingModel(string model) => EmbeddingModel = model;
 
-    public void Add(string text, float[] embedding, string subject = "")
+    public void Add(string text, float[] embedding, string subject = "", string sourceFile = "")
     {
         _store.Add(new StoredChunk
         {
             Text = text,
             Embedding = embedding,
-            Subject = subject
+            Subject = subject,
+            SourceFile = sourceFile
         });
     }
 
     public bool IsFileIngested(string fileName) => _ingestedFiles.Contains(fileName);
 
     public void AddIngestedFile(string fileName) => _ingestedFiles.Add(fileName);
+
+    // Removes all chunks belonging to fileKey and removes it from the ingested list.
+    // Returns the number of chunks removed.
+    public int DeleteFile(string fileKey)
+    {
+        var before = _store.Count;
+        _store.RemoveAll(c => c.SourceFile == fileKey);
+        _ingestedFiles.Remove(fileKey);
+        return before - _store.Count;
+    }
 
     public List<(string Text, string Subject)> Query(float[] queryEmbedding, int topK = 5, float minScore = 0.1f)
     {
@@ -126,4 +137,5 @@ public class StoredChunk
     public string Text { get; set; } = "";
     public float[] Embedding { get; set; } = Array.Empty<float>();
     public string Subject { get; set; } = "";
+    public string SourceFile { get; set; } = "";
 }

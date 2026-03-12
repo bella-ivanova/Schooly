@@ -118,7 +118,7 @@ public class RAGService
                 }
 
                 for (int i = 0; i < chunks.Count; i++)
-                    store.Add(chunks[i], embeddings[i], subject);
+                    store.Add(chunks[i], embeddings[i], subject, fileKey);
 
                 store.AddIngestedFile(fileKey);
                 totalIngested++;
@@ -164,7 +164,7 @@ public class RAGService
             }
 
             for (int i = 0; i < chunks.Count; i++)
-                store.Add(chunks[i], embeddings[i]);
+                store.Add(chunks[i], embeddings[i], sourceFile: fileKey);
 
             store.AddIngestedFile(fileKey);
             totalIngested++;
@@ -203,6 +203,39 @@ public class RAGService
 
     // #12 — clear temp PDFs (called by /clear in Program.cs)
     public void ClearTemporaryChunks() => _temporaryChunks.Clear();
+
+    // Returns the list of ingested file keys for a given grade, or null if grade not loaded.
+    public IReadOnlyCollection<string>? GetIngestedFiles(int grade) =>
+        _gradeStores.TryGetValue(grade, out var store) ? store.IngestedFiles : null;
+
+    // Deletes a specific file's chunks from a grade store and saves.
+    // Returns false if the grade store doesn't exist or the file wasn't found.
+    public bool DeleteGradeFile(int grade, string fileKey)
+    {
+        var dbPath = Path.Combine("Database", "DataJson", $"Grade{grade}.json");
+        if (!File.Exists(dbPath))
+        {
+            Console.WriteLine($"No data found for Grade {grade}.");
+            return false;
+        }
+
+        // Load the store if not already in memory
+        if (!_gradeStores.ContainsKey(grade))
+            _gradeStores[grade] = new PersistentVectorStore(dbPath);
+
+        var store = _gradeStores[grade];
+        var removed = store.DeleteFile(fileKey);
+
+        if (removed == 0 && !store.IngestedFiles.Contains(fileKey))
+        {
+            Console.WriteLine($"File '{fileKey}' not found in Grade {grade}.");
+            return false;
+        }
+
+        store.Save();
+        Console.WriteLine($"Deleted '{fileKey}' from Grade {grade} ({removed} chunks removed).");
+        return true;
+    }
 
     public async Task Ask(string question)
     {
