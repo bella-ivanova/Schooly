@@ -10,7 +10,7 @@ public static class PDFLoader
 {
     // Converts every page of a PDF into PNG image bytes.
     // Each item in the returned list is one page as a PNG byte array.
-    public static List<byte[]> GetPageImages(string pdfPath, int dpi = 150)
+    public static List<byte[]> GetPageImages(string pdfPath, int dpi = 96)
     {
         if (!File.Exists(pdfPath))
             throw new FileNotFoundException(pdfPath);
