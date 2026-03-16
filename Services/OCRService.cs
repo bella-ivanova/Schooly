@@ -11,7 +11,7 @@ public class OCRService
     public OCRService(string model)
     {
         _httpClient = new HttpClient();
-        _httpClient.Timeout = TimeSpan.FromMinutes(5);
+        _httpClient.Timeout = Timeout.InfiniteTimeSpan;
         _model = model;
     }
 

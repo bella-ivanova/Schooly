@@ -13,7 +13,7 @@ public class EmbeddingService
 
     public EmbeddingService(string model = "nomic-embed-text")
     {
-        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        _httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
         _model = model;
     }
 
