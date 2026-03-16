@@ -3,17 +3,27 @@ using StudyAssistant.Services;
 Console.WriteLine("=== Study Assistant ===\n");
 
 // ── Model setup ────────────────────────────────────────────────
-Console.Write("Enter model name (default: glm5): ");
+Console.Write("Enter model name (default: glm-5:cloud): ");
 var modelInput = Console.ReadLine();
-var model = string.IsNullOrWhiteSpace(modelInput) ? "glm5" : modelInput;
+var model = string.IsNullOrWhiteSpace(modelInput) ? "glm-5:cloud" : modelInput;
 
 Console.Write("Enter embedding model (default: nomic-embed-text): ");
 var embedInput = Console.ReadLine();
 var embedModel = string.IsNullOrWhiteSpace(embedInput) ? "nomic-embed-text" : embedInput;
 
+Console.Write("Enter OCR vision model (default: minicpm-v, press Enter to skip OCR): ");
+var ocrInput = Console.ReadLine()?.Trim();
+OCRService? ocr = null;
+if (ocrInput == null || ocrInput == "" || !string.IsNullOrWhiteSpace(ocrInput))
+{
+    var ocrModel = string.IsNullOrWhiteSpace(ocrInput) ? "minicpm-v" : ocrInput;
+    ocr = new OCRService(ocrModel);
+    Console.WriteLine($"OCR enabled with model: {ocrModel}");
+}
+
 var chat = new OllamaChatService(model);
 var embedding = new EmbeddingService(embedModel);
-var rag = new RAGService(chat, embedding);
+var rag = new RAGService(chat, embedding, ocr);
 
 // ── Mode selection ─────────────────────────────────────────────
 Console.WriteLine("\nSelect mode:");

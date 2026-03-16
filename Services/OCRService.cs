@@ -1,37 +1,61 @@
-using System;
-using Tesseract;
-using System.IO;
+using System.Text;
+using System.Text.Json;
 
-namespace StudyAssistant.Services
+namespace StudyAssistant.Services;
+
+public class OCRService
 {
-    public class OCRService
+    private readonly HttpClient _httpClient;
+    private readonly string _model;
+
+    public OCRService(string model)
     {
-        private readonly string _tessDataPath;
+        _httpClient = new HttpClient();
+        _httpClient.Timeout = TimeSpan.FromSeconds(120);
+        _model = model;
+    }
 
-        public OCRService(string tessDataPath = "tessdata")
+    public async Task<string> ReadPageAsync(byte[] imageBytes)
+    {
+        var base64Image = Convert.ToBase64String(imageBytes);
+
+        var requestBody = new
+    {
+    model = _model,
+    messages = new[]
+    {
+        new
         {
-            _tessDataPath = tessDataPath;
+            role = "user",
+            content = "Extract all text exactly as written, including all math formulas and symbols.",
+            images = new[] { base64Image }  
+        }
+    },
+    stream = false
+    };
+
+        var content = new StringContent(
+            JsonSerializer.Serialize(requestBody),
+            Encoding.UTF8,
+            "application/json"
+        );
+
+        var response = await _httpClient.PostAsync(
+            "http://localhost:11434/api/chat",
+            content
+        );
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            throw new Exception($"OCR API Error: {response.StatusCode} - {errorContent}");
         }
 
-        // Extract text from an image file
-        public string ExtractText(string imagePath)
-        {
-            if (!File.Exists(imagePath))
-                throw new Exception($"Image file not found: {imagePath}");
-
-            try
-            {
-                using var engine = new TesseractEngine(_tessDataPath, "eng", EngineMode.Default);
-                using var img = Pix.LoadFromFile(imagePath);
-                using var page = engine.Process(img);
-                var text = page.GetText();
-                return text.Trim();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"OCR error: {ex.Message}");
-                return "";
-            }
-        }
+        var responseJson = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(responseJson);
+        return doc.RootElement
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString() ?? "";
     }
 }

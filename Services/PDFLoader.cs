@@ -1,26 +1,66 @@
 using System.Text;
 using System.IO;
 using System.Text.RegularExpressions;
-using UglyToad.PdfPig;
+using PDFtoImage;
+using SkiaSharp;
 
 namespace StudyAssistant.Services;
 
 public static class PDFLoader
 {
+    // Converts every page of a PDF into PNG image bytes.
+    // Each item in the returned list is one page as a PNG byte array.
+    public static List<byte[]> GetPageImages(string pdfPath, int dpi = 150)
+    {
+        if (!File.Exists(pdfPath))
+            throw new FileNotFoundException(pdfPath);
+
+        var pages = new List<byte[]>();
+        var pdfBytes = File.ReadAllBytes(pdfPath);
+
+        foreach (var skBitmap in Conversion.ToImages(pdfBytes, options: new RenderOptions(Dpi: dpi)))
+        {
+            using var image = SKImage.FromBitmap(skBitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+            pages.Add(data.ToArray());
+            skBitmap.Dispose();
+        }
+
+        return pages;
+    }
+
+    // OCR a full PDF using a vision model — one page at a time.
+    // Returns the full text of the document, pages separated by double newline.
+    public static async Task<string> LoadTextWithOcrAsync(string pdfPath, OCRService ocrService)
+    {
+        var pageImages = GetPageImages(pdfPath);
+        var sb = new StringBuilder();
+
+        for (int i = 0; i < pageImages.Count; i++)
+        {
+            Console.Write($"\r  OCR page {i + 1}/{pageImages.Count}...");
+            var pageText = await ocrService.ReadPageAsync(pageImages[i]);
+            sb.Append(pageText);
+            sb.Append("\n\n");
+        }
+
+        Console.WriteLine();
+        return sb.ToString();
+    }
+
+    // Original PdfPig text extraction — kept as fallback for simple text-only PDFs.
     public static string LoadText(string pdfPath)
     {
         if (!File.Exists(pdfPath))
             throw new FileNotFoundException(pdfPath);
 
-        StringBuilder sb = new StringBuilder();
+        var sb = new StringBuilder();
 
-        using (PdfDocument document = PdfDocument.Open(pdfPath))
+        using var document = UglyToad.PdfPig.PdfDocument.Open(pdfPath);
+        foreach (var page in document.GetPages())
         {
-            foreach (var page in document.GetPages())
-            {
-                sb.Append(page.Text);
-                sb.Append("\n\n"); // preserve paragraph break between pages
-            }
+            sb.Append(page.Text);
+            sb.Append("\n\n");
         }
 
         return sb.ToString();

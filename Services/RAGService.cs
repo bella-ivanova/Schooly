@@ -7,16 +7,18 @@ public class RAGService
     private readonly Dictionary<int, PersistentVectorStore> _gradeStores = new();
     private readonly EmbeddingService _embeddingService;
     private readonly OllamaChatService _chat;
+    private readonly OCRService? _ocr;
 
     // In-memory store for temporary PDFs uploaded during current chat
     private readonly List<(string Text, float[] Embedding, string Subject)> _temporaryChunks = new();
 
     private int _currentGrade = 0;
 
-    public RAGService(OllamaChatService chat, EmbeddingService embeddingService)
+    public RAGService(OllamaChatService chat, EmbeddingService embeddingService, OCRService? ocr = null)
     {
         _chat = chat;
         _embeddingService = embeddingService;
+        _ocr = ocr;
     }
 
     // Load grade knowledge from Database/DataJson/Grade{g}.json
@@ -94,7 +96,9 @@ public class RAGService
                 }
 
                 Console.WriteLine($"Ingesting [{subject}] {Path.GetFileName(pdfPath)}...");
-                var text = PDFLoader.LoadText(pdfPath);
+                var text = _ocr != null
+                    ? await PDFLoader.LoadTextWithOcrAsync(pdfPath, _ocr)
+                    : PDFLoader.LoadText(pdfPath);
                 text = PDFLoader.CleanText(text);
                 var chunks = PDFLoader.ChunkText(text);
 
@@ -140,7 +144,9 @@ public class RAGService
             }
 
             Console.WriteLine($"Ingesting {fileKey}...");
-            var text = PDFLoader.LoadText(pdfPath);
+            var text = _ocr != null
+                ? await PDFLoader.LoadTextWithOcrAsync(pdfPath, _ocr)
+                : PDFLoader.LoadText(pdfPath);
             text = PDFLoader.CleanText(text);
             var chunks = PDFLoader.ChunkText(text);
 

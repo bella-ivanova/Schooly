@@ -122,6 +122,13 @@ public class OllamaChatService
         request,
         HttpCompletionOption.ResponseHeadersRead);
 
+    if (!response.IsSuccessStatusCode)
+    {
+        var errorBody = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"\n[Error {(int)response.StatusCode}] Ollama said: {errorBody}");
+        return;
+    }
+
     using var stream = await response.Content.ReadAsStreamAsync();
     using var reader = new StreamReader(stream);
 
@@ -130,11 +137,17 @@ public class OllamaChatService
     string? line;
     while ((line = await reader.ReadLineAsync()) != null)
     {
-
         if (string.IsNullOrWhiteSpace(line))
             continue;
 
         using var doc = JsonDocument.Parse(line);
+
+        if (doc.RootElement.TryGetProperty("error", out var errProp))
+        {
+            Console.WriteLine($"\n[Ollama error] {errProp.GetString()}");
+            Console.WriteLine($"Is model '{_model}' installed? Run: ollama pull {_model}");
+            return;
+        }
 
         if (doc.RootElement.TryGetProperty("message", out var msg))
         {

@@ -44,6 +44,18 @@
         "net10.0": {
           "targetAlias": "net10.0",
           "dependencies": {
+            "PDFtoImage": {
+              "target": "Package",
+              "version": "[5.2.0, )"
+            },
+            "SkiaSharp": {
+              "target": "Package",
+              "version": "[3.119.2, )"
+            },
+            "SkiaSharp.NativeAssets.macOS": {
+              "target": "Package",
+              "version": "[3.119.2, )"
+            },
             "Tesseract": {
               "target": "Package",
               "version": "[5.2.0, )"

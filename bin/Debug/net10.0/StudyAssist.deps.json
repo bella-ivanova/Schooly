@@ -8,11 +8,217 @@
     ".NETCoreApp,Version=v10.0": {
       "StudyAssist/1.0.0": {
         "dependencies": {
+          "PDFtoImage": "5.2.0",
+          "SkiaSharp": "3.119.2",
+          "SkiaSharp.NativeAssets.macOS": "3.119.2",
           "Tesseract": "5.2.0",
           "UglyToad.PdfPig": "1.7.0-custom-5"
         },
         "runtime": {
           "StudyAssist.dll": {}
+        }
+      },
+      "bblanchon.PDFium.Linux/139.0.7215": {
+        "runtimeTargets": {
+          "runtimes/linux-arm/native/libpdfium.so": {
+            "rid": "linux-arm",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm64/native/libpdfium.so": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-arm64/native/libpdfium.so": {
+            "rid": "linux-musl-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-x64/native/libpdfium.so": {
+            "rid": "linux-musl-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-x86/native/libpdfium.so": {
+            "rid": "linux-musl-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libpdfium.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x86/native/libpdfium.so": {
+            "rid": "linux-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "bblanchon.PDFium.macOS/139.0.7215": {
+        "runtimeTargets": {
+          "runtimes/osx-arm64/native/libpdfium.dylib": {
+            "rid": "osx-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/libpdfium.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "bblanchon.PDFium.Win32/139.0.7215": {
+        "runtimeTargets": {
+          "runtimes/win-arm64/native/pdfium.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/pdfium.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x86/native/pdfium.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "PDFtoImage/5.2.0": {
+        "dependencies": {
+          "SkiaSharp": "3.119.2",
+          "SkiaSharp.NativeAssets.Linux.NoDependencies": "3.119.1",
+          "SkiaSharp.NativeAssets.Win32": "3.119.2",
+          "SkiaSharp.NativeAssets.macOS": "3.119.2",
+          "bblanchon.PDFium.Linux": "139.0.7215",
+          "bblanchon.PDFium.Win32": "139.0.7215",
+          "bblanchon.PDFium.macOS": "139.0.7215"
+        },
+        "runtime": {
+          "lib/net10.0/PDFtoImage.dll": {
+            "assemblyVersion": "5.2.0.0",
+            "fileVersion": "5.2.0.0"
+          }
+        }
+      },
+      "SkiaSharp/3.119.2": {
+        "dependencies": {
+          "SkiaSharp.NativeAssets.Win32": "3.119.2",
+          "SkiaSharp.NativeAssets.macOS": "3.119.2"
+        },
+        "runtime": {
+          "lib/net8.0/SkiaSharp.dll": {
+            "assemblyVersion": "3.119.0.0",
+            "fileVersion": "3.119.2.0"
+          }
+        }
+      },
+      "SkiaSharp.NativeAssets.Linux.NoDependencies/3.119.1": {
+        "runtimeTargets": {
+          "runtimes/linux-arm/native/libSkiaSharp.so": {
+            "rid": "linux-arm",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm64/native/libSkiaSharp.so": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-loongarch64/native/libSkiaSharp.so": {
+            "rid": "linux-loongarch64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-arm/native/libSkiaSharp.so": {
+            "rid": "linux-musl-arm",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-arm64/native/libSkiaSharp.so": {
+            "rid": "linux-musl-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-loongarch64/native/libSkiaSharp.so": {
+            "rid": "linux-musl-loongarch64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-riscv64/native/libSkiaSharp.so": {
+            "rid": "linux-musl-riscv64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-x64/native/libSkiaSharp.so": {
+            "rid": "linux-musl-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-riscv64/native/libSkiaSharp.so": {
+            "rid": "linux-riscv64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libSkiaSharp.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x86/native/libSkiaSharp.so": {
+            "rid": "linux-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "SkiaSharp.NativeAssets.macOS/3.119.2": {
+        "runtimeTargets": {
+          "runtimes/osx/native/libSkiaSharp.dylib": {
+            "rid": "osx",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "SkiaSharp.NativeAssets.Win32/3.119.2": {
+        "runtimeTargets": {
+          "runtimes/win-arm64/native/libSkiaSharp.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-arm64/native/libSkiaSharp.pdb": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/libSkiaSharp.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/libSkiaSharp.pdb": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x86/native/libSkiaSharp.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x86/native/libSkiaSharp.pdb": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
         }
       },
       "Tesseract/5.2.0": {
@@ -88,6 +294,62 @@
       "type": "project",
       "serviceable": false,
       "sha512": ""
+    },
+    "bblanchon.PDFium.Linux/139.0.7215": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-8IOp1YaEkXzan5YtmguLJm+Px3piAip6K3Bz5cxxpvxzCA31FaHTwm4T35NKA6Qw5LeHCmF+dJ4z+SI8RUX44g==",
+      "path": "bblanchon.pdfium.linux/139.0.7215",
+      "hashPath": "bblanchon.pdfium.linux.139.0.7215.nupkg.sha512"
+    },
+    "bblanchon.PDFium.macOS/139.0.7215": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-DkA1OrWl3mTKF1c7flxmPFCTO+2rN14sRnQnH3Ln+JxOF3+WHBM6ncRXRthq8OVG+zp+ElqiRNuvuoxXi49CUw==",
+      "path": "bblanchon.pdfium.macos/139.0.7215",
+      "hashPath": "bblanchon.pdfium.macos.139.0.7215.nupkg.sha512"
+    },
+    "bblanchon.PDFium.Win32/139.0.7215": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-IGhQ+jvnrPs6gV+oL259BDM4eqmSgrTlTgnn01iGv1Lqt4AwJQfq1yyv8K5Py61vPLXtCjzK/Cll1yfXZ06IMg==",
+      "path": "bblanchon.pdfium.win32/139.0.7215",
+      "hashPath": "bblanchon.pdfium.win32.139.0.7215.nupkg.sha512"
+    },
+    "PDFtoImage/5.2.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-a5VpiGVuBWdtsVCG1W2RE4Ek224Vs3muFs0n7YshEYcorrNozSIykUEJnmEMFAjJ5iIeEpmkSUpgDhWugew4Lg==",
+      "path": "pdftoimage/5.2.0",
+      "hashPath": "pdftoimage.5.2.0.nupkg.sha512"
+    },
+    "SkiaSharp/3.119.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-nmy2dOFWPvQKMglfpjz8+/xQQcSrL9jzul3cUyzCJVSwrmSAw+6B1sEgU7jt6NZBptwGq2k/V0kjyu2GizMFtg==",
+      "path": "skiasharp/3.119.2",
+      "hashPath": "skiasharp.3.119.2.nupkg.sha512"
+    },
+    "SkiaSharp.NativeAssets.Linux.NoDependencies/3.119.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-5jj6gBCe4K6TLnIERBXZfmUNE0TUyeTaF28RCxdCgIDVDaCAbHwEbk99eNYRFem/ubW/hKdvayZBOt6PaDL05g==",
+      "path": "skiasharp.nativeassets.linux.nodependencies/3.119.1",
+      "hashPath": "skiasharp.nativeassets.linux.nodependencies.3.119.1.nupkg.sha512"
+    },
+    "SkiaSharp.NativeAssets.macOS/3.119.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-I2jMGQ/26KOnc6iAoR+Mxh9vSJJ2vioJyj9aJ9OL5yEZyXothXJxf4vBMqnSaiXMqiiU1scG7KqtT0CLkmMmWA==",
+      "path": "skiasharp.nativeassets.macos/3.119.2",
+      "hashPath": "skiasharp.nativeassets.macos.3.119.2.nupkg.sha512"
+    },
+    "SkiaSharp.NativeAssets.Win32/3.119.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-uYe+da6+GXVgPKkCopzvIZ83DmC8SXXKeUAPrNcztJNsg0SjPQAxfKMOPZqmVjbzznrq/QUIjLUlJSZV/e0IPA==",
+      "path": "skiasharp.nativeassets.win32/3.119.2",
+      "hashPath": "skiasharp.nativeassets.win32.3.119.2.nupkg.sha512"
     },
     "Tesseract/5.2.0": {
       "type": "package",
