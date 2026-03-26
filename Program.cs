@@ -1,6 +1,14 @@
+using System.Diagnostics;
 using StudyAssistant.Services;
 
 Console.WriteLine("=== Study Assistant ===\n");
+
+// ── Start Qdrant in the background ─────────────────────────────
+var qdrantProcess = await QdrantService.EnsureStartedAsync();
+
+// Stop Qdrant when the app exits (only if we started it)
+Console.CancelKeyPress += (_, _) => qdrantProcess?.Kill();
+AppDomain.CurrentDomain.ProcessExit += (_, _) => qdrantProcess?.Kill();
 
 // ── Model setup ────────────────────────────────────────────────
 Console.Write("Enter model name (default: glm-5:cloud): ");
@@ -14,16 +22,29 @@ var embedModel = string.IsNullOrWhiteSpace(embedInput) ? "nomic-embed-text" : em
 Console.Write("Enter OCR vision model (default: minicpm-v, press Enter to skip OCR): ");
 var ocrInput = Console.ReadLine()?.Trim();
 OCRService? ocr = null;
-if (ocrInput == null || ocrInput == "" || !string.IsNullOrWhiteSpace(ocrInput))
+if (!string.IsNullOrWhiteSpace(ocrInput) || ocrInput == "")
 {
     var ocrModel = string.IsNullOrWhiteSpace(ocrInput) ? "minicpm-v" : ocrInput;
     ocr = new OCRService(ocrModel);
     Console.WriteLine($"OCR enabled with model: {ocrModel}");
 }
 
-var chat = new OllamaChatService(model);
+Console.Write("Enable Pix2Text math OCR? Needed for LaTeX formulas in textbooks (y/n, default n): ");
+var mathOcrInput = Console.ReadLine()?.Trim().ToLower();
+MathOcrService? mathOcr = null;
+Process? pix2textProcess = null;
+if (mathOcrInput == "y")
+{
+    mathOcr = new MathOcrService();
+    pix2textProcess = await MathOcrService.EnsureStartedAsync();
+    Console.CancelKeyPress += (_, _) => pix2textProcess?.Kill();
+    AppDomain.CurrentDomain.ProcessExit += (_, _) => pix2textProcess?.Kill();
+}
+
+var chat      = new OllamaChatService(model);
 var embedding = new EmbeddingService(embedModel);
-var rag = new RAGService(chat, embedding, ocr);
+var qdrant    = new QdrantService();
+var rag       = new RAGService(chat, embedding, qdrant, ocr, mathOcr);
 
 // ── Mode selection ─────────────────────────────────────────────
 Console.WriteLine("\nSelect mode:");
@@ -55,8 +76,7 @@ async Task RunAdminMode(RAGService ragService)
 
     Console.WriteLine("\nAdmin mode. Commands:");
     Console.WriteLine("  /ingest <grade>          — ingest PDFs for a grade");
-    Console.WriteLine("  /status                  — show ingested grades");
-    Console.WriteLine("  /list <grade>            — list files ingested for a grade");
+    Console.WriteLine("  /status <grade>          — list files ingested for a grade");
     Console.WriteLine("  /delete <grade> <file>   — delete a file from a grade");
     Console.WriteLine("  /exit                    — quit\n");
 
@@ -77,43 +97,22 @@ async Task RunAdminMode(RAGService ragService)
             }
             await ragService.IngestGradePDFsAsync(grade);
         }
-        else if (input == "/status")
-        {
-            var jsonDir = Path.Combine("Database", "DataJson");
-            if (!Directory.Exists(jsonDir))
-            {
-                Console.WriteLine("No grades ingested yet.");
-                continue;
-            }
-            var files = Directory.GetFiles(jsonDir, "Grade*.json");
-            if (files.Length == 0)
-            {
-                Console.WriteLine("No grades ingested yet.");
-                continue;
-            }
-            foreach (var f in files.OrderBy(x => x))
-            {
-                var info = new FileInfo(f);
-                Console.WriteLine($"  {Path.GetFileNameWithoutExtension(f)}  ({info.Length / 1024} KB)");
-            }
-        }
-        else if (input.StartsWith("/list "))
+        else if (input.StartsWith("/status"))
         {
             var parts = input.Split(' ', 2);
             if (parts.Length < 2 || !int.TryParse(parts[1].Trim(), out var grade))
             {
-                Console.WriteLine("Usage: /list <grade number>");
+                Console.WriteLine("Usage: /status <grade number>");
                 continue;
             }
-            ragService.SetGrade(grade);
-            var ingestedFiles = ragService.GetIngestedFiles(grade);
-            if (ingestedFiles == null || ingestedFiles.Count == 0)
+            var files = await ragService.GetIngestedFilesAsync(grade);
+            if (files.Count == 0)
             {
                 Console.WriteLine($"No files ingested for Grade {grade}.");
                 continue;
             }
             Console.WriteLine($"Grade {grade} ingested files:");
-            foreach (var f in ingestedFiles.OrderBy(x => x))
+            foreach (var f in files.OrderBy(x => x))
                 Console.WriteLine($"  {f}");
         }
         else if (input.StartsWith("/delete "))
@@ -125,8 +124,7 @@ async Task RunAdminMode(RAGService ragService)
                 continue;
             }
             var fileKey = parts[2].Trim();
-            ragService.SetGrade(grade);
-            ragService.DeleteGradeFile(grade, fileKey);
+            await ragService.DeleteGradeFileAsync(grade, fileKey);
         }
         else
         {
@@ -140,7 +138,6 @@ async Task RunAdminMode(RAGService ragService)
 // ══════════════════════════════════════════════════════════════
 async Task RunStudentMode(OllamaChatService chatService, RAGService ragService)
 {
-    // Pick grade
     Console.Write("\nEnter your grade (1-12), or press Enter to skip: ");
     var gradeInput = Console.ReadLine()?.Trim();
     if (!string.IsNullOrWhiteSpace(gradeInput) && int.TryParse(gradeInput, out var grade) && grade >= 1 && grade <= 12)
@@ -182,7 +179,14 @@ async Task RunStudentMode(OllamaChatService chatService, RAGService ragService)
         if (string.IsNullOrWhiteSpace(input)) continue;
 
         Console.Write("\nAI: ");
-        await ragService.Ask(input);
+        try
+        {
+            await ragService.Ask(input);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"\n[Error] {ex.Message}");
+        }
         Console.WriteLine();
     }
 }

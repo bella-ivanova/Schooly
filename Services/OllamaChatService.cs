@@ -1,168 +1,103 @@
-using System.Text;
-using System.Text.Json;
+using OllamaSharp;
+using OllamaSharp.Models;
+using OllamaSharp.Models.Chat;
+
+namespace StudyAssistant.Services;
 
 public class OllamaChatService
 {
-    private readonly HttpClient _httpClient;
+    private readonly OllamaApiClient _ollama;
     private readonly string _model;
-    private readonly List<ChatMessage> _messages;
+    private readonly List<Message> _messages = new();
 
     public double Temperature { get; set; } = 0.7;
 
     public OllamaChatService(string model)
     {
-        _httpClient = new HttpClient();
         _model = model;
-        _messages = new List<ChatMessage>();
+        _ollama = new OllamaApiClient("http://localhost:11434");
     }
 
-    // ✅ System Prompt Support
+    // Clears history and sets a system prompt.
+    // Every new conversation starts here so the AI knows its role.
     public void SetSystemPrompt(string prompt)
     {
         _messages.Clear();
-        _messages.Add(new ChatMessage
-        {
-            Role = "system",
-            Content = prompt
-        });
+        _messages.Add(new Message { Role = ChatRole.System, Content = prompt });
     }
 
-    // ✅ Conversation Memory (Auto stored)
+    // Sends a message and waits for the full reply before returning.
+    // Used internally; streaming is preferred for interactive chat.
     public async Task<string> SendMessageAsync(string userMessage)
     {
-        _messages.Add(new ChatMessage
-        {
-            Role = "user",
-            Content = userMessage
-        });
+        _messages.Add(new Message { Role = ChatRole.User, Content = userMessage });
 
-        var requestBody = new
+        var request = new ChatRequest
         {
-            model = _model,
-            messages = _messages,
-            options = new
-            {
-                temperature = Temperature
-            },
-            stream = false
+            Model   = _model,
+            Messages = _messages,
+            Stream  = false,
+            Options = new RequestOptions { Temperature = (float)Temperature }
         };
 
-        var content = new StringContent(
-            JsonSerializer.Serialize(requestBody),
-            Encoding.UTF8,
-            "application/json"
-        );
+        var fullResponse = new System.Text.StringBuilder();
+        await foreach (var token in _ollama.ChatAsync(request))
+            fullResponse.Append(token?.Message?.Content);
 
-        var response = await _httpClient.PostAsync(
-            "http://localhost:11434/api/chat",
-            content
-        );
-
-        var responseJson = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(responseJson);
-
-        var assistantReply = doc.RootElement
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
-
-        _messages.Add(new ChatMessage
-        {
-            Role = "assistant",
-            Content = assistantReply ?? ""
-        });
-
-        return assistantReply ?? "";
+        var reply = fullResponse.ToString();
+        _messages.Add(new Message { Role = ChatRole.Assistant, Content = reply });
+        return reply;
     }
 
-    // historyMessage is stored in conversation history.
-    // apiMessage (if provided) is what actually gets sent to the model — used by RAG to inject context.
+    // Streams the response token by token so the user sees words appear in real time.
+    //
+    // newUserMessage  — stored in conversation history so the AI remembers the exchange.
+    // apiMessage      — what actually gets sent to the model (used by RAG to inject
+    //                   textbook context around the question without polluting history).
     public async Task StreamMessageAsync(string newUserMessage, string? apiMessage = null)
     {
-    _messages.Add(new ChatMessage
-    {
-        Role = "user",
-        Content = newUserMessage
-    });
+        _messages.Add(new Message { Role = ChatRole.User, Content = newUserMessage });
 
-    // Build the message list for the API: replace the last user message with apiMessage if provided
-    List<ChatMessage> apiMessages;
-    if (apiMessage != null)
-    {
-        apiMessages = [.._messages.Take(_messages.Count - 1),
-            new ChatMessage { Role = "user", Content = apiMessage }];
-    }
-    else
-    {
-        apiMessages = _messages;
-    }
+        // Build the list of messages to send: swap the last user message for the
+        // enriched RAG prompt when one is provided.
+        IEnumerable<Message> apiMessages = apiMessage != null
+            ? [.._messages.Take(_messages.Count - 1),
+               new Message { Role = ChatRole.User, Content = apiMessage }]
+            : _messages;
 
-    var requestBody = new
-    {
-        model = _model,
-        messages = apiMessages,
-        options = new
+        var request = new ChatRequest
         {
-            temperature = Temperature
-        },
-        stream = true
-    };
+            Model    = _model,
+            Messages = apiMessages,
+            Stream   = true,
+            Options  = new RequestOptions { Temperature = (float)Temperature }
+        };
 
-    var request = new HttpRequestMessage(
-        HttpMethod.Post,
-        "http://localhost:11434/api/chat")
-    {
-        Content = new StringContent(
-            JsonSerializer.Serialize(requestBody),
-            Encoding.UTF8,
-            "application/json")
-    };
+        var fullResponse = new System.Text.StringBuilder();
 
-    var response = await _httpClient.SendAsync(
-        request,
-        HttpCompletionOption.ResponseHeadersRead);
-
-    if (!response.IsSuccessStatusCode)
-    {
-        var errorBody = await response.Content.ReadAsStringAsync();
-        Console.WriteLine($"\n[Error {(int)response.StatusCode}] Ollama said: {errorBody}");
-        return;
-    }
-
-    using var stream = await response.Content.ReadAsStreamAsync();
-    using var reader = new StreamReader(stream);
-
-    StringBuilder fullResponse = new StringBuilder();
-
-    string? line;
-    while ((line = await reader.ReadLineAsync()) != null)
-    {
-        if (string.IsNullOrWhiteSpace(line))
-            continue;
-
-        using var doc = JsonDocument.Parse(line);
-
-        if (doc.RootElement.TryGetProperty("error", out var errProp))
+        try
         {
-            Console.WriteLine($"\n[Ollama error] {errProp.GetString()}");
-            Console.WriteLine($"Is model '{_model}' installed? Run: ollama pull {_model}");
+            await foreach (var token in _ollama.ChatAsync(request))
+            {
+                if (token == null) continue;
+                var chunk = token.Message?.Content;
+                if (!string.IsNullOrEmpty(chunk))
+                {
+                    Console.Write(chunk);
+                    fullResponse.Append(chunk);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"\n[Chat error] {ex.Message}");
+            Console.WriteLine($"Is model '{_model}' pulled? Run: ollama pull {_model}");
             return;
         }
 
-        if (doc.RootElement.TryGetProperty("message", out var msg))
-        {
-            var chunk = msg.GetProperty("content").GetString();
-            Console.Write(chunk);
-            fullResponse.Append(chunk);
-        }
-    }
+        if (fullResponse.Length == 0)
+            Console.WriteLine($"[No response from model '{_model}'. Is it pulled? Run: ollama pull {_model}]");
 
-    _messages.Add(new ChatMessage
-    {
-        Role = "assistant",
-        Content = fullResponse.ToString()
-    });
+        _messages.Add(new Message { Role = ChatRole.Assistant, Content = fullResponse.ToString() });
     }
 }
-
-

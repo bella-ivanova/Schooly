@@ -8,7 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="OllamaSharp" Version="5.4.24" />
     <PackageReference Include="PDFtoImage" Version="5.2.0" />
+    <PackageReference Include="Qdrant.Client" Version="1.17.0" />
     <PackageReference Include="SkiaSharp" Version="3.119.2" />
     <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="3.119.2" />
     <PackageReference Include="Tesseract" Version="5.2.0" />

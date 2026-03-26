@@ -1,22 +1,24 @@
-using System.Net.Http;
 using System.Text;
-using System.Text.Json;
+using OllamaSharp;
+using OllamaSharp.Models;
 
 namespace StudyAssistant.Services;
 
 public class EmbeddingService
 {
-    private readonly HttpClient _httpClient;
+    private readonly OllamaApiClient _ollama;
     private readonly string _model;
 
     public string Model => _model;
 
     public EmbeddingService(string model = "nomic-embed-text")
     {
-        _httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-        _model = model;
+        _model  = model;
+        _ollama = new OllamaApiClient("http://localhost:11434");
     }
 
+    // Returns one float[] embedding per input string.
+    // Processes in batches of 10 to avoid overloading the model.
     public async Task<List<float[]>> GetEmbeddingsAsync(List<string> inputs, int batchSize = 10)
     {
         var results = new List<float[]>();
@@ -28,47 +30,36 @@ public class EmbeddingService
                 .Select(SanitizeText)
                 .ToList();
 
-            var requestBody = new { model = _model, input = batch };
-
-            var content = new StringContent(
-                JsonSerializer.Serialize(requestBody),
-                Encoding.UTF8,
-                "application/json"
-            );
-
-            var response = await _httpClient.PostAsync("http://localhost:11434/api/embed", content);
-
-            if (!response.IsSuccessStatusCode)
+            var response = await _ollama.EmbedAsync(new EmbedRequest
             {
-                var errorBody = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException(
-                    $"Response status code does not indicate success: {(int)response.StatusCode} ({response.ReasonPhrase}). Ollama said: {errorBody}");
-            }
+                Model = _model,
+                Input = batch
+            });
 
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
+            if (response?.Embeddings == null || response.Embeddings.Count == 0)
+                throw new Exception(
+                    $"Embedding model '{_model}' returned no embeddings. " +
+                    $"Is it pulled? Run: ollama pull {_model}");
 
-            foreach (var item in doc.RootElement.GetProperty("embeddings").EnumerateArray())
-            {
-                results.Add(item.EnumerateArray().Select(x => x.GetSingle()).ToArray());
-            }
+            foreach (var embedding in response.Embeddings)
+                results.Add(embedding.ToArray());
         }
 
         return results;
     }
 
-    // Strip control characters and hard-cap length to stay within model context
+    // Removes control characters and hard-caps length so the model never
+    // receives malformed or oversized text.
     private static string SanitizeText(string text)
     {
         var sb = new StringBuilder(text.Length);
         foreach (char c in text)
         {
-            if (c == '\0') continue;              // null byte
-            if (c < 0x20 && c != '\t') continue; // control chars except tab
+            if (c == '\0') continue;               // null byte
+            if (c < 0x20 && c != '\t') continue;  // control chars except tab
             sb.Append(c);
         }
         var result = sb.ToString().Trim();
-        // Hard cap: even if chunker produces something oversized, never exceed 500 chars
         return result.Length > 500 ? result[..500] : result;
     }
 }

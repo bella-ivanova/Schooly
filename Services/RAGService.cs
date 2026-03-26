@@ -1,53 +1,34 @@
-using StudyAssistant.Services;
-
 namespace StudyAssistant.Services;
 
 public class RAGService
 {
-    private readonly Dictionary<int, PersistentVectorStore> _gradeStores = new();
     private readonly EmbeddingService _embeddingService;
     private readonly OllamaChatService _chat;
+    private readonly QdrantService _qdrant;
     private readonly OCRService? _ocr;
+    private readonly MathOcrService? _mathOcr;
 
-    // In-memory store for temporary PDFs uploaded during current chat
+    // In-memory store for temporary PDFs loaded during the current chat session only.
+    // These are never saved to Qdrant — they disappear when the session ends.
     private readonly List<(string Text, float[] Embedding, string Subject)> _temporaryChunks = new();
 
     private int _currentGrade = 0;
 
-    public RAGService(OllamaChatService chat, EmbeddingService embeddingService, OCRService? ocr = null)
+    public RAGService(OllamaChatService chat, EmbeddingService embeddingService, QdrantService qdrant, OCRService? ocr = null, MathOcrService? mathOcr = null)
     {
-        _chat = chat;
+        _chat             = chat;
         _embeddingService = embeddingService;
-        _ocr = ocr;
+        _qdrant           = qdrant;
+        _ocr              = ocr;
+        _mathOcr          = mathOcr;
     }
 
-    // Load grade knowledge from Database/DataJson/Grade{g}.json
+    // Sets the student's current grade. Qdrant already holds all grades —
+    // we just remember the number so searches are filtered to grades 1 → N.
     public void SetGrade(int grade)
     {
         _currentGrade = grade;
-
-        for (int g = 1; g <= grade; g++)
-        {
-            if (!_gradeStores.ContainsKey(g))
-            {
-                var dbPath = Path.Combine("Database", "DataJson", $"Grade{g}.json");
-                var store = new PersistentVectorStore(dbPath);
-
-                // #4 — warn if the store was built with a different embedding model
-                if (!string.IsNullOrWhiteSpace(store.EmbeddingModel) &&
-                    store.EmbeddingModel != _embeddingService.Model)
-                {
-                    Console.WriteLine(
-                        $"WARNING: Grade {g} knowledge base was ingested with '{store.EmbeddingModel}' " +
-                        $"but current embedding model is '{_embeddingService.Model}'. " +
-                        "Queries may return poor results. Re-ingest to fix.");
-                }
-
-                _gradeStores[g] = store;
-            }
-        }
-
-        Console.WriteLine($"Grade set to {grade}. Knowledge loaded permanently.");
+        Console.WriteLine($"Grade set to {grade}.");
     }
 
     // Reads PDFs from Database/DataPdf/Grade{grade}/{Subject}/ subfolders.
@@ -63,94 +44,33 @@ public class RAGService
             return;
         }
 
-        var dbPath = Path.Combine("Database", "DataJson", $"Grade{grade}.json");
-        Directory.CreateDirectory(Path.Combine("Database", "DataJson"));
+        // Ask Qdrant which files are already stored for this grade
+        await _qdrant.EnsureCollectionAsync();
+        var alreadyIngested = (await _qdrant.GetIngestedFilesAsync(grade)).ToHashSet();
 
-        // Delete old data so re-ingestion always rebuilds from scratch
-        if (File.Exists(dbPath))
-            File.Delete(dbPath);
-        else if (Directory.Exists(dbPath))
-            Directory.Delete(dbPath, recursive: true);
-
-        var store = new PersistentVectorStore(dbPath);
-        store.SetEmbeddingModel(_embeddingService.Model); // #4 — save model name with store
         int totalIngested = 0;
         int skipped = 0;
 
-        // Scan subject subfolders (e.g. Grade5/Math/, Grade5/Science/)
-        var subjectFolders = Directory.GetDirectories(gradeFolder);
-        foreach (var subjectFolder in subjectFolders)
+        async Task IngestFile(string pdfPath, string subject, string fileKey)
         {
-            var subject = Path.GetFileName(subjectFolder);
-            var pdfFiles = Directory.GetFiles(subjectFolder, "*.pdf");
-
-            foreach (var pdfPath in pdfFiles)
-            {
-                var fileKey = Path.Combine(subject, Path.GetFileName(pdfPath));
-
-                if (store.IsFileIngested(fileKey))
-                {
-                    Console.WriteLine($"Skipping (already ingested): [{subject}] {Path.GetFileName(pdfPath)}");
-                    skipped++;
-                    continue;
-                }
-
-                Console.WriteLine($"Ingesting [{subject}] {Path.GetFileName(pdfPath)}...");
-                var text = _ocr != null
-                    ? await PDFLoader.LoadTextWithOcrAsync(pdfPath, _ocr)
-                    : PDFLoader.LoadText(pdfPath);
-                text = PDFLoader.CleanText(text);
-                var chunks = PDFLoader.ChunkText(text);
-
-                // #3 — catch embedding failure and print a clear actionable message
-                List<float[]> embeddings;
-                try
-                {
-                    embeddings = await _embeddingService.GetEmbeddingsAsync(chunks);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"\nEmbedding failed: {ex.Message}");
-                    Console.WriteLine($"Is '{_embeddingService.Model}' pulled? Run: ollama pull {_embeddingService.Model}");
-                    Console.WriteLine($"Ingestion stopped. {totalIngested} file(s) were processed before the error.");
-                    if (totalIngested > 0)
-                    {
-                        store.Save();
-                        Console.WriteLine("Partial results saved.");
-                    }
-                    return;
-                }
-
-                for (int i = 0; i < chunks.Count; i++)
-                    store.Add(chunks[i], embeddings[i], subject, fileKey);
-
-                store.AddIngestedFile(fileKey);
-                totalIngested++;
-                Console.WriteLine($"  → {chunks.Count} chunks");
-            }
-        }
-
-        // Also scan PDFs directly in the grade root (no subject tag)
-        var rootPdfs = Directory.GetFiles(gradeFolder, "*.pdf");
-        foreach (var pdfPath in rootPdfs)
-        {
-            var fileKey = Path.GetFileName(pdfPath);
-
-            if (store.IsFileIngested(fileKey))
+            if (alreadyIngested.Contains(fileKey))
             {
                 Console.WriteLine($"Skipping (already ingested): {fileKey}");
                 skipped++;
-                continue;
+                return;
             }
 
             Console.WriteLine($"Ingesting {fileKey}...");
-            var text = _ocr != null
-                ? await PDFLoader.LoadTextWithOcrAsync(pdfPath, _ocr)
-                : PDFLoader.LoadText(pdfPath);
+
+            // Priority: Pix2Text (best for math) → vision OCR → plain PdfPig text
+            var text = _mathOcr != null
+                ? await PDFLoader.LoadTextWithMathOcrAsync(pdfPath, _mathOcr)
+                : _ocr != null
+                    ? await PDFLoader.LoadTextWithOcrAsync(pdfPath, _ocr)
+                    : PDFLoader.LoadText(pdfPath);
             text = PDFLoader.CleanText(text);
             var chunks = PDFLoader.ChunkText(text);
 
-            // #3 — same failure handling for root PDFs
             List<float[]> embeddings;
             try
             {
@@ -161,38 +81,56 @@ public class RAGService
                 Console.WriteLine($"\nEmbedding failed: {ex.Message}");
                 Console.WriteLine($"Is '{_embeddingService.Model}' pulled? Run: ollama pull {_embeddingService.Model}");
                 Console.WriteLine($"Ingestion stopped. {totalIngested} file(s) were processed before the error.");
-                if (totalIngested > 0)
-                {
-                    store.Save();
-                    Console.WriteLine("Partial results saved.");
-                }
                 return;
             }
 
+            var chunkDataList = new List<ChunkData>();
             for (int i = 0; i < chunks.Count; i++)
-                store.Add(chunks[i], embeddings[i], sourceFile: fileKey);
+            {
+                chunkDataList.Add(new ChunkData
+                {
+                    Text       = chunks[i],
+                    Embedding  = embeddings[i],
+                    Subject    = subject,
+                    Grade      = grade,
+                    SourceFile = fileKey
+                });
+            }
 
-            store.AddIngestedFile(fileKey);
+            await _qdrant.UpsertChunksAsync(chunkDataList);
             totalIngested++;
-            Console.WriteLine($"  → {chunks.Count} chunks");
+            Console.WriteLine($"  → {chunks.Count} chunks stored in Qdrant");
         }
 
-        if (totalIngested == 0)
+        // Scan subject subfolders (e.g. Grade5/Math/, Grade5/Science/)
+        foreach (var subjectFolder in Directory.GetDirectories(gradeFolder))
+        {
+            var subject = Path.GetFileName(subjectFolder);
+            foreach (var pdfPath in Directory.GetFiles(subjectFolder, "*.pdf"))
+            {
+                var fileKey = Path.Combine(subject, Path.GetFileName(pdfPath));
+                await IngestFile(pdfPath, subject, fileKey);
+            }
+        }
+
+        // Also scan PDFs directly in the grade root (no subject tag)
+        foreach (var pdfPath in Directory.GetFiles(gradeFolder, "*.pdf"))
+        {
+            var fileKey = Path.GetFileName(pdfPath);
+            await IngestFile(pdfPath, subject: "", fileKey);
+        }
+
+        if (totalIngested == 0 && skipped == 0)
         {
             Console.WriteLine($"No PDF files found in {gradeFolder}");
             return;
         }
 
-        store.Save();
         var skipMsg = skipped > 0 ? $" ({skipped} skipped)" : "";
-        Console.WriteLine($"Grade {grade} ingestion complete. {totalIngested} file(s) ingested{skipMsg} → {dbPath}");
-
-        // Reload into active store if this grade is already loaded
-        if (_gradeStores.ContainsKey(grade))
-            _gradeStores[grade] = new PersistentVectorStore(dbPath);
+        Console.WriteLine($"Grade {grade} ingestion complete. {totalIngested} file(s) ingested{skipMsg}.");
     }
 
-    // Adds a PDF temporarily for the current chat session only (not saved to disk)
+    // Adds a PDF temporarily for the current chat session only (not saved to Qdrant).
     public async Task AddTemporaryPDFAsync(string pdfPath, string subject = "")
     {
         var text = PDFLoader.LoadText(pdfPath);
@@ -207,39 +145,24 @@ public class RAGService
         Console.WriteLine($"Loaded '{Path.GetFileName(pdfPath)}'{label} temporarily — {chunks.Count} chunks.");
     }
 
-    // #12 — clear temp PDFs (called by /clear in Program.cs)
     public void ClearTemporaryChunks() => _temporaryChunks.Clear();
 
-    // Returns the list of ingested file keys for a given grade, or null if grade not loaded.
-    public IReadOnlyCollection<string>? GetIngestedFiles(int grade) =>
-        _gradeStores.TryGetValue(grade, out var store) ? store.IngestedFiles : null;
+    // Returns the list of ingested file keys for a given grade from Qdrant.
+    public async Task<List<string>> GetIngestedFilesAsync(int grade) =>
+        await _qdrant.GetIngestedFilesAsync(grade);
 
-    // Deletes a specific file's chunks from a grade store and saves.
-    // Returns false if the grade store doesn't exist or the file wasn't found.
-    public bool DeleteGradeFile(int grade, string fileKey)
+    // Deletes a specific file's chunks from Qdrant.
+    public async Task<bool> DeleteGradeFileAsync(int grade, string fileKey)
     {
-        var dbPath = Path.Combine("Database", "DataJson", $"Grade{grade}.json");
-        if (!File.Exists(dbPath))
-        {
-            Console.WriteLine($"No data found for Grade {grade}.");
-            return false;
-        }
-
-        // Load the store if not already in memory
-        if (!_gradeStores.ContainsKey(grade))
-            _gradeStores[grade] = new PersistentVectorStore(dbPath);
-
-        var store = _gradeStores[grade];
-        var removed = store.DeleteFile(fileKey);
-
-        if (removed == 0 && !store.IngestedFiles.Contains(fileKey))
+        var files = await _qdrant.GetIngestedFilesAsync(grade);
+        if (!files.Contains(fileKey))
         {
             Console.WriteLine($"File '{fileKey}' not found in Grade {grade}.");
             return false;
         }
 
-        store.Save();
-        Console.WriteLine($"Deleted '{fileKey}' from Grade {grade} ({removed} chunks removed).");
+        await _qdrant.DeleteFileAsync(grade, fileKey);
+        Console.WriteLine($"Deleted '{fileKey}' from Grade {grade}.");
         return true;
     }
 
@@ -256,24 +179,36 @@ public class RAGService
 
         var combinedChunks = new List<(string Text, string Subject, int Grade)>();
 
-        const float MinScore = 0.1f;
-
-        // Search permanent grade stores
-        for (int g = 1; g <= _currentGrade; g++)
+        // Search Qdrant — the gradeFilter handles grades 1 → N automatically
+        if (_currentGrade > 0)
         {
-            if (_gradeStores.TryGetValue(g, out var store))
+            try
             {
-                foreach (var chunk in store.Query(queryEmbedding, topK: 10, minScore: MinScore))
-                    combinedChunks.Add((chunk.Text, chunk.Subject, g));
+                var qdrantResults = await _qdrant.SearchAsync(
+                    queryEmbedding,
+                    topK:        10,
+                    minScore:    0.1f,
+                    gradeFilter: _currentGrade
+                );
+
+                foreach (var r in qdrantResults)
+                    combinedChunks.Add((r.Text, r.Subject, r.Grade));
+            }
+            catch (Exception ex) when (ex.Message.Contains("Connection refused") || ex.Message.Contains("Unavailable"))
+            {
+                Console.WriteLine("\n[Qdrant is not running — answering without textbook context.]");
+                Console.WriteLine("To start Qdrant, open a new terminal and run: qdrant\n");
+                await _chat.StreamMessageAsync(question);
+                return;
             }
         }
 
-        // Search temporary chunks
+        // Search temporary in-memory chunks (cosine similarity done locally)
         if (_temporaryChunks.Count > 0)
         {
             var tempResults = _temporaryChunks
                 .Select(x => new { x.Text, x.Subject, Score = CosineSimilarity(queryEmbedding, x.Embedding) })
-                .Where(x => x.Score >= MinScore)
+                .Where(x => x.Score >= 0.1f)
                 .OrderByDescending(x => x.Score)
                 .Take(5)
                 .Select(x => (x.Text, x.Subject, Grade: _currentGrade));
@@ -281,14 +216,14 @@ public class RAGService
             combinedChunks.AddRange(tempResults);
         }
 
-        // If no relevant chunks were found, answer directly without the RAG wrapper
+        // If nothing relevant was found, answer directly without RAG
         if (combinedChunks.Count == 0)
         {
             await _chat.StreamMessageAsync(question);
             return;
         }
 
-        // Format each chunk with grade + subject label
+        // Format each chunk with its grade + subject label
         var formattedChunks = combinedChunks.Select(c =>
         {
             var label = $"[Grade {c.Grade}";
@@ -312,18 +247,17 @@ public class RAGService
             "\n--- End of Material ---\n\n" +
             "Student question: " + question;
 
-        // #10 — pass original question as the history message, RAG prompt as the API message.
-        // Only the clean question gets stored in conversation history.
         await _chat.StreamMessageAsync(question, ragPrompt);
     }
 
+    // Used locally for temporary chunk similarity (Qdrant handles this for permanent chunks)
     private static float CosineSimilarity(float[] a, float[] b)
     {
         if (a.Length != b.Length) return 0;
         float dot = 0, normA = 0, normB = 0;
         for (int i = 0; i < a.Length; i++)
         {
-            dot += a[i] * b[i];
+            dot   += a[i] * b[i];
             normA += a[i] * a[i];
             normB += b[i] * b[i];
         }
