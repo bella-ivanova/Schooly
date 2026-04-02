@@ -20,10 +20,12 @@ public static class PDFLoader
 
         foreach (var skBitmap in Conversion.ToImages(pdfBytes, options: new RenderOptions(Dpi: dpi)))
         {
-            using var image = SKImage.FromBitmap(skBitmap);
-            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-            pages.Add(data.ToArray());
-            skBitmap.Dispose();
+            using (skBitmap)
+            {
+                using var image = SKImage.FromBitmap(skBitmap);
+                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                pages.Add(data.ToArray());
+            }
         }
 
         return pages;
