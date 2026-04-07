@@ -21,10 +21,15 @@ public class AuthService
 
     // Registers a new user. Returns the created user on success.
     public async Task<(ApplicationUser? User, IReadOnlyList<string> Errors)> RegisterAsync(
-        string username, string email, string password, UserRole role, int? grade = null)
+        string username, string email, string password, UserRole role, int? grade = null, string? className = null)
     {
         if (role == UserRole.Student && (grade is null or < 1 or > 12))
             return (null, new[] { "Students must have a grade between 1 and 12." });
+
+        // Normalise class to uppercase single letter (e.g. "a" → "A")
+        var normClass = role == UserRole.Student && !string.IsNullOrWhiteSpace(className)
+            ? className.Trim().ToUpperInvariant()
+            : null;
 
         var user = new ApplicationUser
         {
@@ -32,6 +37,7 @@ public class AuthService
             Email     = email,
             Role      = role,
             Grade     = role == UserRole.Student ? grade : null,
+            Class     = normClass,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -76,6 +82,33 @@ public class AuthService
             return (false, new[] { "No account found with that email." });
 
         return await _users.ResetPasswordAsync(user, token, newPassword);
+    }
+
+    // Validates a JWT and returns its claims. Returns null if invalid or expired.
+    public ClaimsPrincipal? ValidateToken(string token)
+    {
+        var secret   = _config["Jwt:Secret"]   ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
+        var issuer   = _config["Jwt:Issuer"]   ?? "StudyAssistant";
+        var audience = _config["Jwt:Audience"] ?? "StudyAssistantUsers";
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
+        var handler = new JwtSecurityTokenHandler();
+
+        try
+        {
+            return handler.ValidateToken(token, new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey         = key,
+                ValidateIssuer           = true,
+                ValidIssuer              = issuer,
+                ValidateAudience         = true,
+                ValidAudience            = audience,
+                ValidateLifetime         = true,
+                ClockSkew                = TimeSpan.Zero
+            }, out _);
+        }
+        catch { return null; }
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

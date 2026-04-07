@@ -15,5 +15,8 @@ public class ApplicationUser : IdentityUser
     // Null for teachers; 1–12 for students.
     public int? Grade { get; set; }
 
+    // Class letter within a grade (e.g. "A", "B", "C"). Null for teachers.
+    public string? Class { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

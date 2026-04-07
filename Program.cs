@@ -1,7 +1,37 @@
 using System.Diagnostics;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using StudyAssistant.Data;
+using StudyAssistant.Models;
 using StudyAssistant.Services;
 
 Console.WriteLine("=== Study Assistant ===\n");
+
+// ── Dependency injection (auth stack) ──────────────────────────
+var config = new ConfigurationBuilder()
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: false)
+    .Build();
+
+var services = new ServiceCollection()
+    .AddDbContext<AppDbContext>(o =>
+        o.UseNpgsql(config.GetConnectionString("DefaultConnection")))
+    .AddIdentityCore<ApplicationUser>(o =>
+    {
+        o.Password.RequireNonAlphanumeric = false;
+        o.Password.RequireUppercase       = false;
+        o.Password.RequiredLength         = 8;
+    })
+    .AddEntityFrameworkStores<AppDbContext>().Services
+    .AddScoped<IUserRepository, UserRepository>()
+    .AddSingleton<IConfiguration>(config)
+    .AddScoped<AuthService>()
+    .BuildServiceProvider();
+
+var authService = services.GetRequiredService<AuthService>();
 
 // ── Start Qdrant in the background ─────────────────────────────
 var qdrantProcess = await QdrantService.EnsureStartedAsync();
@@ -49,21 +79,34 @@ var rag       = new RAGService(chat, embedding, qdrant, ocr, mathOcr);
 // ── Mode selection ─────────────────────────────────────────────
 Console.WriteLine("\nSelect mode:");
 Console.WriteLine("  1. Student");
-Console.WriteLine("  2. Admin");
+Console.WriteLine("  2. Teacher");
 Console.Write("\nChoice: ");
 var modeInput = Console.ReadLine()?.Trim();
 
-if (modeInput == "2")
+if (modeInput == "/bleblablebliblobli")
+{
     await RunAdminMode(rag);
+}
+else if (modeInput == "2")
+{
+    var principal = await RunLoginAsync(authService, UserRole.Teacher);
+    if (principal != null)
+    {
+        var repo = services.GetRequiredService<IUserRepository>();
+        await RunTeacherMode(principal, repo, rag);
+    }
+}
 else
+{
     await RunStudentMode(chat, rag);
+}
 
 // ══════════════════════════════════════════════════════════════
 // ADMIN MODE
 // ══════════════════════════════════════════════════════════════
 async Task RunAdminMode(RAGService ragService)
 {
-    const string AdminPassword = "admin123";
+    const string AdminPassword = "xg-sk3";
 
     Console.Write("\nEnter admin password: ");
     var pwd = ReadPassword();
@@ -189,6 +232,119 @@ async Task RunStudentMode(OllamaChatService chatService, RAGService ragService)
         }
         Console.WriteLine();
     }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TEACHER MODE
+// ══════════════════════════════════════════════════════════════
+async Task RunTeacherMode(ClaimsPrincipal principal, IUserRepository repo, RAGService ragService)
+{
+    var name = principal.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.UniqueName) ?? "Teacher";
+    Console.WriteLine($"\nWelcome, {name}.");
+    Console.WriteLine("Commands:");
+    Console.WriteLine("  /students                  — list all students");
+    Console.WriteLine("  /students <grade>          — list students in a grade");
+    Console.WriteLine("  /students <grade> <class>  — list students in a grade and class");
+    Console.WriteLine("  /exit                      — quit\n");
+
+    while (true)
+    {
+        Console.Write("Teacher> ");
+        var input = Console.ReadLine()?.Trim() ?? "";
+
+        if (input == "/exit") break;
+
+        if (input == "/students" || input.StartsWith("/students "))
+        {
+            var parts = input.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+
+            int? gradeFilter = null;
+            string? classFilter = null;
+
+            if (parts.Length >= 2 && int.TryParse(parts[1], out var g) && g >= 1 && g <= 12)
+                gradeFilter = g;
+
+            if (parts.Length >= 3 && gradeFilter.HasValue)
+                classFilter = parts[2].Trim().ToUpperInvariant();
+
+            var allStudents = await repo.GetByRoleAsync(UserRole.Student);
+
+            var students = allStudents
+                .Where(u => !gradeFilter.HasValue || u.Grade == gradeFilter)
+                .Where(u => classFilter == null || string.Equals(u.Class, classFilter, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(u => u.Grade)
+                .ThenBy(u => u.Class)
+                .ThenBy(u => u.UserName)
+                .ToList();
+
+            if (students.Count == 0)
+            {
+                var noResultMsg = (gradeFilter, classFilter) switch
+                {
+                    (null, _)              => "No students registered.",
+                    ({ } gr, null)         => $"No students in Grade {gr}.",
+                    ({ } gr, { } cl)       => $"No students in Grade {gr} Class {cl}."
+                };
+                Console.WriteLine(noResultMsg);
+                continue;
+            }
+
+            var header = (gradeFilter, classFilter) switch
+            {
+                (null, _)              => "All students:",
+                ({ } gr, null)         => $"Grade {gr} students:",
+                ({ } gr, { } cl)       => $"Grade {gr} Class {cl} students:"
+            };
+            Console.WriteLine(header);
+
+            foreach (var s in students)
+            {
+                var gradeTag  = s.Grade.HasValue ? $"Grade {s.Grade}" : "no grade";
+                var classTag  = !string.IsNullOrWhiteSpace(s.Class) ? $" Class {s.Class}" : "";
+                Console.WriteLine($"  [{gradeTag}{classTag}] {s.UserName}  ({s.Email})");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Unknown command. Type /exit to quit.");
+        }
+    }
+}
+
+// ── Login helper ───────────────────────────────────────────────
+// Prompts for credentials, validates the JWT, and checks the expected role.
+// Returns the validated ClaimsPrincipal on success, or null on failure.
+async Task<ClaimsPrincipal?> RunLoginAsync(AuthService auth, UserRole expectedRole)
+{
+    Console.WriteLine($"\n── {expectedRole} Login ──");
+    Console.Write("Username or email: ");
+    var usernameOrEmail = Console.ReadLine()?.Trim() ?? "";
+
+    Console.Write("Password: ");
+    var password = ReadPassword();
+
+    var (token, error) = await auth.LoginAsync(usernameOrEmail, password);
+    if (error != null)
+    {
+        Console.WriteLine($"Login failed: {error}");
+        return null;
+    }
+
+    var principal = auth.ValidateToken(token!);
+    if (principal == null)
+    {
+        Console.WriteLine("Login failed: token could not be verified.");
+        return null;
+    }
+
+    var roleClaim = principal.FindFirstValue("role");
+    if (!Enum.TryParse<UserRole>(roleClaim, out var role) || role != expectedRole)
+    {
+        Console.WriteLine($"Access denied: this login is not a {expectedRole} account.");
+        return null;
+    }
+
+    return principal;
 }
 
 // ── Helpers ────────────────────────────────────────────────────
