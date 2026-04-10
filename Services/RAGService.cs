@@ -241,6 +241,8 @@ public class RAGService
             "IMPORTANT: Base your answer strictly on what is present in the excerpts below. Do NOT say a topic is absent or belongs to a different grade unless no related content appears in the excerpts.\n" +
             "Your job is to identify which excerpt is relevant to the student's question, then apply that topic's definitions, formulas, and methods step by step.\n" +
             "The student's problem may be a new example — you do not need an identical solved example in the text. Use the method the textbook teaches and work through the student's numbers.\n" +
+            "Keep in mind that if a complex concept is included in the material that the student knows all of the basic things that are needed to understand it. For example a 10th grader that has Irrational equations knows how to solve 2+2 \n" +
+            "If the answer is very simple keep the answer short, but if it is complex provide a detailed explanation.\n" +
             "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material below.\n\n" +
             "--- Textbook Material ---\n" +
             context +
