@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Net.Sockets;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
 
@@ -18,75 +16,6 @@ public class QdrantService
     public QdrantService(string host = "localhost", int port = 6334)
     {
         _client = new QdrantClient(host, port);
-    }
-
-    // Starts Qdrant in the background if it isn't already running.
-    // Returns the Process so the caller can stop it when the app exits.
-    // Returns null if Qdrant was already running (we didn't start it, so we shouldn't stop it).
-    public static async Task<Process?> EnsureStartedAsync(int port = 6334)
-    {
-        if (await IsPortOpenAsync(port))
-        {
-            Console.WriteLine("Qdrant already running.");
-            return null;
-        }
-
-        Console.Write("Starting Qdrant...");
-
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName               = "qdrant",
-                UseShellExecute        = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                CreateNoWindow         = true
-            }
-        };
-
-        try
-        {
-            process.Start();
-        }
-        catch
-        {
-            Console.WriteLine(" not found.");
-            Console.WriteLine("Qdrant binary is missing. Download it from https://github.com/qdrant/qdrant/releases");
-            Console.WriteLine("Then place the binary somewhere on your PATH (e.g. /usr/local/bin/qdrant).");
-            return null;
-        }
-
-        // Poll until Qdrant is ready to accept connections (up to 15 seconds)
-        var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (await IsPortOpenAsync(port))
-            {
-                Console.WriteLine(" ready.");
-                return process;
-            }
-            await Task.Delay(300);
-        }
-
-        Console.WriteLine(" timed out.");
-        process.Kill();
-        return null;
-    }
-
-    // Quick TCP probe — just checks whether port 6334 is accepting connections.
-    private static async Task<bool> IsPortOpenAsync(int port)
-    {
-        try
-        {
-            using var tcp = new TcpClient();
-            await tcp.ConnectAsync("localhost", port);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     // Creates the collection if it doesn't already exist.

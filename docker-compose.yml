@@ -10,7 +10,37 @@ services:
       - "5432:5432"
     volumes:
       - studyassist-pgdata:/var/lib/postgresql/data
+    networks:
+      - studyassist-net
     restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant
+    container_name: studyassist-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - studyassist-qdrant:/qdrant/storage
+    networks:
+      - studyassist-net
+    restart: unless-stopped
+
+  pix2text:
+    build:
+      context: .
+      dockerfile: Dockerfile.pix2text
+    container_name: studyassist-pix2text
+    ports:
+      - "8503:8503"
+    networks:
+      - studyassist-net
+    restart: unless-stopped
+
+networks:
+  studyassist-net:
+    driver: bridge
 
 volumes:
   studyassist-pgdata:
+  studyassist-qdrant:

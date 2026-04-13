@@ -197,7 +197,7 @@ public class RAGService
             catch (Exception ex) when (ex.Message.Contains("Connection refused") || ex.Message.Contains("Unavailable"))
             {
                 Console.WriteLine("\n[Qdrant is not running — answering without textbook context.]");
-                Console.WriteLine("To start Qdrant, open a new terminal and run: qdrant\n");
+                Console.WriteLine("Start it with: docker-compose up qdrant\n");
                 await _chat.StreamMessageAsync(question);
                 return;
             }

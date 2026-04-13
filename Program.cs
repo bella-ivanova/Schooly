@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -33,13 +32,6 @@ var services = new ServiceCollection()
 
 var authService = services.GetRequiredService<AuthService>();
 
-// ── Start Qdrant in the background ─────────────────────────────
-var qdrantProcess = await QdrantService.EnsureStartedAsync();
-
-// Stop Qdrant when the app exits (only if we started it)
-Console.CancelKeyPress += (_, _) => qdrantProcess?.Kill();
-AppDomain.CurrentDomain.ProcessExit += (_, _) => qdrantProcess?.Kill();
-
 // ── Model setup ────────────────────────────────────────────────
 Console.Write("Enter model name (default: glm-5:cloud): ");
 var modelInput = Console.ReadLine();
@@ -62,13 +54,9 @@ if (!string.IsNullOrWhiteSpace(ocrInput) || ocrInput == "")
 Console.Write("Enable Pix2Text math OCR? Needed for LaTeX formulas in textbooks (y/n, default n): ");
 var mathOcrInput = Console.ReadLine()?.Trim().ToLower();
 MathOcrService? mathOcr = null;
-Process? pix2textProcess = null;
 if (mathOcrInput == "y")
 {
     mathOcr = new MathOcrService();
-    pix2textProcess = await MathOcrService.EnsureStartedAsync();
-    Console.CancelKeyPress += (_, _) => pix2textProcess?.Kill();
-    AppDomain.CurrentDomain.ProcessExit += (_, _) => pix2textProcess?.Kill();
 }
 
 var chat      = new OllamaChatService(model);
