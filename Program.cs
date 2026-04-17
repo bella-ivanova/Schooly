@@ -32,6 +32,9 @@ var services = new ServiceCollection()
 
 var authService = services.GetRequiredService<AuthService>();
 
+// Delete any temp visualisation HTML files when the process exits.
+AppDomain.CurrentDomain.ProcessExit += (_, _) => TempFileManager.CleanupAll();
+
 // ── Model setup ────────────────────────────────────────────────
 Console.Write("Enter model name (default: glm-5:cloud): ");
 var modelInput = Console.ReadLine();
@@ -177,7 +180,7 @@ async Task RunStudentMode(OllamaChatService chatService, RAGService ragService)
     chatService.SetSystemPrompt(
         "You are a helpful school tutor. Explain concepts clearly and step by step.");
 
-    Console.WriteLine("\nCommands: /clear  /load <pdf path>  /exit\n");
+    Console.WriteLine("\nCommands: /clear  /load <pdf path>  /visualise  /exit\n");
 
     while (true)
     {
@@ -207,12 +210,47 @@ async Task RunStudentMode(OllamaChatService chatService, RAGService ragService)
             continue;
         }
 
+        // Re-open the most recently generated 3D visualisation.
+        if (input == "/visualise")
+        {
+            VisualisationService.ShowLast();
+            continue;
+        }
+
         if (string.IsNullOrWhiteSpace(input)) continue;
 
         Console.Write("\nAI: ");
         try
         {
-            await ragService.Ask(input);
+            if (StereometryDetector.IsStereometryQuestion(input))
+            {
+                // For stereometry questions:
+                //   • StreamMessageFilteredAsync streams the answer to the console
+                //     but silently swallows the trailing <GEOM>…</GEOM> block.
+                //   • The full response (including the GEOM JSON) is returned so
+                //     we can extract it and open the browser visualiser.
+                var fullResponse = await ragService.Ask(
+                    input,
+                    capture: true,
+                    instructionSuffix: VisualisationService.GeomInstruction
+                );
+
+                Console.WriteLine();
+
+                if (fullResponse != null)
+                {
+                    var geomJson = VisualisationService.ExtractGeomJson(fullResponse);
+                    if (geomJson != null)
+                    {
+                        Console.WriteLine("[Opening 3D visualisation in browser…]");
+                        VisualisationService.ShowVisualisation(geomJson);
+                    }
+                }
+            }
+            else
+            {
+                await ragService.Ask(input);
+            }
         }
         catch (Exception ex)
         {

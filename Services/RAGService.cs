@@ -166,13 +166,35 @@ public class RAGService
         return true;
     }
 
-    public async Task Ask(string question)
+    // capture = true  → suppresses <GEOM> block from console and returns the full
+    //                    LLM response so the caller can extract and visualise it.
+    // capture = false → original behaviour, returns null.
+    //
+    // instructionSuffix → appended to the API message (not stored in history) so
+    //                     the LLM receives extra instructions (e.g. the GEOM prompt)
+    //                     without polluting the conversation history shown to students.
+    public async Task<string?> Ask(string question, bool capture = false, string? instructionSuffix = null)
     {
-        if (_currentGrade == 0 && _temporaryChunks.Count == 0)
+        // Helper: choose the right send method based on the capture flag.
+        Task<string?> Send(string userMsg, string? apiMsg)
         {
-            await _chat.StreamMessageAsync(question);
-            return;
+            // Append instruction to the API message (not to the stored user message).
+            var finalApi = instructionSuffix != null
+                ? (apiMsg ?? userMsg) + "\n\n" + instructionSuffix
+                : apiMsg;
+
+            if (capture)
+                return _chat.StreamMessageFilteredAsync(userMsg, finalApi)
+                            .ContinueWith(t => (string?)t.Result);
+            else
+            {
+                return _chat.StreamMessageAsync(userMsg, finalApi)
+                            .ContinueWith(_ => (string?)null);
+            }
         }
+
+        if (_currentGrade == 0 && _temporaryChunks.Count == 0)
+            return await Send(question, null);
 
         var qEmbeddingList = await _embeddingService.GetEmbeddingsAsync(new List<string> { question });
         var queryEmbedding = qEmbeddingList.First();
@@ -198,8 +220,7 @@ public class RAGService
             {
                 Console.WriteLine("\n[Qdrant is not running — answering without textbook context.]");
                 Console.WriteLine("Start it with: docker-compose up qdrant\n");
-                await _chat.StreamMessageAsync(question);
-                return;
+                return await Send(question, null);
             }
         }
 
@@ -218,10 +239,7 @@ public class RAGService
 
         // If nothing relevant was found, answer directly without RAG
         if (combinedChunks.Count == 0)
-        {
-            await _chat.StreamMessageAsync(question);
-            return;
-        }
+            return await Send(question, null);
 
         // Format each chunk with its grade + subject label
         var formattedChunks = combinedChunks.Select(c =>
@@ -249,7 +267,7 @@ public class RAGService
             "\n--- End of Material ---\n\n" +
             "Student question: " + question;
 
-        await _chat.StreamMessageAsync(question, ragPrompt);
+        return await Send(question, ragPrompt);
     }
 
     // Used locally for temporary chunk similarity (Qdrant handles this for permanent chunks)

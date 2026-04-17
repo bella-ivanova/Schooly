@@ -100,4 +100,90 @@ public class OllamaChatService
 
         _messages.Add(new Message { Role = ChatRole.Assistant, Content = fullResponse.ToString() });
     }
+
+    // Like StreamMessageAsync but:
+    //   • Suppresses the <GEOM>…</GEOM> block from the console so the student
+    //     never sees raw JSON while still capturing it for VisualisationService.
+    //   • Returns the full unfiltered response (including the GEOM block) so the
+    //     caller can extract and render the JSON.
+    //
+    // Uses a small look-ahead buffer (length of the opening tag) to detect the
+    // tag even when it arrives split across multiple tokens.
+    public async Task<string> StreamMessageFilteredAsync(string newUserMessage, string? apiMessage = null)
+    {
+        _messages.Add(new Message { Role = ChatRole.User, Content = newUserMessage });
+
+        IEnumerable<Message> apiMessages = apiMessage != null
+            ? [.._messages.Take(_messages.Count - 1),
+               new Message { Role = ChatRole.User, Content = apiMessage }]
+            : _messages;
+
+        var request = new ChatRequest
+        {
+            Model    = _model,
+            Messages = apiMessages,
+            Stream   = true,
+            Options  = new RequestOptions { Temperature = (float)Temperature }
+        };
+
+        var fullResponse    = new System.Text.StringBuilder();
+        var displayBuffer   = new System.Text.StringBuilder();
+        bool geomStarted    = false;
+        const string openTag = "<GEOM>";
+
+        try
+        {
+            await foreach (var token in _ollama.ChatAsync(request))
+            {
+                if (token == null) continue;
+                var chunk = token.Message?.Content;
+                if (string.IsNullOrEmpty(chunk)) continue;
+
+                fullResponse.Append(chunk);
+
+                if (!geomStarted)
+                {
+                    displayBuffer.Append(chunk);
+                    var buf = displayBuffer.ToString();
+                    var idx = buf.IndexOf(openTag, StringComparison.Ordinal);
+
+                    if (idx >= 0)
+                    {
+                        // Print everything before the opening tag, then go silent.
+                        if (idx > 0) Console.Write(buf[..idx]);
+                        geomStarted = true;
+                    }
+                    else
+                    {
+                        // Safe to flush everything except the last (tag.Length - 1) chars,
+                        // which might be the start of a tag split across tokens.
+                        var safeLen = buf.Length - (openTag.Length - 1);
+                        if (safeLen > 0)
+                        {
+                            Console.Write(buf[..safeLen]);
+                            displayBuffer.Remove(0, safeLen);
+                        }
+                    }
+                }
+                // Once the GEOM tag has started, accumulate silently.
+            }
+
+            // If <GEOM> never appeared, flush whatever is left in the buffer.
+            if (!geomStarted && displayBuffer.Length > 0)
+                Console.Write(displayBuffer.ToString());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"\n[Chat error] {ex.Message}");
+            Console.WriteLine($"Is model '{_model}' pulled? Run: ollama pull {_model}");
+            _messages.Add(new Message { Role = ChatRole.Assistant, Content = fullResponse.ToString() });
+            return fullResponse.ToString();
+        }
+
+        if (fullResponse.Length == 0)
+            Console.WriteLine($"[No response from model '{_model}'. Is it pulled? Run: ollama pull {_model}]");
+
+        _messages.Add(new Message { Role = ChatRole.Assistant, Content = fullResponse.ToString() });
+        return fullResponse.ToString();
+    }
 }
