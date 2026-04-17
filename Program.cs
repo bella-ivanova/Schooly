@@ -129,7 +129,11 @@ async Task RunAdminMode(RAGService ragService)
                 Console.WriteLine("Usage: /ingest <grade number>");
                 continue;
             }
-            await ragService.IngestGradePDFsAsync(grade);
+            try { await ragService.IngestGradePDFsAsync(grade); }
+            catch (Exception ex) when (IsQdrantDown(ex))
+            {
+                Console.WriteLine("[Qdrant is not running. Start it with: docker-compose up -d qdrant]");
+            }
         }
         else if (input.StartsWith("/status"))
         {
@@ -139,15 +143,22 @@ async Task RunAdminMode(RAGService ragService)
                 Console.WriteLine("Usage: /status <grade number>");
                 continue;
             }
-            var files = await ragService.GetIngestedFilesAsync(grade);
-            if (files.Count == 0)
+            try
             {
-                Console.WriteLine($"No files ingested for Grade {grade}.");
-                continue;
+                var files = await ragService.GetIngestedFilesAsync(grade);
+                if (files.Count == 0)
+                {
+                    Console.WriteLine($"No files ingested for Grade {grade}.");
+                    continue;
+                }
+                Console.WriteLine($"Grade {grade} ingested files:");
+                foreach (var f in files.OrderBy(x => x))
+                    Console.WriteLine($"  {f}");
             }
-            Console.WriteLine($"Grade {grade} ingested files:");
-            foreach (var f in files.OrderBy(x => x))
-                Console.WriteLine($"  {f}");
+            catch (Exception ex) when (IsQdrantDown(ex))
+            {
+                Console.WriteLine("[Qdrant is not running. Start it with: docker-compose up -d qdrant]");
+            }
         }
         else if (input.StartsWith("/delete "))
         {
@@ -158,7 +169,11 @@ async Task RunAdminMode(RAGService ragService)
                 continue;
             }
             var fileKey = parts[2].Trim();
-            await ragService.DeleteGradeFileAsync(grade, fileKey);
+            try { await ragService.DeleteGradeFileAsync(grade, fileKey); }
+            catch (Exception ex) when (IsQdrantDown(ex))
+            {
+                Console.WriteLine("[Qdrant is not running. Start it with: docker-compose up -d qdrant]");
+            }
         }
         else
         {
@@ -374,6 +389,9 @@ async Task<ClaimsPrincipal?> RunLoginAsync(AuthService auth, UserRole expectedRo
 }
 
 // ── Helpers ────────────────────────────────────────────────────
+static bool IsQdrantDown(Exception ex) =>
+    ex.Message.Contains("Connection refused") || ex.Message.Contains("Unavailable");
+
 static string ReadPassword()
 {
     var pwd = new System.Text.StringBuilder();
