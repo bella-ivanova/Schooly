@@ -3,7 +3,7 @@ namespace StudyAssistant.Services;
 public class RAGService
 {
     private readonly EmbeddingService _embeddingService;
-    private readonly OllamaChatService _chat;
+    private readonly IChatService _chat;
     private readonly QdrantService _qdrant;
     private readonly OCRService? _ocr;
     private readonly MathOcrService? _mathOcr;
@@ -14,7 +14,7 @@ public class RAGService
 
     private int _currentGrade = 0;
 
-    public RAGService(OllamaChatService chat, EmbeddingService embeddingService, QdrantService qdrant, OCRService? ocr = null, MathOcrService? mathOcr = null)
+    public RAGService(IChatService chat, EmbeddingService embeddingService, QdrantService qdrant, OCRService? ocr = null, MathOcrService? mathOcr = null)
     {
         _chat             = chat;
         _embeddingService = embeddingService;

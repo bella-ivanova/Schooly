@@ -4,7 +4,7 @@ using OllamaSharp.Models.Chat;
 
 namespace StudyAssistant.Services;
 
-public class OllamaChatService
+public class OllamaChatService : IChatService
 {
     private readonly OllamaApiClient _ollama;
     private readonly string _model;

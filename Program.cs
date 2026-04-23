@@ -62,7 +62,12 @@ if (mathOcrInput == "y")
     mathOcr = new MathOcrService();
 }
 
-var chat      = new OllamaChatService(model);
+// Use ZhipuAI's API directly for GLM models — Ollama charges for cloud model access.
+var zhipuKey = Environment.GetEnvironmentVariable("ZHIPUAI_API_KEY") ?? "";
+IChatService chat = model.StartsWith("glm-", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(zhipuKey)
+    ? new ZhipuAIChatService(model, zhipuKey)
+    : new OllamaChatService(model);
+
 var embedding = new EmbeddingService(embedModel);
 var qdrant    = new QdrantService();
 var rag       = new RAGService(chat, embedding, qdrant, ocr, mathOcr);
@@ -185,7 +190,7 @@ async Task RunAdminMode(RAGService ragService)
 // ══════════════════════════════════════════════════════════════
 // STUDENT MODE
 // ══════════════════════════════════════════════════════════════
-async Task RunStudentMode(OllamaChatService chatService, RAGService ragService)
+async Task RunStudentMode(IChatService chatService, RAGService ragService)
 {
     Console.Write("\nEnter your grade (1-12), or press Enter to skip: ");
     var gradeInput = Console.ReadLine()?.Trim();

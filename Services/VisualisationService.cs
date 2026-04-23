@@ -58,7 +58,7 @@ public static class VisualisationService
 
     // ══════════════════════════════════════════════════════════════════════════
     // HTML TEMPLATE
-    // Uses Three.js r128 + OrbitControls from cdnjs.
+    // Uses Three.js r128 + OrbitControls from jsdelivr (cdnjs does not host the examples folder).
     // __GEOM_JSON__ is replaced by the extracted JSON before writing to disk.
     // ══════════════════════════════════════════════════════════════════════════
     private const string HtmlTemplate = """
@@ -82,8 +82,8 @@ public static class VisualisationService
         <body>
         <div id="hint">Drag to rotate &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Right-drag to pan</div>
 
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
         <script>
         (function () {
           const GEOM = __GEOM_JSON__;
