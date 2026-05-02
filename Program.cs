@@ -252,18 +252,18 @@ async Task RunStudentMode(IChatService chatService, RAGService ragService)
                 var fullResponse = await ragService.Ask(
                     input,
                     capture: true,
-                    instructionSuffix: VisualisationService.GeomInstruction
+                    instructionSuffix: StereometryService.Instruction
                 );
 
                 Console.WriteLine();
 
                 if (fullResponse != null)
                 {
-                    var geomJson = VisualisationService.ExtractGeomJson(fullResponse);
-                    if (geomJson != null)
+                    var sceneJson = StereometryService.ExtractSceneJson(fullResponse);
+                    if (sceneJson != null)
                     {
                         Console.WriteLine("[Opening 3D visualisation in browser…]");
-                        VisualisationService.ShowVisualisation(geomJson);
+                        VisualisationService.ShowHtml(StereometryHtmlBuilder.Build(sceneJson));
                     }
                 }
             }

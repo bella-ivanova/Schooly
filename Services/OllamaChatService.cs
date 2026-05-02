@@ -129,7 +129,7 @@ public class OllamaChatService : IChatService
         var fullResponse    = new System.Text.StringBuilder();
         var displayBuffer   = new System.Text.StringBuilder();
         bool geomStarted    = false;
-        const string openTag = "<GEOM>";
+        const string openTag = "<STEREO>";
 
         try
         {

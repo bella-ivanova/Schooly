@@ -75,7 +75,7 @@ public class ZhipuAIChatService : IChatService
         var fullResponse  = new StringBuilder();
         var displayBuffer = new StringBuilder();
         bool geomStarted  = false;
-        const string openTag = "<GEOM>";
+        const string openTag = "<STEREO>";
 
         try
         {
