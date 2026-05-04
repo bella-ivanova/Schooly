@@ -21,24 +21,25 @@ public class AuthService
 
     // Registers a new user. Returns the created user on success.
     public async Task<(ApplicationUser? User, IReadOnlyList<string> Errors)> RegisterAsync(
-        string username, string email, string password, UserRole role, int? grade = null, string? className = null)
+        string username, string email, string password, UserRole role,
+        string fullName = "", int? grade = null, string? classLetter = null)
     {
         if (role == UserRole.Student && (grade is null or < 1 or > 12))
             return (null, new[] { "Students must have a grade between 1 and 12." });
 
-        // Normalise class to uppercase single letter (e.g. "a" → "A")
-        var normClass = role == UserRole.Student && !string.IsNullOrWhiteSpace(className)
-            ? className.Trim().ToUpperInvariant()
+        var normLetter = role == UserRole.Student && !string.IsNullOrWhiteSpace(classLetter)
+            ? classLetter.Trim().ToUpperInvariant()
             : null;
 
         var user = new ApplicationUser
         {
-            UserName  = username,
-            Email     = email,
-            Role      = role,
-            Grade     = role == UserRole.Student ? grade : null,
-            Class     = normClass,
-            CreatedAt = DateTime.UtcNow
+            UserName    = username,
+            Email       = email,
+            FullName    = fullName,
+            Role        = role,
+            Grade       = role == UserRole.Student ? grade : null,
+            ClassLetter = normLetter,
+            CreatedAt   = DateTime.UtcNow
         };
 
         var (success, errors) = await _users.CreateAsync(user, password);
