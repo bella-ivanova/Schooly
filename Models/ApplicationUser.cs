@@ -6,6 +6,7 @@ public enum UserRole
 {
     Student,
     Teacher,
+    SchoolAdmin,
     Admin,
 }
 
@@ -24,6 +25,10 @@ public class ApplicationUser : IdentityUser
     // FK to the structured Class entity (set by a teacher/admin via AssignStudent).
     public int? ClassId { get; set; }
     public Class? Class { get; set; }
+
+    // School the user belongs to. Set at registration for Teachers/SchoolAdmins;
+    // auto-set when a student is assigned to a class.
+    public string? School { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

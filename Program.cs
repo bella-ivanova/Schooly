@@ -114,7 +114,15 @@ while (currentUser == null)
                 grade = g;
         }
 
-        var (regUser, regErrors) = await authService.RegisterAsync(username, email, password, role, fullName, grade);
+        string? school = null;
+        if (role == UserRole.Teacher)
+        {
+            Console.Write("Училище: ");
+            school = Console.ReadLine()?.Trim();
+            if (string.IsNullOrWhiteSpace(school)) school = null;
+        }
+
+        var (regUser, regErrors) = await authService.RegisterAsync(username, email, password, role, fullName, grade, school: school);
         if (regUser == null)
         {
             Console.WriteLine($"Грешка: {string.Join(", ", regErrors)}");
@@ -132,6 +140,8 @@ if (currentUser == null) return;
 // ── Route by role ───────────────────────────────────────────────────────
 if (currentUser.Role == UserRole.Admin || currentUser.UserName == "admin")
     await RunAdminMode(rag, adminUserService);
+else if (currentUser.Role == UserRole.SchoolAdmin)
+    await RunSchoolAdminMode(currentUser, db, repo);
 else if (currentUser.Role == UserRole.Teacher)
     Console.WriteLine("\nУчителското табло идва скоро!");
 else
@@ -151,6 +161,7 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
     Console.WriteLine("  /assignstudent           — добави ученик в клас");
     Console.WriteLine("  /listusers               — покажи потребителите");
     Console.WriteLine("  /deleteclass             — изтрий клас");
+    Console.WriteLine("  /makeschooldamin         — направи потребител училищен администратор");
     Console.WriteLine("  /exit                    — изход\n");
 
     while (true)
@@ -206,7 +217,8 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
         else if (input == "/listclasses")     { await adminSvc.ListClassesAsync(); }
         else if (input == "/assignstudent")   { await adminSvc.AssignStudentAsync(); }
         else if (input == "/listusers")       { await adminSvc.ListUsersAsync(); }
-        else if (input == "/deleteclass")     { await adminSvc.DeleteClassAsync(); }
+        else if (input == "/deleteclass")      { await adminSvc.DeleteClassAsync(); }
+        else if (input == "/makeschooldamin") { await adminSvc.MakeSchoolAdminAsync(); }
         else
         {
             Console.WriteLine("Непозната команда. Въведи /exit за изход.");
@@ -313,6 +325,42 @@ async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGSer
                 await logService.SaveMessageAsync(capturedUserId, "assistant", capturedResponse, subject, topic);
             });
         }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SCHOOL ADMIN MODE
+// ══════════════════════════════════════════════════════════════
+async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUserRepository repository)
+{
+    if (string.IsNullOrWhiteSpace(user.School))
+    {
+        Console.WriteLine("\n[Грешка] Акаунтът няма зададено училище. Свържи се с администратора.");
+        return;
+    }
+
+    var svc = new SchoolAdminService(database, repository, user.School);
+
+    Console.WriteLine($"\nУчилищен администратор — {user.School}. Команди:");
+    Console.WriteLine("  /addclass        — добави клас");
+    Console.WriteLine("  /listclasses     — покажи класовете");
+    Console.WriteLine("  /assignteacher   — назначи учител на клас");
+    Console.WriteLine("  /assignstudent   — добави ученик в клас");
+    Console.WriteLine("  /listusers       — покажи потребителите в училището");
+    Console.WriteLine("  /exit            — изход\n");
+
+    while (true)
+    {
+        Console.Write($"SchoolAdmin [{user.School}]> ");
+        var input = Console.ReadLine()?.Trim() ?? "";
+
+        if (input == "/exit")          break;
+        else if (input == "/addclass")       await svc.AddClassAsync();
+        else if (input == "/listclasses")    await svc.ListClassesAsync();
+        else if (input == "/assignteacher")  await svc.AssignTeacherAsync();
+        else if (input == "/assignstudent")  await svc.AssignStudentAsync();
+        else if (input == "/listusers")      await svc.ListUsersAsync();
+        else Console.WriteLine("Непозната команда. Въведи /exit за изход.");
     }
 }
 

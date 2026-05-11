@@ -76,6 +76,7 @@ public class AdminUserService
         }
 
         student.ClassId = cls.Id;
+        student.School  = cls.School;
         await _users.UpdateAsync(student);
         Console.WriteLine($"Ученик '{studentUsername}' е добавен в клас '{className}'.");
     }
@@ -96,10 +97,31 @@ public class AdminUserService
 
         foreach (var u in users)
         {
-            var gradeTag = u.Grade.HasValue ? $"  Клас {u.Grade}" : "";
-            var classTag = u.Class != null ? $" ({u.Class.Name})" : " (Без клас)";
-            Console.WriteLine($"  [{u.Role}] {u.UserName} — {u.FullName}{gradeTag}{classTag}");
+            var gradeTag  = u.Grade.HasValue ? $"  Клас {u.Grade}" : "";
+            var classTag  = u.Class != null ? $" ({u.Class.Name})" : " (Без клас)";
+            var schoolTag = u.School != null ? $" | {u.School}" : "";
+            Console.WriteLine($"  [{u.Role}] {u.UserName} — {u.FullName}{gradeTag}{classTag}{schoolTag}");
         }
+    }
+
+    public async Task MakeSchoolAdminAsync()
+    {
+        Console.Write("Потребителско име: ");
+        var username = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("Училище: ");
+        var school = Console.ReadLine()?.Trim() ?? "";
+
+        var user = await _users.GetByUsernameAsync(username);
+        if (user == null)
+        {
+            Console.WriteLine($"Потребителят '{username}' не е намерен.");
+            return;
+        }
+
+        user.Role   = UserRole.SchoolAdmin;
+        user.School = school;
+        await _users.UpdateAsync(user);
+        Console.WriteLine($"'{username}' е вече училищен администратор на '{school}'.");
     }
 
     public async Task DeleteClassAsync()
