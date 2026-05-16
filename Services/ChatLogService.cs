@@ -33,18 +33,16 @@ public class ChatLogService
 
     public async Task<(string subject, string topic)> DetectSubjectTopicAsync(string question)
     {
-        // Fresh history for each call so detection never bleeds into the main conversation.
-        _chat.SetSystemPrompt("You are a concise classifier. Reply ONLY with valid JSON, no explanation.");
-
         var prompt =
             $"Given this student question: '{question}', reply with ONLY a JSON object with no extra text: " +
             "{\"subject\": \"<Bulgarian school curriculum subject name>\", \"topic\": \"<short topic label in Bulgarian>\"}";
 
         try
         {
-            var response = await _chat.SendMessageAsync(prompt);
+            var response = await _chat.OneShotAsync(
+                "You are a concise classifier. Reply ONLY with valid JSON, no explanation.",
+                prompt);
 
-            // Strip markdown code fences if the model wraps the JSON
             var json = response.Trim();
             if (json.StartsWith("```"))
             {
@@ -54,15 +52,36 @@ public class ChatLogService
                     json = json[(nl + 1)..last].Trim();
             }
 
-            using var doc    = JsonDocument.Parse(json);
-            var subject      = doc.RootElement.GetProperty("subject").GetString() ?? "Unknown";
-            var topic        = doc.RootElement.GetProperty("topic").GetString()   ?? "Unknown";
+            using var doc = JsonDocument.Parse(json);
+            var subject   = doc.RootElement.GetProperty("subject").GetString() ?? "Unknown";
+            var topic     = doc.RootElement.GetProperty("topic").GetString()   ?? "Unknown";
             return (subject, topic);
         }
         catch
         {
             return ("Unknown", "Unknown");
         }
+    }
+
+    public async Task<List<(string Topic, string Subject, int Count)>> GetWeakSpotsAsync(
+        string userId, int days = 7, int minCount = 2)
+    {
+        var since = DateTime.UtcNow.AddDays(-days);
+
+        var messages = await _db.ChatMessages
+            .Where(m => m.UserId == userId && m.Timestamp >= since && m.Topic != "Unknown")
+            .ToListAsync();
+
+        return messages
+            .GroupBy(m => m.Topic)
+            .Where(g => g.Count() >= minCount)
+            .OrderByDescending(g => g.Count())
+            .Select(g => (
+                Topic:   g.Key,
+                Subject: g.OrderByDescending(m => m.Timestamp).First().Subject,
+                Count:   g.Count()
+            ))
+            .ToList();
     }
 
     public async Task<List<ChatMessage>> GetHistoryAsync(string userId, int limit = 50)

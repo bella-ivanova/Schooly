@@ -57,6 +57,8 @@ var db               = services.GetRequiredService<AppDbContext>();
 var classChat        = new OllamaChatService("llama3.2");
 var chatLogService   = new ChatLogService(db, classChat);
 var adminUserService = new AdminUserService(db, repo);
+var practiceService  = new PracticeQuestionService(classChat);
+var examService      = new ExamService(rag, classChat);
 
 // ── Login / register menu ───────────────────────────────────────────────
 ApplicationUser? currentUser = null;
@@ -145,7 +147,7 @@ else if (currentUser.Role == UserRole.SchoolAdmin)
 else if (currentUser.Role == UserRole.Teacher)
     Console.WriteLine("\nУчителското табло идва скоро!");
 else
-    await RunStudentMode(currentUser, chat, rag, chatLogService);
+    await RunStudentMode(currentUser, chat, rag, chatLogService, practiceService, examService);
 
 // ══════════════════════════════════════════════════════════════
 // ADMIN MODE
@@ -229,7 +231,8 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
 // ══════════════════════════════════════════════════════════════
 // STUDENT MODE
 // ══════════════════════════════════════════════════════════════
-async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGService ragService, ChatLogService logService)
+async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGService ragService,
+    ChatLogService logService, PracticeQuestionService practiceService, ExamService examService)
 {
     if (user.Grade.HasValue)
         ragService.SetGrade(user.Grade.Value);
@@ -239,10 +242,19 @@ async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGSer
         ? $"\nДобре дошъл обратно, {user.FullName}!"
         : $"\nДобре дошъл в Schooly, {user.FullName}!");
 
+    var weakSpots = await logService.GetWeakSpotsAsync(user.Id, days: 7, minCount: 2);
+    if (weakSpots.Count > 0)
+    {
+        Console.WriteLine("\n🔁 Тази седмица си питал най-много за:");
+        foreach (var (topic, subject, count) in weakSpots.Take(3))
+            Console.WriteLine($"  • {topic} ({subject}) — {count} пъти");
+        Console.WriteLine();
+    }
+
     chatService.SetSystemPrompt(
         "You are a helpful school tutor. Explain concepts clearly and step by step.");
 
-    Console.WriteLine("\nКоманди: /clear  /load <pdf>  /visualise  /exit\n");
+    Console.WriteLine("\nКоманди: /clear  /load <pdf>  /visualise  /exam  /exit\n");
 
     while (true)
     {
@@ -271,6 +283,18 @@ async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGSer
         if (input == "/visualise")
         {
             VisualisationService.ShowLast();
+            continue;
+        }
+
+        if (input == "/exam")
+        {
+            Console.Write("Въведи тема за изпита: ");
+            var topic = Console.ReadLine()?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(topic)) continue;
+            Console.WriteLine("\nГенерирам изпит…");
+            var exam = await examService.GenerateExamAsync(topic, user.Grade ?? 10);
+            Console.WriteLine("\n" + exam);
+            Console.WriteLine();
             continue;
         }
 
@@ -324,6 +348,15 @@ async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGSer
                 await logService.SaveMessageAsync(capturedUserId, "user",      capturedInput,    subject, topic);
                 await logService.SaveMessageAsync(capturedUserId, "assistant", capturedResponse, subject, topic);
             });
+
+            var questions = await practiceService.GenerateAsync(input, aiResponse);
+            if (questions.Count > 0)
+            {
+                Console.WriteLine("\n📝 Практически въпроси:");
+                for (int i = 0; i < questions.Count; i++)
+                    Console.WriteLine($"  {i + 1}. {questions[i]}");
+                Console.WriteLine();
+            }
         }
     }
 }

@@ -26,6 +26,31 @@ public class OllamaChatService : IChatService
         _messages.Add(new Message { Role = ChatRole.System, Content = prompt });
     }
 
+    // Sends a single message with a completely fresh history so the call never
+    // bleeds into (or is contaminated by) the ongoing conversation state.
+    public async Task<string> OneShotAsync(string systemPrompt, string userMessage)
+    {
+        var tempMessages = new List<Message>
+        {
+            new Message { Role = ChatRole.System, Content = systemPrompt },
+            new Message { Role = ChatRole.User,   Content = userMessage  }
+        };
+
+        var request = new ChatRequest
+        {
+            Model    = _model,
+            Messages = tempMessages,
+            Stream   = false,
+            Options  = new RequestOptions { Temperature = (float)Temperature }
+        };
+
+        var sb = new System.Text.StringBuilder();
+        await foreach (var token in _ollama.ChatAsync(request))
+            sb.Append(token?.Message?.Content);
+
+        return sb.ToString();
+    }
+
     // Sends a message and waits for the full reply before returning.
     // Used internally; streaming is preferred for interactive chat.
     public async Task<string> SendMessageAsync(string userMessage)

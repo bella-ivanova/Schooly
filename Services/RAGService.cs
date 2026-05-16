@@ -166,42 +166,18 @@ public class RAGService
         return true;
     }
 
-    // capture = true  → suppresses <GEOM> block from console and returns the full
-    //                    LLM response so the caller can extract and visualise it.
-    // capture = false → original behaviour, returns null.
-    //
-    // instructionSuffix → appended to the API message (not stored in history) so
-    //                     the LLM receives extra instructions (e.g. the GEOM prompt)
-    //                     without polluting the conversation history shown to students.
-    public async Task<string?> Ask(string question, bool capture = false, string? instructionSuffix = null)
+    // Returns the raw formatted context string for a query (embedding + Qdrant + temp chunks).
+    // Returns empty string if nothing is found or Qdrant is unreachable.
+    private async Task<string> GetContextAsync(string query)
     {
-        // Helper: choose the right send method based on the capture flag.
-        Task<string?> Send(string userMsg, string? apiMsg)
-        {
-            // Append instruction to the API message (not to the stored user message).
-            var finalApi = instructionSuffix != null
-                ? (apiMsg ?? userMsg) + "\n\n" + instructionSuffix
-                : apiMsg;
-
-            if (capture)
-                return _chat.StreamMessageFilteredAsync(userMsg, finalApi)
-                            .ContinueWith(t => (string?)t.Result);
-            else
-            {
-                return _chat.StreamMessageAsync(userMsg, finalApi)
-                            .ContinueWith(_ => (string?)null);
-            }
-        }
-
         if (_currentGrade == 0 && _temporaryChunks.Count == 0)
-            return await Send(question, null);
+            return "";
 
-        var qEmbeddingList = await _embeddingService.GetEmbeddingsAsync(new List<string> { question });
+        var qEmbeddingList = await _embeddingService.GetEmbeddingsAsync(new List<string> { query });
         var queryEmbedding = qEmbeddingList.First();
 
         var combinedChunks = new List<(string Text, string Subject, int Grade)>();
 
-        // Search Qdrant — the gradeFilter handles grades 1 → N automatically
         if (_currentGrade > 0)
         {
             try
@@ -212,7 +188,6 @@ public class RAGService
                     minScore:    0.1f,
                     gradeFilter: _currentGrade
                 );
-
                 foreach (var r in qdrantResults)
                     combinedChunks.Add((r.Text, r.Subject, r.Grade));
             }
@@ -220,11 +195,10 @@ public class RAGService
             {
                 Console.WriteLine("\n[Qdrant is not running — answering without textbook context.]");
                 Console.WriteLine("Start it with: docker-compose up qdrant\n");
-                return await Send(question, null);
+                return "";
             }
         }
 
-        // Search temporary in-memory chunks (cosine similarity done locally)
         if (_temporaryChunks.Count > 0)
         {
             var tempResults = _temporaryChunks
@@ -233,15 +207,12 @@ public class RAGService
                 .OrderByDescending(x => x.Score)
                 .Take(5)
                 .Select(x => (x.Text, x.Subject, Grade: _currentGrade));
-
             combinedChunks.AddRange(tempResults);
         }
 
-        // If nothing relevant was found, answer directly without RAG
         if (combinedChunks.Count == 0)
-            return await Send(question, null);
+            return "";
 
-        // Format each chunk with its grade + subject label
         var formattedChunks = combinedChunks.Select(c =>
         {
             var label = $"[Grade {c.Grade}";
@@ -250,7 +221,40 @@ public class RAGService
             return $"{label}\n{c.Text}";
         });
 
-        var context = string.Join("\n\n", formattedChunks);
+        return string.Join("\n\n", formattedChunks);
+    }
+
+    // Returns the raw context chunks for a topic query without calling the LLM.
+    // Used by ExamService to retrieve relevant textbook material.
+    public async Task<string> GetChunksAsync(string query) => await GetContextAsync(query);
+
+    // capture = true  → suppresses <GEOM> block from console and returns the full
+    //                    LLM response so the caller can extract and visualise it.
+    // capture = false → original behaviour, returns null.
+    //
+    // instructionSuffix → appended to the API message (not stored in history) so
+    //                     the LLM receives extra instructions (e.g. the GEOM prompt)
+    //                     without polluting the conversation history shown to students.
+    public async Task<string?> Ask(string question, bool capture = false, string? instructionSuffix = null)
+    {
+        Task<string?> Send(string userMsg, string? apiMsg)
+        {
+            var finalApi = instructionSuffix != null
+                ? (apiMsg ?? userMsg) + "\n\n" + instructionSuffix
+                : apiMsg;
+
+            if (capture)
+                return _chat.StreamMessageFilteredAsync(userMsg, finalApi)
+                            .ContinueWith(t => (string?)t.Result);
+            else
+                return _chat.StreamMessageAsync(userMsg, finalApi)
+                            .ContinueWith(_ => (string?)null);
+        }
+
+        var context = await GetContextAsync(question);
+
+        if (string.IsNullOrEmpty(context))
+            return await Send(question, null);
 
         var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
         var ragPrompt =
