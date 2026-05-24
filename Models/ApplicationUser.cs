@@ -2,14 +2,6 @@ using Microsoft.AspNetCore.Identity;
 
 namespace StudyAssistant.Models;
 
-public enum UserRole
-{
-    Student,
-    Teacher,
-    SchoolAdmin,
-    Admin,
-}
-
 public class ApplicationUser : IdentityUser
 {
     public UserRole Role { get; set; } = UserRole.Student;

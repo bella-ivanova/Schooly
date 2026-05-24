@@ -120,6 +120,29 @@ public class SchoolAdminService
         Console.WriteLine($"Ученик '{studentUsername}' е добавен в клас '{className}'.");
     }
 
+    public async Task RemoveStudentAsync()
+    {
+        Console.Write("Потребителско име на ученика: ");
+        var studentUsername = Console.ReadLine()?.Trim() ?? "";
+
+        var student = await _users.GetByUsernameAsync(studentUsername);
+        if (student == null)
+        {
+            Console.WriteLine($"Потребителят '{studentUsername}' не е намерен.");
+            return;
+        }
+
+        if (student.School != _school)
+        {
+            Console.WriteLine("Ученикът не принадлежи към твоето училище.");
+            return;
+        }
+
+        student.ClassId = null;
+        await _users.UpdateAsync(student);
+        Console.WriteLine($"Ученик '{studentUsername}' е премахнат от класа си.");
+    }
+
     public async Task ListUsersAsync()
     {
         var users = await _db.Set<ApplicationUser>()

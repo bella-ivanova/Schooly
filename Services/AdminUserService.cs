@@ -60,6 +60,8 @@ public class AdminUserService
         var studentUsername = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Клас (напр. 10А): ");
         var className = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("Училище: ");
+        var school = Console.ReadLine()?.Trim() ?? "";
 
         var student = await _users.GetByUsernameAsync(studentUsername);
         if (student == null)
@@ -68,7 +70,7 @@ public class AdminUserService
             return;
         }
 
-        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className);
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == school);
         if (cls == null)
         {
             Console.WriteLine($"Клас '{className}' не е намерен.");
@@ -128,10 +130,12 @@ public class AdminUserService
     {
         Console.Write("Клас за изтриване: ");
         var className = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("Училище: ");
+        var school = Console.ReadLine()?.Trim() ?? "";
 
         var cls = await _db.Classes
             .Include(c => c.Students)
-            .FirstOrDefaultAsync(c => c.Name == className);
+            .FirstOrDefaultAsync(c => c.Name == className && c.School == school);
 
         if (cls == null)
         {
