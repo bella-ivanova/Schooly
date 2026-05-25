@@ -17,14 +17,22 @@ public class ChatLogService
     }
 
     public async Task SaveMessageAsync(string userId, string role, string content,
-        string subject = "Unknown", string topic = "Unknown")
+        string detectedSubject = "Unknown", string topic = "Unknown", string? school = null)
     {
+        int? subjectId = null;
+        if (school != null && detectedSubject != "Unknown")
+        {
+            var sub = await _db.Subjects
+                .FirstOrDefaultAsync(s => s.Name == detectedSubject && s.School == school);
+            subjectId = sub?.Id;
+        }
+
         _db.ChatMessages.Add(new ChatMessage
         {
             UserId    = userId,
             Role      = role,
             Content   = content,
-            Subject   = subject,
+            SubjectId = subjectId,
             Topic     = topic,
             Timestamp = DateTime.UtcNow,
         });
@@ -69,6 +77,7 @@ public class ChatLogService
         var since = DateTime.UtcNow.AddDays(-days);
 
         var messages = await _db.ChatMessages
+            .Include(m => m.Subject)
             .Where(m => m.UserId == userId && m.Timestamp >= since && m.Topic != "Unknown")
             .ToListAsync();
 
@@ -78,7 +87,7 @@ public class ChatLogService
             .OrderByDescending(g => g.Count())
             .Select(g => (
                 Topic:   g.Key,
-                Subject: g.OrderByDescending(m => m.Timestamp).First().Subject,
+                Subject: g.OrderByDescending(m => m.Timestamp).First().Subject?.Name ?? "Unknown",
                 Count:   g.Count()
             ))
             .ToList();

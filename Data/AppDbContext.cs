@@ -10,6 +10,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<Class> Classes { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
+    public DbSet<Subject> Subjects { get; set; }
+    public DbSet<TeacherSubject> TeacherSubjects { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -38,6 +40,29 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
              .OnDelete(DeleteBehavior.SetNull);
         });
 
+        builder.Entity<Subject>(b =>
+        {
+            b.Property(s => s.Name).IsRequired();
+            b.Property(s => s.School).IsRequired();
+        });
+
+        builder.Entity<TeacherSubject>(b =>
+        {
+            b.HasKey(ts => new { ts.TeacherId, ts.SubjectId });
+
+            b.HasOne(ts => ts.Teacher)
+             .WithMany(u => u.TeacherSubjects)
+             .HasForeignKey(ts => ts.TeacherId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(ts => ts.Subject)
+             .WithMany(s => s.TeacherSubjects)
+             .HasForeignKey(ts => ts.SubjectId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<ChatMessage>(b =>
         {
             b.HasOne(m => m.User)
@@ -45,6 +70,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
              .HasForeignKey(m => m.UserId)
              .IsRequired()
              .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(m => m.Subject)
+             .WithMany()
+             .HasForeignKey(m => m.SubjectId)
+             .IsRequired(false)
+             .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

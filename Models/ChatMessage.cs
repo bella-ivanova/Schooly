@@ -7,7 +7,8 @@ public class ChatMessage
     public ApplicationUser? User { get; set; }
     public string Role { get; set; } = "";        // "user" or "assistant"
     public string Content { get; set; } = "";
-    public string Subject { get; set; } = "";     // e.g. "Математика"
+    public int? SubjectId { get; set; }
+    public Subject? Subject { get; set; }
     public string Topic { get; set; } = "";       // e.g. "Стереометрия"
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

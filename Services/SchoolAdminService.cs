@@ -120,6 +120,81 @@ public class SchoolAdminService
         Console.WriteLine($"Ученик '{studentUsername}' е добавен в клас '{className}'.");
     }
 
+    public async Task AssignSubjectToTeacherAsync()
+    {
+        Console.Write("Потребителско име на учителя: ");
+        var teacherUsername = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("ID на предмета: ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out var subjectId))
+        {
+            Console.WriteLine("Невалидно ID.");
+            return;
+        }
+
+        var teacher = await _users.GetByUsernameAsync(teacherUsername);
+        if (teacher == null)
+        {
+            Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
+            return;
+        }
+
+        if (teacher.School != _school)
+        {
+            Console.WriteLine($"Учителят не принадлежи към училище '{_school}'.");
+            return;
+        }
+
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.School == _school);
+        if (subject == null)
+        {
+            Console.WriteLine($"Предмет с ID {subjectId} не е намерен в '{_school}'.");
+            return;
+        }
+
+        var alreadyAssigned = await _db.TeacherSubjects
+            .AnyAsync(ts => ts.TeacherId == teacher.Id && ts.SubjectId == subjectId);
+        if (alreadyAssigned)
+        {
+            Console.WriteLine($"Предметът вече е назначен на '{teacherUsername}'.");
+            return;
+        }
+
+        _db.TeacherSubjects.Add(new TeacherSubject { TeacherId = teacher.Id, SubjectId = subjectId });
+        await _db.SaveChangesAsync();
+        Console.WriteLine($"Предмет '{subject.Name}' е назначен на '{teacherUsername}'.");
+    }
+
+    public async Task RemoveSubjectFromTeacherAsync()
+    {
+        Console.Write("Потребителско име на учителя: ");
+        var teacherUsername = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("ID на предмета: ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out var subjectId))
+        {
+            Console.WriteLine("Невалидно ID.");
+            return;
+        }
+
+        var teacher = await _users.GetByUsernameAsync(teacherUsername);
+        if (teacher == null)
+        {
+            Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
+            return;
+        }
+
+        var row = await _db.TeacherSubjects
+            .FirstOrDefaultAsync(ts => ts.TeacherId == teacher.Id && ts.SubjectId == subjectId);
+        if (row == null)
+        {
+            Console.WriteLine("Връзката не е намерена.");
+            return;
+        }
+
+        _db.TeacherSubjects.Remove(row);
+        await _db.SaveChangesAsync();
+        Console.WriteLine($"Предметът е премахнат от '{teacherUsername}'.");
+    }
+
     public async Task RemoveStudentAsync()
     {
         Console.Write("Потребителско име на ученика: ");

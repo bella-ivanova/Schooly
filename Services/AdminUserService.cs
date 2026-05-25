@@ -126,6 +126,48 @@ public class AdminUserService
         Console.WriteLine($"'{username}' е вече училищен администратор на '{school}'.");
     }
 
+    public async Task CreateSubjectAsync()
+    {
+        Console.Write("Название на предмета: ");
+        var name = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("Училище: ");
+        var school = Console.ReadLine()?.Trim() ?? "";
+
+        var exists = await _db.Subjects.AnyAsync(s => s.Name == name && s.School == school);
+        if (exists)
+        {
+            Console.WriteLine($"Предмет '{name}' вече съществува в '{school}'.");
+            return;
+        }
+
+        _db.Subjects.Add(new Subject { Name = name, School = school });
+        await _db.SaveChangesAsync();
+        Console.WriteLine($"Предмет '{name}' е създаден в '{school}'.");
+    }
+
+    public async Task DeleteSubjectAsync()
+    {
+        Console.Write("ID на предмета: ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out var subjectId))
+        {
+            Console.WriteLine("Невалидно ID.");
+            return;
+        }
+        Console.Write("Училище: ");
+        var school = Console.ReadLine()?.Trim() ?? "";
+
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.School == school);
+        if (subject == null)
+        {
+            Console.WriteLine($"Предмет с ID {subjectId} не е намерен в '{school}'.");
+            return;
+        }
+
+        _db.Subjects.Remove(subject);
+        await _db.SaveChangesAsync();
+        Console.WriteLine($"Предмет '{subject.Name}' е изтрит.");
+    }
+
     public async Task DeleteClassAsync()
     {
         Console.Write("Клас за изтриване: ");

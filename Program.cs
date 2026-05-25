@@ -342,11 +342,12 @@ async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGSer
             var capturedInput    = input;
             var capturedResponse = aiResponse;
             var capturedUserId   = user.Id;
+            var capturedSchool   = user.School;
             _ = Task.Run(async () =>
             {
                 var (subject, topic) = await logService.DetectSubjectTopicAsync(capturedInput);
-                await logService.SaveMessageAsync(capturedUserId, "user",      capturedInput,    subject, topic);
-                await logService.SaveMessageAsync(capturedUserId, "assistant", capturedResponse, subject, topic);
+                await logService.SaveMessageAsync(capturedUserId, "user",      capturedInput,    subject, topic, capturedSchool);
+                await logService.SaveMessageAsync(capturedUserId, "assistant", capturedResponse, subject, topic, capturedSchool);
             });
 
             var questions = await practiceService.GenerateAsync(input, aiResponse);

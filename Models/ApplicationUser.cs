@@ -23,4 +23,6 @@ public class ApplicationUser : IdentityUser
     public string? School { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<TeacherSubject> TeacherSubjects { get; set; } = new List<TeacherSubject>();
 }
