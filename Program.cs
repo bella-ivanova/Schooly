@@ -56,9 +56,10 @@ var repo             = services.GetRequiredService<IUserRepository>();
 var db               = services.GetRequiredService<AppDbContext>();
 var classChat        = new OllamaChatService("llama3.2");
 var chatLogService   = new ChatLogService(db, classChat);
-var adminUserService = new AdminUserService(db, repo);
-var practiceService  = new PracticeQuestionService(classChat);
-var examService      = new ExamService(rag, classChat);
+var adminUserService        = new AdminUserService(db, repo);
+var practiceService         = new PracticeQuestionService(classChat);
+var examService             = new ExamService(rag, classChat);
+var teacherDashboardService = new TeacherDashboardService(db);
 
 // ── Login / register menu ───────────────────────────────────────────────
 ApplicationUser? currentUser = null;
@@ -145,7 +146,7 @@ if (currentUser.Role == UserRole.Admin || currentUser.UserName == "admin")
 else if (currentUser.Role == UserRole.SchoolAdmin)
     await RunSchoolAdminMode(currentUser, db, repo);
 else if (currentUser.Role == UserRole.Teacher)
-    Console.WriteLine("\nУчителското табло идва скоро!");
+    await RunTeacherMode(currentUser, db, teacherDashboardService);
 else
     await RunStudentMode(currentUser, chat, rag, chatLogService, practiceService, examService);
 
@@ -161,6 +162,7 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
     Console.WriteLine("  /addclass                — добави клас");
     Console.WriteLine("  /listclasses             — покажи класовете");
     Console.WriteLine("  /assignstudent           — добави ученик в клас");
+    Console.WriteLine("  /assignteachertoclass    — назначи учител на клас по предмет");
     Console.WriteLine("  /listusers               — покажи потребителите");
     Console.WriteLine("  /deleteclass             — изтрий клас");
     Console.WriteLine("  /makeschooladmin         — направи потребител училищен администратор");
@@ -217,10 +219,11 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
         }
         else if (input == "/addclass")        { await adminSvc.AddClassAsync(); }
         else if (input == "/listclasses")     { await adminSvc.ListClassesAsync(); }
-        else if (input == "/assignstudent")   { await adminSvc.AssignStudentAsync(); }
-        else if (input == "/listusers")       { await adminSvc.ListUsersAsync(); }
-        else if (input == "/deleteclass")      { await adminSvc.DeleteClassAsync(); }
-        else if (input == "/makeschooladmin") { await adminSvc.MakeSchoolAdminAsync(); }
+        else if (input == "/assignstudent")        { await adminSvc.AssignStudentAsync(); }
+        else if (input == "/assignteachertoclass") { await adminSvc.AssignTeacherToClassAsync(); }
+        else if (input == "/listusers")            { await adminSvc.ListUsersAsync(); }
+        else if (input == "/deleteclass")          { await adminSvc.DeleteClassAsync(); }
+        else if (input == "/makeschooladmin")      { await adminSvc.MakeSchoolAdminAsync(); }
         else
         {
             Console.WriteLine("Непозната команда. Въведи /exit за изход.");
@@ -379,10 +382,11 @@ async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUser
     Console.WriteLine("  /addclass        — добави клас");
     Console.WriteLine("  /listclasses     — покажи класовете");
     Console.WriteLine("  /assignteacher   — назначи учител на клас");
-    Console.WriteLine("  /assignstudent   — добави ученик в клас");
-    Console.WriteLine("  /removestudent   — премахни ученик от клас");
-    Console.WriteLine("  /listusers       — покажи потребителите в училището");
-    Console.WriteLine("  /exit            — изход\n");
+    Console.WriteLine("  /assignstudent        — добави ученик в клас");
+    Console.WriteLine("  /removestudent        — премахни ученик от клас");
+    Console.WriteLine("  /assignteachertoclass — назначи учител на клас по предмет");
+    Console.WriteLine("  /listusers            — покажи потребителите в училището");
+    Console.WriteLine("  /exit                 — изход\n");
 
     while (true)
     {
@@ -394,9 +398,111 @@ async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUser
         else if (input == "/listclasses")    await svc.ListClassesAsync();
         else if (input == "/assignteacher")  await svc.AssignTeacherAsync();
         else if (input == "/assignstudent")  await svc.AssignStudentAsync();
-        else if (input == "/removestudent")  await svc.RemoveStudentAsync();
-        else if (input == "/listusers")      await svc.ListUsersAsync();
+        else if (input == "/removestudent")        await svc.RemoveStudentAsync();
+        else if (input == "/assignteachertoclass") await svc.AssignTeacherToClassAsync();
+        else if (input == "/listusers")            await svc.ListUsersAsync();
         else Console.WriteLine("Непозната команда. Въведи /exit за изход.");
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TEACHER MODE
+// ══════════════════════════════════════════════════════════════
+async Task RunTeacherMode(ApplicationUser user, AppDbContext database, TeacherDashboardService dashboardService)
+{
+    Console.WriteLine($"\nДобре дошъл, {user.FullName}! ({user.School})");
+    Console.WriteLine("Команди:");
+    Console.WriteLine("  /classes         — покажи моите класове и предмети");
+    Console.WriteLine("  /struggles       — топ теми, с които учениците имат затруднения");
+    Console.WriteLine("  /active          — най-активни ученици по клас");
+    Console.WriteLine("  /exit            — изход\n");
+
+    while (true)
+    {
+        Console.Write("Учител> ");
+        var input = Console.ReadLine()?.Trim() ?? "";
+        if (input == "/exit") break;
+
+        else if (input == "/classes")
+        {
+            var myClasses = await dashboardService.GetMyClassesAsync(user.Id);
+            if (myClasses.Count == 0)
+            {
+                Console.WriteLine("Нямаш назначени класове.");
+                continue;
+            }
+
+            foreach (var (cls, subjects, studentCount) in myClasses)
+            {
+                Console.WriteLine($"\n  Клас {cls.Name} ({cls.School}) — {studentCount} ученика");
+                foreach (var s in subjects)
+                    Console.WriteLine($"    • {s.Name}");
+            }
+        }
+
+        else if (input == "/struggles")
+        {
+            var myClasses = await dashboardService.GetMyClassesAsync(user.Id);
+            if (myClasses.Count == 0)
+            {
+                Console.WriteLine("Нямаш назначени класове.");
+                continue;
+            }
+
+            Console.WriteLine("\nТвоите класове:");
+            for (int i = 0; i < myClasses.Count; i++)
+                Console.WriteLine($"  [{i + 1}] {myClasses[i].Class.Name}");
+
+            Console.Write("Избери клас (номер): ");
+            var pick = Console.ReadLine()?.Trim() ?? "";
+            if (!int.TryParse(pick, out var idx) || idx < 1 || idx > myClasses.Count)
+            {
+                Console.WriteLine("Невалиден избор.");
+                continue;
+            }
+
+            var selected  = myClasses[idx - 1];
+            var struggles = await dashboardService.GetStrugglesByClassAsync(user.Id, selected.Class.Id);
+
+            if (struggles.Count == 0 || struggles.All(s => s.TopTopics.Count == 0))
+            {
+                Console.WriteLine($"Няма достатъчно данни за клас {selected.Class.Name}.");
+                continue;
+            }
+
+            foreach (var (cls, subject, topics) in struggles)
+            {
+                if (topics.Count == 0) continue;
+                Console.WriteLine($"\n  Клас {cls.Name} — {subject.Name}:");
+                for (int i = 0; i < topics.Count; i++)
+                    Console.WriteLine($"    {i + 1}. {topics[i].Topic} ({topics[i].Count} въпроса)");
+            }
+        }
+
+        else if (input == "/active")
+        {
+            var activeData = await dashboardService.GetActiveStudentsByClassAsync(user.Id);
+            if (activeData.Count == 0)
+            {
+                Console.WriteLine("Нямаш назначени класове.");
+                continue;
+            }
+
+            foreach (var (cls, students) in activeData)
+            {
+                Console.WriteLine($"\n  Клас {cls.Name}:");
+                if (students.Count == 0)
+                {
+                    Console.WriteLine("    Няма активност.");
+                    continue;
+                }
+
+                for (int i = 0; i < students.Count; i++)
+                    Console.WriteLine($"    {i + 1}. {students[i].Student.FullName} ({students[i].Student.UserName}) — {students[i].QuestionCount} въпроса");
+            }
+        }
+
+        else Console.WriteLine("Непозната команда.");
     }
 }
 

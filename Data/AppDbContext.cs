@@ -9,6 +9,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     public DbSet<Class> Classes { get; set; }
+    public DbSet<ClassTeacher> ClassTeachers { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
     public DbSet<Subject> Subjects { get; set; }
     public DbSet<TeacherSubject> TeacherSubjects { get; set; }
@@ -25,19 +26,40 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<Class>(b =>
         {
-            // Teacher FK: one ApplicationUser owns many Class records (no inverse collection)
-            b.HasOne(c => c.Teacher)
+            b.HasOne(c => c.HomeroomTeacher)
              .WithMany()
-             .HasForeignKey(c => c.TeacherId)
-             .IsRequired()
-             .OnDelete(DeleteBehavior.Restrict);
+             .HasForeignKey(c => c.HomeroomTeacherId)
+             .IsRequired(false)
+             .OnDelete(DeleteBehavior.SetNull);
 
-            // Students: one Class has many ApplicationUser via ClassId (inverse: User.Class)
             b.HasMany(c => c.Students)
              .WithOne(u => u.Class)
              .HasForeignKey(u => u.ClassId)
              .IsRequired(false)
              .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<ClassTeacher>(b =>
+        {
+            b.HasKey(ct => new { ct.ClassId, ct.TeacherId, ct.SubjectId });
+
+            b.HasOne(ct => ct.Class)
+             .WithMany(c => c.ClassTeachers)
+             .HasForeignKey(ct => ct.ClassId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(ct => ct.Teacher)
+             .WithMany()
+             .HasForeignKey(ct => ct.TeacherId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(ct => ct.Subject)
+             .WithMany()
+             .HasForeignKey(ct => ct.SubjectId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<Subject>(b =>

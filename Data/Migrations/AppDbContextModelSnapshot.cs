@@ -328,6 +328,9 @@ namespace StudyAssist.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("HomeroomTeacherId")
+                        .HasColumnType("text");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -336,15 +339,31 @@ namespace StudyAssist.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.HasKey("Id");
+
+                    b.HasIndex("HomeroomTeacherId");
+
+                    b.ToTable("Classes");
+                });
+
+            modelBuilder.Entity("StudyAssistant.Models.ClassTeacher", b =>
+                {
+                    b.Property<int>("ClassId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("TeacherId")
-                        .IsRequired()
                         .HasColumnType("text");
 
-                    b.HasKey("Id");
+                    b.Property<int>("SubjectId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ClassId", "TeacherId", "SubjectId");
+
+                    b.HasIndex("SubjectId");
 
                     b.HasIndex("TeacherId");
 
-                    b.ToTable("Classes");
+                    b.ToTable("ClassTeachers");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -447,17 +466,42 @@ namespace StudyAssist.Data.Migrations
 
             modelBuilder.Entity("StudyAssistant.Models.Class", b =>
                 {
+                    b.HasOne("StudyAssistant.Models.ApplicationUser", "HomeroomTeacher")
+                        .WithMany()
+                        .HasForeignKey("HomeroomTeacherId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("HomeroomTeacher");
+                });
+
+            modelBuilder.Entity("StudyAssistant.Models.ClassTeacher", b =>
+                {
+                    b.HasOne("StudyAssistant.Models.Class", "Class")
+                        .WithMany("ClassTeachers")
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("StudyAssistant.Models.ApplicationUser", "Teacher")
                         .WithMany()
                         .HasForeignKey("TeacherId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("StudyAssistant.Models.Subject", "Subject")
+                        .WithMany()
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Class");
+                    b.Navigation("Subject");
                     b.Navigation("Teacher");
                 });
 
             modelBuilder.Entity("StudyAssistant.Models.Class", b =>
                 {
+                    b.Navigation("ClassTeachers");
                     b.Navigation("Students");
                 });
 

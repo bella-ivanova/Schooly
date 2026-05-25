@@ -21,17 +21,22 @@ public class AdminUserService
         var name = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Училище: ");
         var school = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("Потребителско име на учителя: ");
+        Console.Write("Потребителско име на класния ръководител (Enter за пропускане): ");
         var teacherUsername = Console.ReadLine()?.Trim() ?? "";
 
-        var teacher = await _users.GetByUsernameAsync(teacherUsername);
-        if (teacher == null)
+        string? homeroomTeacherId = null;
+        if (!string.IsNullOrWhiteSpace(teacherUsername))
         {
-            Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
-            return;
+            var teacher = await _users.GetByUsernameAsync(teacherUsername);
+            if (teacher == null)
+            {
+                Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
+                return;
+            }
+            homeroomTeacherId = teacher.Id;
         }
 
-        _db.Classes.Add(new Class { Name = name, School = school, TeacherId = teacher.Id });
+        _db.Classes.Add(new Class { Name = name, School = school, HomeroomTeacherId = homeroomTeacherId });
         await _db.SaveChangesAsync();
         Console.WriteLine($"Клас '{name}' е създаден.");
     }
@@ -39,7 +44,7 @@ public class AdminUserService
     public async Task ListClassesAsync()
     {
         var classes = await _db.Classes
-            .Include(c => c.Teacher)
+            .Include(c => c.HomeroomTeacher)
             .Include(c => c.Students)
             .OrderBy(c => c.Name)
             .ToListAsync();
@@ -51,7 +56,7 @@ public class AdminUserService
         }
 
         foreach (var c in classes)
-            Console.WriteLine($"  {c.Name} — {c.School} | Учител: {c.Teacher?.UserName ?? "?"} | Ученици: {c.Students.Count}");
+            Console.WriteLine($"  {c.Name} — {c.School} | Класен: {c.HomeroomTeacher?.UserName ?? "—"} | Ученици: {c.Students.Count}");
     }
 
     public async Task AssignStudentAsync()
@@ -124,6 +129,52 @@ public class AdminUserService
         user.School = school;
         await _users.UpdateAsync(user);
         Console.WriteLine($"'{username}' е вече училищен администратор на '{school}'.");
+    }
+
+    public async Task AssignTeacherToClassAsync()
+    {
+        Console.Write("Клас (напр. 10А): ");
+        var className = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("Училище: ");
+        var school = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("Потребителско име на учителя: ");
+        var teacherUsername = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("Предмет: ");
+        var subjectName = Console.ReadLine()?.Trim() ?? "";
+
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == school);
+        if (cls == null)
+        {
+            Console.WriteLine($"Клас '{className}' не е намерен.");
+            return;
+        }
+
+        var teacher = await _users.GetByUsernameAsync(teacherUsername);
+        if (teacher == null)
+        {
+            Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
+            return;
+        }
+
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Name == subjectName && s.School == school);
+        if (subject == null)
+        {
+            subject = new Subject { Name = subjectName, School = school };
+            _db.Subjects.Add(subject);
+            await _db.SaveChangesAsync();
+        }
+
+        var existing = await _db.ClassTeachers.FirstOrDefaultAsync(
+            ct => ct.ClassId == cls.Id && ct.TeacherId == teacher.Id && ct.SubjectId == subject.Id);
+        if (existing != null)
+        {
+            Console.WriteLine($"Учителят вече преподава '{subjectName}' в клас '{className}'.");
+            return;
+        }
+
+        _db.ClassTeachers.Add(new ClassTeacher { ClassId = cls.Id, TeacherId = teacher.Id, SubjectId = subject.Id });
+        await _db.SaveChangesAsync();
+        Console.WriteLine($"Учител '{teacherUsername}' е назначен на '{subjectName}' в клас '{className}'.");
     }
 
     public async Task CreateSubjectAsync()
