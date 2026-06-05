@@ -19,9 +19,10 @@ var services = new ServiceCollection()
         o.UseNpgsql(config.GetConnectionString("DefaultConnection")))
     .AddIdentityCore<ApplicationUser>(o =>
     {
-        o.Password.RequireNonAlphanumeric = false;
-        o.Password.RequireUppercase       = false;
-        o.Password.RequiredLength         = 8;
+        o.Password.RequireNonAlphanumeric = true;
+        o.Password.RequireUppercase       = true;
+        o.Password.RequireDigit           = true;
+        o.Password.RequiredLength         = 10;
     })
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders().Services
@@ -85,7 +86,7 @@ while (currentUser == null)
 
         if (rateLimiter.IsLoginLocked(usernameOrEmail, out var loginWait))
         {
-            Console.WriteLine($"Акаунтът е заключен. Опитай след {RateLimiter.FormatRemaining(loginWait)}.");
+            Console.WriteLine($"Твърде много грешни опити. Опитай след {RateLimiter.FormatRemaining(loginWait)}.");
             continue;
         }
 
@@ -96,10 +97,10 @@ while (currentUser == null)
         if (loginError != null)
         {
             rateLimiter.RecordLoginFailure(usernameOrEmail);
-            var left = rateLimiter.RemainingLoginAttempts(usernameOrEmail);
+            var left = rateLimiter.RemainingAttemptsBeforeDelay(usernameOrEmail);
             Console.WriteLine(left > 0
-                ? $"Грешни данни. Остават {left} опита."
-                : $"Твърде много грешни опити. Акаунтът е заключен за 15 мин.");
+                ? $"Грешни данни. Остават {left} опита без забавяне."
+                : $"Грешни данни. Следващият опит ще изисква изчакване.");
             continue;
         }
 
@@ -110,18 +111,18 @@ while (currentUser == null)
     }
     else if (choice == "2")
     {
-        if (rateLimiter.IsRegistrationThrottled(out var regWait))
-        {
-            Console.WriteLine($"Твърде много регистрации. Опитай след {RateLimiter.FormatRemaining(regWait)}.");
-            continue;
-        }
-
         Console.Write("Пълно име: ");
         var fullName = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Потребителско име: ");
         var username = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Имейл: ");
         var email = Console.ReadLine()?.Trim() ?? "";
+
+        if (rateLimiter.IsRegistrationThrottled(email, out var regWait))
+        {
+            Console.WriteLine($"Регистрацията е опитана наскоро. Опитай след {RateLimiter.FormatRemaining(regWait)}.");
+            continue;
+        }
         Console.Write("Парола: ");
         var password = ReadPassword();
 
@@ -153,7 +154,7 @@ while (currentUser == null)
             continue;
         }
 
-        rateLimiter.RecordRegistration();
+        rateLimiter.RecordRegistration(email);
         // Auto-login after registration
         await authService.LoginAsync(username, password);
         currentUser = regUser;
@@ -198,7 +199,7 @@ while (currentUser == null)
 if (currentUser == null) return;
 
 // ── Route by role ───────────────────────────────────────────────────────
-if (currentUser.Role == UserRole.Admin || currentUser.UserName == "admin")
+if (currentUser.Role == UserRole.Admin)
     await RunAdminMode(rag, adminUserService);
 else if (currentUser.Role == UserRole.SchoolAdmin)
     await RunSchoolAdminMode(currentUser, db, repo);

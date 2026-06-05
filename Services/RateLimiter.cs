@@ -1,57 +1,81 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace StudyAssistant.Services;
 
 public class RateLimiter
 {
-    private const int LoginMaxAttempts = 5;
-    private static readonly TimeSpan LoginLockoutDuration    = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan PasswordResetCooldown   = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan RegistrationWindow      = TimeSpan.FromMinutes(10);
-    private const int RegistrationMaxPerWindow = 3;
+    // Progressive delays per consecutive failure (index = failure count, capped at last entry).
+    // Replaces the hard 15-min lockout so an attacker cannot permanently deny access to any account.
+    private static readonly TimeSpan[] LoginDelays =
+    [
+        TimeSpan.Zero,            // 1st failure: no wait
+        TimeSpan.FromSeconds(3),  // 2nd
+        TimeSpan.FromSeconds(10), // 3rd
+        TimeSpan.FromSeconds(30), // 4th
+        TimeSpan.FromSeconds(60), // 5th and beyond
+    ];
+    private static readonly TimeSpan PasswordResetCooldown  = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan RegistrationCooldown   = TimeSpan.FromMinutes(2);
 
-    // username/email → (consecutiveFailures, lockedUntil)
-    private readonly Dictionary<string, (int Count, DateTime? LockedUntil)> _loginAttempts
+    private static readonly string StateFile = Path.Combine(
+        AppContext.BaseDirectory, "rate_limiter_state.json");
+
+    private static readonly JsonSerializerOptions JsonOpts = new()
+        { WriteIndented = false, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+
+    private Dictionary<string, LoginEntry> _loginAttempts
         = new(StringComparer.OrdinalIgnoreCase);
 
-    // email → last reset request time
-    private readonly Dictionary<string, DateTime> _passwordResetRequests
+    private Dictionary<string, DateTime> _passwordResetRequests
         = new(StringComparer.OrdinalIgnoreCase);
 
-    // timestamps of recent registrations for sliding-window check
-    private readonly Queue<DateTime> _registrationTimestamps = new();
+    // email → last successful registration attempt
+    private Dictionary<string, DateTime> _registrationRequests
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    public RateLimiter() => Load();
 
     // ── Login ────────────────────────────────────────────────────────────────
 
     public bool IsLoginLocked(string usernameOrEmail, out TimeSpan remaining)
     {
         remaining = TimeSpan.Zero;
-        if (!_loginAttempts.TryGetValue(usernameOrEmail, out var entry) || entry.LockedUntil is null)
+        if (!_loginAttempts.TryGetValue(usernameOrEmail, out var entry) || entry.NextAttemptAfter is null)
             return false;
 
-        if (DateTime.UtcNow < entry.LockedUntil)
+        if (DateTime.UtcNow < entry.NextAttemptAfter)
         {
-            remaining = entry.LockedUntil.Value - DateTime.UtcNow;
+            remaining = entry.NextAttemptAfter.Value - DateTime.UtcNow;
             return true;
         }
 
-        _loginAttempts[usernameOrEmail] = (0, null);
+        // Delay expired — clear it but keep the failure count so delays keep growing
+        _loginAttempts[usernameOrEmail] = entry with { NextAttemptAfter = null };
+        Save();
         return false;
     }
 
     public void RecordLoginFailure(string usernameOrEmail)
     {
         _loginAttempts.TryGetValue(usernameOrEmail, out var entry);
-        var newCount = entry.Count + 1;
-        var lockedUntil = newCount >= LoginMaxAttempts ? DateTime.UtcNow.Add(LoginLockoutDuration) : (DateTime?)null;
-        _loginAttempts[usernameOrEmail] = (newCount, lockedUntil);
+        var newCount    = entry.Count + 1;
+        var delay       = LoginDelays[Math.Min(newCount, LoginDelays.Length - 1)];
+        var nextAllowed = delay > TimeSpan.Zero ? DateTime.UtcNow.Add(delay) : (DateTime?)null;
+        _loginAttempts[usernameOrEmail] = new LoginEntry(newCount, nextAllowed);
+        Save();
     }
 
-    public void RecordLoginSuccess(string usernameOrEmail) =>
+    public void RecordLoginSuccess(string usernameOrEmail)
+    {
         _loginAttempts.Remove(usernameOrEmail);
+        Save();
+    }
 
-    public int RemainingLoginAttempts(string usernameOrEmail)
+    public int RemainingAttemptsBeforeDelay(string usernameOrEmail)
     {
         _loginAttempts.TryGetValue(usernameOrEmail, out var entry);
-        return Math.Max(0, LoginMaxAttempts - entry.Count);
+        return Math.Max(0, LoginDelays.Length - 1 - entry.Count);
     }
 
     // ── Password reset ───────────────────────────────────────────────────────
@@ -69,35 +93,72 @@ public class RateLimiter
         return false;
     }
 
-    public void RecordPasswordResetRequest(string email) =>
+    public void RecordPasswordResetRequest(string email)
+    {
         _passwordResetRequests[email] = DateTime.UtcNow;
+        Save();
+    }
 
     // ── Registration ─────────────────────────────────────────────────────────
 
-    public bool IsRegistrationThrottled(out TimeSpan remaining)
+    public bool IsRegistrationThrottled(string email, out TimeSpan remaining)
     {
         remaining = TimeSpan.Zero;
-        PruneOldRegistrations();
-
-        if (_registrationTimestamps.Count >= RegistrationMaxPerWindow)
+        if (!_registrationRequests.TryGetValue(email, out var lastAttempt)) return false;
+        var elapsed = DateTime.UtcNow - lastAttempt;
+        if (elapsed < RegistrationCooldown)
         {
-            remaining = RegistrationWindow - (DateTime.UtcNow - _registrationTimestamps.Peek());
+            remaining = RegistrationCooldown - elapsed;
             return true;
         }
         return false;
     }
 
-    public void RecordRegistration()
+    public void RecordRegistration(string email)
     {
-        PruneOldRegistrations();
-        _registrationTimestamps.Enqueue(DateTime.UtcNow);
+        _registrationRequests[email] = DateTime.UtcNow;
+        Save();
     }
 
-    private void PruneOldRegistrations()
+    // ── Persistence ──────────────────────────────────────────────────────────
+
+    private void Save()
     {
-        var cutoff = DateTime.UtcNow - RegistrationWindow;
-        while (_registrationTimestamps.Count > 0 && _registrationTimestamps.Peek() < cutoff)
-            _registrationTimestamps.Dequeue();
+        try
+        {
+            var now = DateTime.UtcNow;
+
+            var activeLogins = _loginAttempts
+                .Where(kv => kv.Value.Count > 0)
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+
+            var activeResets = _passwordResetRequests
+                .Where(kv => now - kv.Value < PasswordResetCooldown)
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+
+            var activeRegs = _registrationRequests
+                .Where(kv => now - kv.Value < RegistrationCooldown)
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+
+            var state = new PersistedState(activeLogins, activeResets, activeRegs);
+            File.WriteAllText(StateFile, JsonSerializer.Serialize(state, JsonOpts));
+        }
+        catch { /* non-critical; in-memory state still works */ }
+    }
+
+    private void Load()
+    {
+        try
+        {
+            if (!File.Exists(StateFile)) return;
+            var state = JsonSerializer.Deserialize<PersistedState>(File.ReadAllText(StateFile), JsonOpts);
+            if (state is null) return;
+
+            _loginAttempts        = new(state.LoginAttempts,        StringComparer.OrdinalIgnoreCase);
+            _passwordResetRequests = new(state.PasswordResetRequests, StringComparer.OrdinalIgnoreCase);
+            _registrationRequests  = new(state.RegistrationRequests,  StringComparer.OrdinalIgnoreCase);
+        }
+        catch { /* corrupt file — start fresh */ }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -106,4 +167,13 @@ public class RateLimiter
         remaining.TotalSeconds < 90
             ? $"{(int)remaining.TotalSeconds} сек."
             : $"{(int)remaining.TotalMinutes} мин.";
+
+    // ── DTOs ─────────────────────────────────────────────────────────────────
+
+    public record LoginEntry(int Count, DateTime? NextAttemptAfter);
+
+    private record PersistedState(
+        Dictionary<string, LoginEntry> LoginAttempts,
+        Dictionary<string, DateTime>   PasswordResetRequests,
+        Dictionary<string, DateTime>   RegistrationRequests);
 }
