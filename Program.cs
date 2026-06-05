@@ -61,6 +61,7 @@ var adminUserService        = new AdminUserService(db, repo);
 var practiceService         = new PracticeQuestionService(chat);
 var examService             = new ExamService(rag, chat);
 var teacherDashboardService = new TeacherDashboardService(db);
+var rateLimiter             = new RateLimiter();
 
 // ── Login / register menu ───────────────────────────────────────────────
 ApplicationUser? currentUser = null;
@@ -81,22 +82,40 @@ while (currentUser == null)
     {
         Console.Write("Потребителско име или имейл: ");
         var usernameOrEmail = Console.ReadLine()?.Trim() ?? "";
+
+        if (rateLimiter.IsLoginLocked(usernameOrEmail, out var loginWait))
+        {
+            Console.WriteLine($"Акаунтът е заключен. Опитай след {RateLimiter.FormatRemaining(loginWait)}.");
+            continue;
+        }
+
         Console.Write("Парола: ");
         var password = ReadPassword();
 
         var (_, loginError) = await authService.LoginAsync(usernameOrEmail, password);
         if (loginError != null)
         {
-            Console.WriteLine("Грешни данни. Опитай пак.");
+            rateLimiter.RecordLoginFailure(usernameOrEmail);
+            var left = rateLimiter.RemainingLoginAttempts(usernameOrEmail);
+            Console.WriteLine(left > 0
+                ? $"Грешни данни. Остават {left} опита."
+                : $"Твърде много грешни опити. Акаунтът е заключен за 15 мин.");
             continue;
         }
 
+        rateLimiter.RecordLoginSuccess(usernameOrEmail);
         currentUser = usernameOrEmail.Contains('@')
             ? await repo.GetByEmailAsync(usernameOrEmail)
             : await repo.GetByUsernameAsync(usernameOrEmail);
     }
     else if (choice == "2")
     {
+        if (rateLimiter.IsRegistrationThrottled(out var regWait))
+        {
+            Console.WriteLine($"Твърде много регистрации. Опитай след {RateLimiter.FormatRemaining(regWait)}.");
+            continue;
+        }
+
         Console.Write("Пълно име: ");
         var fullName = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Потребителско име: ");
@@ -134,6 +153,7 @@ while (currentUser == null)
             continue;
         }
 
+        rateLimiter.RecordRegistration();
         // Auto-login after registration
         await authService.LoginAsync(username, password);
         currentUser = regUser;
@@ -143,12 +163,20 @@ while (currentUser == null)
         Console.Write("Имейл: ");
         var resetEmail = Console.ReadLine()?.Trim() ?? "";
 
+        if (rateLimiter.IsPasswordResetThrottled(resetEmail, out var resetWait))
+        {
+            Console.WriteLine($"Заявката е изпратена наскоро. Опитай след {RateLimiter.FormatRemaining(resetWait)}.");
+            continue;
+        }
+
         var (token, tokenError) = await authService.RequestPasswordResetAsync(resetEmail);
         if (tokenError != null)
         {
             Console.WriteLine($"Грешка: {tokenError}");
             continue;
         }
+
+        rateLimiter.RecordPasswordResetRequest(resetEmail);
 
         Console.WriteLine($"\nТокен за нулиране: {token}");
         Console.Write("Въведи токена: ");
