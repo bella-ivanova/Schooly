@@ -59,7 +59,6 @@ public class EmbeddingService
             if (c < 0x20 && c != '\t') continue;  // control chars except tab
             sb.Append(c);
         }
-        var result = sb.ToString().Trim();
-        return result.Length > 500 ? result[..500] : result;
+        return sb.ToString().Trim();
     }
 }

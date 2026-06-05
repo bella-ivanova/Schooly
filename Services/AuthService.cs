@@ -47,21 +47,20 @@ public class AuthService
         return success ? (user, Array.Empty<string>()) : (null, errors);
     }
 
-    // Validates credentials and returns a JWT on success.
-    public async Task<(string? Token, string? Error)> LoginAsync(string usernameOrEmail, string password)
+    // Validates credentials. Returns null on success, or an error message on failure.
+    public async Task<string?> LoginAsync(string usernameOrEmail, string password)
     {
         var user = usernameOrEmail.Contains('@')
             ? await _users.GetByEmailAsync(usernameOrEmail)
             : await _users.GetByUsernameAsync(usernameOrEmail);
 
         if (user == null)
-            return (null, "Invalid username or password.");
+            return "Invalid username or password.";
 
         if (!await _users.CheckPasswordAsync(user, password))
-            return (null, "Invalid username or password.");
+            return "Invalid username or password.";
 
-        var token = GenerateJwt(user);
-        return (token, null);
+        return null;
     }
 
     // Generates a password reset token (send this to the user via email/console).
@@ -115,7 +114,7 @@ public class AuthService
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    private string GenerateJwt(ApplicationUser user)
+    public string GenerateJwt(ApplicationUser user)
     {
         var secret  = _config["Jwt:Secret"]   ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
         var issuer  = _config["Jwt:Issuer"]   ?? "StudyAssistant";

@@ -296,4 +296,22 @@ public class SchoolAdminService
             Console.WriteLine($"  [{u.Role}] {u.UserName} — {u.FullName}{gradeTag}{classTag}");
         }
     }
+
+    public async Task ListSubjectsAsync()
+    {
+        var subjects = await _db.Subjects
+            .Where(s => s.School == _school)
+            .OrderBy(s => s.Name)
+            .ToListAsync();
+
+        if (subjects.Count == 0)
+        {
+            Console.WriteLine($"Няма предмети в '{_school}'.");
+            return;
+        }
+
+        Console.WriteLine($"Предмети в '{_school}':");
+        foreach (var s in subjects)
+            Console.WriteLine($"  [{s.Id}] {s.Name}");
+    }
 }

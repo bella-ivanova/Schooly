@@ -78,7 +78,7 @@ public class ChatLogService
 
         var messages = await _db.ChatMessages
             .Include(m => m.Subject)
-            .Where(m => m.UserId == userId && m.Timestamp >= since && m.Topic != "Unknown")
+            .Where(m => m.UserId == userId && m.Role == "user" && m.Timestamp >= since && m.Topic != "Unknown")
             .ToListAsync();
 
         return messages

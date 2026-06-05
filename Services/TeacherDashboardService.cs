@@ -94,7 +94,9 @@ public class TeacherDashboardService
         {
             var cls = await _db.Classes
                 .Include(c => c.Students)
-                .FirstAsync(c => c.Id == cid);
+                .FirstOrDefaultAsync(c => c.Id == cid);
+
+            if (cls is null) continue;
 
             var studentIds = cls.Students.Select(s => s.Id).ToList();
 

@@ -12,6 +12,8 @@ Console.WriteLine("=== Schooly ===\n");
 var config = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
     .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile("appsettings.Local.json", optional: true)
+    .AddEnvironmentVariables()
     .Build();
 
 var services = new ServiceCollection()
@@ -93,7 +95,7 @@ while (currentUser == null)
         Console.Write("Парола: ");
         var password = ReadPassword();
 
-        var (_, loginError) = await authService.LoginAsync(usernameOrEmail, password);
+        var loginError = await authService.LoginAsync(usernameOrEmail, password);
         if (loginError != null)
         {
             rateLimiter.RecordLoginFailure(usernameOrEmail);
@@ -129,7 +131,23 @@ while (currentUser == null)
         Console.WriteLine("[1] Ученик   [2] Учител");
         Console.Write("Роля: ");
         var roleChoice = Console.ReadLine()?.Trim();
-        var role = roleChoice == "2" ? UserRole.Teacher : UserRole.Student;
+        UserRole role;
+        if (roleChoice == "2")
+        {
+            Console.Write("Код за регистрация на учител: ");
+            var enteredCode = ReadPassword();
+            var expectedCode = config["TeacherRegistrationCode"] ?? "";
+            if (string.IsNullOrEmpty(expectedCode) || enteredCode != expectedCode)
+            {
+                Console.WriteLine("Невалиден код. Регистрацията е отказана.");
+                continue;
+            }
+            role = UserRole.Teacher;
+        }
+        else
+        {
+            role = UserRole.Student;
+        }
 
         int? grade = null;
         if (role == UserRole.Student)
@@ -223,6 +241,8 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
     Console.WriteLine("  /assignteachertoclass    — назначи учител на клас по предмет");
     Console.WriteLine("  /listusers               — покажи потребителите");
     Console.WriteLine("  /deleteclass             — изтрий клас");
+    Console.WriteLine("  /createsubject           — добави предмет");
+    Console.WriteLine("  /deletesubject           — изтрий предмет");
     Console.WriteLine("  /makeschooladmin         — направи потребител училищен администратор");
     Console.WriteLine("  /exit                    — изход\n");
 
@@ -245,7 +265,7 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
             catch (Exception ex) when (IsQdrantDown(ex))
             { Console.WriteLine("[Qdrant не работи. Стартирай с: docker-compose up -d qdrant]"); }
         }
-        else if (input.StartsWith("/status"))
+        else if (input.StartsWith("/status "))
         {
             var parts = input.Split(' ', 2);
             if (parts.Length < 2 || !int.TryParse(parts[1].Trim(), out var grade))
@@ -281,6 +301,8 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
         else if (input == "/assignteachertoclass") { await adminSvc.AssignTeacherToClassAsync(); }
         else if (input == "/listusers")            { await adminSvc.ListUsersAsync(); }
         else if (input == "/deleteclass")          { await adminSvc.DeleteClassAsync(); }
+        else if (input == "/createsubject")        { await adminSvc.CreateSubjectAsync(); }
+        else if (input == "/deletesubject")        { await adminSvc.DeleteSubjectAsync(); }
         else if (input == "/makeschooladmin")      { await adminSvc.MakeSchoolAdminAsync(); }
         else
         {
@@ -408,9 +430,12 @@ async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGSer
             {
                 try
                 {
-                    var (subject, topic) = await logService.DetectSubjectTopicAsync(capturedInput);
-                    await logService.SaveMessageAsync(capturedUserId, "user",      capturedInput,    subject, topic, capturedSchool);
-                    await logService.SaveMessageAsync(capturedUserId, "assistant", capturedResponse, subject, topic, capturedSchool);
+                    using var scope  = services.CreateScope();
+                    var scopedLog    = new ChatLogService(
+                        scope.ServiceProvider.GetRequiredService<AppDbContext>(), chatService);
+                    var (subject, topic) = await scopedLog.DetectSubjectTopicAsync(capturedInput);
+                    await scopedLog.SaveMessageAsync(capturedUserId, "user",      capturedInput,    subject, topic, capturedSchool);
+                    await scopedLog.SaveMessageAsync(capturedUserId, "assistant", capturedResponse, subject, topic, capturedSchool);
                 }
                 catch (Exception ex)
                 {
@@ -450,6 +475,7 @@ async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUser
     Console.WriteLine("  /assignstudent         — добави ученик в клас");
     Console.WriteLine("  /removestudent         — премахни ученик от клас");
     Console.WriteLine("  /assignteachertoclass  — назначи учител на клас по предмет");
+    Console.WriteLine("  /listsubjects          — покажи предметите с техните ID-та");
     Console.WriteLine("  /assignsubject         — назначи предмет на учител");
     Console.WriteLine("  /removesubject         — премахни предмет от учител");
     Console.WriteLine("  /listusers             — покажи потребителите в училището");
@@ -467,6 +493,7 @@ async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUser
         else if (input == "/assignstudent")  await svc.AssignStudentAsync();
         else if (input == "/removestudent")        await svc.RemoveStudentAsync();
         else if (input == "/assignteachertoclass") await svc.AssignTeacherToClassAsync();
+        else if (input == "/listsubjects")         await svc.ListSubjectsAsync();
         else if (input == "/assignsubject")        await svc.AssignSubjectToTeacherAsync();
         else if (input == "/removesubject")        await svc.RemoveSubjectFromTeacherAsync();
         else if (input == "/listusers")            await svc.ListUsersAsync();
