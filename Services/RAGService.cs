@@ -174,7 +174,8 @@ public class RAGService
             return "";
 
         var qEmbeddingList = await _embeddingService.GetEmbeddingsAsync(new List<string> { query });
-        var queryEmbedding = qEmbeddingList.First();
+        if (qEmbeddingList.Count == 0) return "";
+        var queryEmbedding = qEmbeddingList[0];
 
         var combinedChunks = new List<(string Text, string Subject, int Grade)>();
 

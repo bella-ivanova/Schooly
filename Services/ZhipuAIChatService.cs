@@ -34,6 +34,49 @@ public class ZhipuAIChatService : IChatService
         _messages.Add(new ChatMsg("system", prompt));
     }
 
+    public async Task<string> OneShotAsync(string systemPrompt, string userMessage)
+    {
+        var body = JsonSerializer.Serialize(new
+        {
+            model       = _model,
+            messages    = new[] {
+                new { role = "system", content = systemPrompt },
+                new { role = "user",   content = userMessage  }
+            },
+            stream      = false,
+            temperature = Temperature,
+        });
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, BaseUrl)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        };
+
+        try
+        {
+            using var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"\n[Chat error] {(int)response.StatusCode}: {err}");
+                return "";
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString() ?? "";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"\n[Chat error] {ex.Message}");
+            return "";
+        }
+    }
+
     public async Task StreamMessageAsync(string newUserMessage, string? apiMessage = null)
     {
         _messages.Add(new ChatMsg("user", newUserMessage));

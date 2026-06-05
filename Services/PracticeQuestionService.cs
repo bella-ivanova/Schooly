@@ -4,9 +4,9 @@ namespace StudyAssistant.Services;
 
 public class PracticeQuestionService
 {
-    private readonly OllamaChatService _chat;
+    private readonly IChatService _chat;
 
-    public PracticeQuestionService(OllamaChatService chat)
+    public PracticeQuestionService(IChatService chat)
     {
         _chat = chat;
     }

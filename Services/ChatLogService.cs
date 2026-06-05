@@ -8,9 +8,9 @@ namespace StudyAssistant.Services;
 public class ChatLogService
 {
     private readonly AppDbContext _db;
-    private readonly OllamaChatService _chat;
+    private readonly IChatService _chat;
 
-    public ChatLogService(AppDbContext db, OllamaChatService chat)
+    public ChatLogService(AppDbContext db, IChatService chat)
     {
         _db   = db;
         _chat = chat;

@@ -23,7 +23,9 @@ var services = new ServiceCollection()
         o.Password.RequireUppercase       = false;
         o.Password.RequiredLength         = 8;
     })
-    .AddEntityFrameworkStores<AppDbContext>().Services
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddDefaultTokenProviders().Services
+    .AddDataProtection().Services
     .AddScoped<IUserRepository, UserRepository>()
     .AddSingleton<IConfiguration>(config)
     .AddScoped<AuthService>()
@@ -54,11 +56,10 @@ var rag       = new RAGService(chat, embedding, qdrant, ocr, mathOcr);
 var authService      = services.GetRequiredService<AuthService>();
 var repo             = services.GetRequiredService<IUserRepository>();
 var db               = services.GetRequiredService<AppDbContext>();
-var classChat        = new OllamaChatService("llama3.2");
-var chatLogService   = new ChatLogService(db, classChat);
+var chatLogService   = new ChatLogService(db, chat);
 var adminUserService        = new AdminUserService(db, repo);
-var practiceService         = new PracticeQuestionService(classChat);
-var examService             = new ExamService(rag, classChat);
+var practiceService         = new PracticeQuestionService(chat);
+var examService             = new ExamService(rag, chat);
 var teacherDashboardService = new TeacherDashboardService(db);
 
 // ── Login / register menu ───────────────────────────────────────────────
@@ -69,11 +70,12 @@ while (currentUser == null)
     Console.WriteLine("\n=== Schooly ===");
     Console.WriteLine("[1] Влез в профила си");
     Console.WriteLine("[2] Създай профил");
-    Console.WriteLine("[3] Изход");
+    Console.WriteLine("[3] Нулирай парола");
+    Console.WriteLine("[4] Изход");
     Console.Write("\nИзбор: ");
     var choice = Console.ReadLine()?.Trim();
 
-    if (choice == "3") break;
+    if (choice == "4") break;
 
     if (choice == "1")
     {
@@ -135,6 +137,33 @@ while (currentUser == null)
         // Auto-login after registration
         await authService.LoginAsync(username, password);
         currentUser = regUser;
+    }
+    else if (choice == "3")
+    {
+        Console.Write("Имейл: ");
+        var resetEmail = Console.ReadLine()?.Trim() ?? "";
+
+        var (token, tokenError) = await authService.RequestPasswordResetAsync(resetEmail);
+        if (tokenError != null)
+        {
+            Console.WriteLine($"Грешка: {tokenError}");
+            continue;
+        }
+
+        Console.WriteLine($"\nТокен за нулиране: {token}");
+        Console.Write("Въведи токена: ");
+        var inputToken = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("Нова парола: ");
+        var newPassword = ReadPassword();
+
+        var (success, resetErrors) = await authService.ResetPasswordAsync(resetEmail, inputToken, newPassword);
+        if (!success)
+        {
+            Console.WriteLine($"Грешка: {string.Join(", ", resetErrors)}");
+            continue;
+        }
+
+        Console.WriteLine("Паролата е нулирана успешно. Влез с новата си парола.");
     }
 }
 
@@ -348,9 +377,16 @@ async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGSer
             var capturedSchool   = user.School;
             _ = Task.Run(async () =>
             {
-                var (subject, topic) = await logService.DetectSubjectTopicAsync(capturedInput);
-                await logService.SaveMessageAsync(capturedUserId, "user",      capturedInput,    subject, topic, capturedSchool);
-                await logService.SaveMessageAsync(capturedUserId, "assistant", capturedResponse, subject, topic, capturedSchool);
+                try
+                {
+                    var (subject, topic) = await logService.DetectSubjectTopicAsync(capturedInput);
+                    await logService.SaveMessageAsync(capturedUserId, "user",      capturedInput,    subject, topic, capturedSchool);
+                    await logService.SaveMessageAsync(capturedUserId, "assistant", capturedResponse, subject, topic, capturedSchool);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"\n[Грешка при запис на съобщението] {ex.Message}");
+                }
             });
 
             var questions = await practiceService.GenerateAsync(input, aiResponse);
@@ -379,14 +415,16 @@ async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUser
     var svc = new SchoolAdminService(database, repository, user.School);
 
     Console.WriteLine($"\nУчилищен администратор — {user.School}. Команди:");
-    Console.WriteLine("  /addclass        — добави клас");
-    Console.WriteLine("  /listclasses     — покажи класовете");
-    Console.WriteLine("  /assignteacher   — назначи учител на клас");
-    Console.WriteLine("  /assignstudent        — добави ученик в клас");
-    Console.WriteLine("  /removestudent        — премахни ученик от клас");
-    Console.WriteLine("  /assignteachertoclass — назначи учител на клас по предмет");
-    Console.WriteLine("  /listusers            — покажи потребителите в училището");
-    Console.WriteLine("  /exit                 — изход\n");
+    Console.WriteLine("  /addclass              — добави клас");
+    Console.WriteLine("  /listclasses           — покажи класовете");
+    Console.WriteLine("  /assignteacher         — назначи класен ръководител");
+    Console.WriteLine("  /assignstudent         — добави ученик в клас");
+    Console.WriteLine("  /removestudent         — премахни ученик от клас");
+    Console.WriteLine("  /assignteachertoclass  — назначи учител на клас по предмет");
+    Console.WriteLine("  /assignsubject         — назначи предмет на учител");
+    Console.WriteLine("  /removesubject         — премахни предмет от учител");
+    Console.WriteLine("  /listusers             — покажи потребителите в училището");
+    Console.WriteLine("  /exit                  — изход\n");
 
     while (true)
     {
@@ -400,6 +438,8 @@ async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUser
         else if (input == "/assignstudent")  await svc.AssignStudentAsync();
         else if (input == "/removestudent")        await svc.RemoveStudentAsync();
         else if (input == "/assignteachertoclass") await svc.AssignTeacherToClassAsync();
+        else if (input == "/assignsubject")        await svc.AssignSubjectToTeacherAsync();
+        else if (input == "/removesubject")        await svc.RemoveSubjectFromTeacherAsync();
         else if (input == "/listusers")            await svc.ListUsersAsync();
         else Console.WriteLine("Непозната команда. Въведи /exit за изход.");
     }

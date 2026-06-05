@@ -3,9 +3,9 @@ namespace StudyAssistant.Services;
 public class ExamService
 {
     private readonly RAGService _rag;
-    private readonly OllamaChatService _chat;
+    private readonly IChatService _chat;
 
-    public ExamService(RAGService rag, OllamaChatService chat)
+    public ExamService(RAGService rag, IChatService chat)
     {
         _rag  = rag;
         _chat = chat;

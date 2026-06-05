@@ -130,7 +130,7 @@ public class SchoolAdminService
     {
         Console.Write("Клас (напр. 10А): ");
         var className = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("Потребителско ime на учителя: ");
+        Console.Write("Потребителско име на учителя: ");
         var teacherUsername = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Предмет: ");
         var subjectName = Console.ReadLine()?.Trim() ?? "";
