@@ -68,7 +68,7 @@ public class AuthService
     {
         var user = await _users.GetByEmailAsync(email);
         if (user == null)
-            return (null, "No account found with that email.");
+            return (null, null); // don't reveal whether the email is registered
 
         var token = await _users.GeneratePasswordResetTokenAsync(user);
         return (token, null);
@@ -80,7 +80,7 @@ public class AuthService
     {
         var user = await _users.GetByEmailAsync(email);
         if (user == null)
-            return (false, new[] { "No account found with that email." });
+            return (false, new[] { "Invalid or expired reset token." });
 
         return await _users.ResetPasswordAsync(user, token, newPassword);
     }

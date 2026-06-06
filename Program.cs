@@ -189,13 +189,11 @@ while (currentUser == null)
         }
 
         var (token, tokenError) = await authService.RequestPasswordResetAsync(resetEmail);
-        if (tokenError != null)
-        {
-            Console.WriteLine($"Грешка: {tokenError}");
-            continue;
-        }
 
         rateLimiter.RecordPasswordResetRequest(resetEmail);
+
+        Console.WriteLine("Ако акаунт с този имейл съществува, токен е генериран.");
+        if (token == null) continue;
 
         Console.WriteLine($"\nТокен за нулиране: {token}");
         Console.Write("Въведи токена: ");
@@ -218,19 +216,20 @@ if (currentUser == null) return;
 
 // ── Route by role ───────────────────────────────────────────────────────
 if (currentUser.Role == UserRole.Admin)
-    await RunAdminMode(rag, adminUserService);
+    await RunAdminMode(chat, rag, adminUserService);
 else if (currentUser.Role == UserRole.SchoolAdmin)
-    await RunSchoolAdminMode(currentUser, db, repo);
+    await RunSchoolAdminMode(currentUser, chat, rag, db, repo);
 else if (currentUser.Role == UserRole.Teacher)
-    await RunTeacherMode(currentUser, db, teacherDashboardService);
+    await RunTeacherMode(currentUser, chat, rag, db, teacherDashboardService);
 else
     await RunStudentMode(currentUser, chat, rag, chatLogService, practiceService, examService);
 
 // ══════════════════════════════════════════════════════════════
 // ADMIN MODE
 // ══════════════════════════════════════════════════════════════
-async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
+async Task RunAdminMode(IChatService chatService, RAGService ragService, AdminUserService adminSvc)
 {
+    chatService.SetSystemPrompt("You are a helpful AI assistant for school administrators. Answer questions clearly and concisely.");
     Console.WriteLine("\nAdmin режим. Команди:");
     Console.WriteLine("  /ingest <клас>           — зареди PDF за клас");
     Console.WriteLine("  /status <клас>           — файлове за клас");
@@ -244,7 +243,8 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
     Console.WriteLine("  /createsubject           — добави предмет");
     Console.WriteLine("  /deletesubject           — изтрий предмет");
     Console.WriteLine("  /makeschooladmin         — направи потребител училищен администратор");
-    Console.WriteLine("  /exit                    — изход\n");
+    Console.WriteLine("  /exit                    — изход");
+    Console.WriteLine("  <въпрос>                 — разговор с AI\n");
 
     while (true)
     {
@@ -304,9 +304,39 @@ async Task RunAdminMode(RAGService ragService, AdminUserService adminSvc)
         else if (input == "/createsubject")        { await adminSvc.CreateSubjectAsync(); }
         else if (input == "/deletesubject")        { await adminSvc.DeleteSubjectAsync(); }
         else if (input == "/makeschooladmin")      { await adminSvc.MakeSchoolAdminAsync(); }
-        else
+        else if (input.StartsWith('/'))
         {
             Console.WriteLine("Непозната команда. Въведи /exit за изход.");
+        }
+        else
+        {
+            Console.Write("\nAI: ");
+            try
+            {
+                if (StereometryDetector.IsStereometryQuestion(input))
+                {
+                    var aiResp = await ragService.Ask(input, capture: true, instructionSuffix: StereometryService.Instruction);
+                    Console.WriteLine();
+                    if (aiResp != null)
+                    {
+                        var sceneJson = StereometryService.ExtractSceneJson(aiResp);
+                        if (sceneJson != null)
+                        {
+                            Console.WriteLine("[Отваря 3D визуализация в браузъра…]");
+                            VisualisationService.ShowHtml(StereometryHtmlBuilder.Build(sceneJson));
+                        }
+                    }
+                }
+                else
+                {
+                    await ragService.Ask(input, capture: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n[Грешка] {ex.Message}");
+            }
+            Console.WriteLine();
         }
     }
 }
@@ -458,7 +488,7 @@ async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGSer
 // ══════════════════════════════════════════════════════════════
 // SCHOOL ADMIN MODE
 // ══════════════════════════════════════════════════════════════
-async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUserRepository repository)
+async Task RunSchoolAdminMode(ApplicationUser user, IChatService chatService, RAGService ragService, AppDbContext database, IUserRepository repository)
 {
     if (string.IsNullOrWhiteSpace(user.School))
     {
@@ -467,6 +497,7 @@ async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUser
     }
 
     var svc = new SchoolAdminService(database, repository, user.School);
+    chatService.SetSystemPrompt("You are a helpful AI assistant for school administrators. Answer questions clearly and concisely.");
 
     Console.WriteLine($"\nУчилищен администратор — {user.School}. Команди:");
     Console.WriteLine("  /addclass              — добави клас");
@@ -479,7 +510,8 @@ async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUser
     Console.WriteLine("  /assignsubject         — назначи предмет на учител");
     Console.WriteLine("  /removesubject         — премахни предмет от учител");
     Console.WriteLine("  /listusers             — покажи потребителите в училището");
-    Console.WriteLine("  /exit                  — изход\n");
+    Console.WriteLine("  /exit                  — изход");
+    Console.WriteLine("  <въпрос>               — разговор с AI\n");
 
     while (true)
     {
@@ -497,21 +529,54 @@ async Task RunSchoolAdminMode(ApplicationUser user, AppDbContext database, IUser
         else if (input == "/assignsubject")        await svc.AssignSubjectToTeacherAsync();
         else if (input == "/removesubject")        await svc.RemoveSubjectFromTeacherAsync();
         else if (input == "/listusers")            await svc.ListUsersAsync();
-        else Console.WriteLine("Непозната команда. Въведи /exit за изход.");
+        else if (input.StartsWith('/'))
+            Console.WriteLine("Непозната команда. Въведи /exit за изход.");
+        else
+        {
+            Console.Write("\nAI: ");
+            try
+            {
+                if (StereometryDetector.IsStereometryQuestion(input))
+                {
+                    var aiResp = await ragService.Ask(input, capture: true, instructionSuffix: StereometryService.Instruction);
+                    Console.WriteLine();
+                    if (aiResp != null)
+                    {
+                        var sceneJson = StereometryService.ExtractSceneJson(aiResp);
+                        if (sceneJson != null)
+                        {
+                            Console.WriteLine("[Отваря 3D визуализация в браузъра…]");
+                            VisualisationService.ShowHtml(StereometryHtmlBuilder.Build(sceneJson));
+                        }
+                    }
+                }
+                else
+                {
+                    await ragService.Ask(input, capture: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n[Грешка] {ex.Message}");
+            }
+            Console.WriteLine();
+        }
     }
 }
 
 // ══════════════════════════════════════════════════════════════
 // TEACHER MODE
 // ══════════════════════════════════════════════════════════════
-async Task RunTeacherMode(ApplicationUser user, AppDbContext database, TeacherDashboardService dashboardService)
+async Task RunTeacherMode(ApplicationUser user, IChatService chatService, RAGService ragService, AppDbContext database, TeacherDashboardService dashboardService)
 {
+    chatService.SetSystemPrompt("You are a helpful AI assistant for school teachers. Answer questions clearly and concisely.");
     Console.WriteLine($"\nДобре дошъл, {user.FullName}! ({user.School})");
     Console.WriteLine("Команди:");
     Console.WriteLine("  /classes         — покажи моите класове и предмети");
     Console.WriteLine("  /struggles       — топ теми, с които учениците имат затруднения");
     Console.WriteLine("  /active          — най-активни ученици по клас");
-    Console.WriteLine("  /exit            — изход\n");
+    Console.WriteLine("  /exit            — изход");
+    Console.WriteLine("  <въпрос>         — разговор с AI\n");
 
     while (true)
     {
@@ -598,7 +663,38 @@ async Task RunTeacherMode(ApplicationUser user, AppDbContext database, TeacherDa
             }
         }
 
-        else Console.WriteLine("Непозната команда.");
+        else if (input.StartsWith('/'))
+            Console.WriteLine("Непозната команда.");
+        else
+        {
+            Console.Write("\nAI: ");
+            try
+            {
+                if (StereometryDetector.IsStereometryQuestion(input))
+                {
+                    var aiResp = await ragService.Ask(input, capture: true, instructionSuffix: StereometryService.Instruction);
+                    Console.WriteLine();
+                    if (aiResp != null)
+                    {
+                        var sceneJson = StereometryService.ExtractSceneJson(aiResp);
+                        if (sceneJson != null)
+                        {
+                            Console.WriteLine("[Отваря 3D визуализация в браузъра…]");
+                            VisualisationService.ShowHtml(StereometryHtmlBuilder.Build(sceneJson));
+                        }
+                    }
+                }
+                else
+                {
+                    await ragService.Ask(input, capture: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n[Грешка] {ex.Message}");
+            }
+            Console.WriteLine();
+        }
     }
 }
 

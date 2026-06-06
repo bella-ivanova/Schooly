@@ -238,6 +238,12 @@ public class SchoolAdminService
             return;
         }
 
+        if (teacher.School != _school)
+        {
+            Console.WriteLine($"Учителят не принадлежи към училище '{_school}'.");
+            return;
+        }
+
         var row = await _db.TeacherSubjects
             .FirstOrDefaultAsync(ts => ts.TeacherId == teacher.Id && ts.SubjectId == subjectId);
         if (row == null)

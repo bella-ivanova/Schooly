@@ -401,11 +401,22 @@ public static class StereometryHtmlBuilder
             angles.forEach((a, i) => {
               const pal = PAL[i % PAL.length];
               const row = document.createElement('div');
-              const intersection = a.intersection ? ` \u2229 ${a.intersection}` : '';
-              row.innerHTML =
-                `<span style="color:${pal.border}">\u25a0</span>` +
-                `<span style="color:#9898a8;margin-left:5px;">${a.face}${intersection}</span>` +
-                `<span style="color:#f0f0f4;margin-left:6px;font-weight:500;">${a.value}</span>`;
+
+              const swatch = document.createElement('span');
+              swatch.style.color = pal.border;
+              swatch.textContent = '\u25a0';
+
+              const label = document.createElement('span');
+              label.style.cssText = 'color:#9898a8;margin-left:5px;';
+              label.textContent = a.intersection ? `${a.face} \u2229 ${a.intersection}` : a.face;
+
+              const val = document.createElement('span');
+              val.style.cssText = 'color:#f0f0f4;margin-left:6px;font-weight:500;';
+              val.textContent = a.value;
+
+              row.appendChild(swatch);
+              row.appendChild(label);
+              row.appendChild(val);
               leg.appendChild(row);
             });
 
