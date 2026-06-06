@@ -16,6 +16,26 @@ var config = new ConfigurationBuilder()
     .AddEnvironmentVariables()
     .Build();
 
+// Fail fast if secrets are missing or still hold placeholder values.
+var jwtSecret = config["Jwt:Secret"] ?? "";
+var connStr   = config.GetConnectionString("DefaultConnection") ?? "";
+string[] placeholders = ["REPLACE_WITH_JWT_SECRET", "REPLACE_WITH_DB_PASSWORD", "REPLACE_WITH_CONNECTION_STRING"];
+if (string.IsNullOrEmpty(jwtSecret) || placeholders.Any(p => jwtSecret.Equals(p, StringComparison.Ordinal)))
+{
+    Console.Error.WriteLine("ERROR: Jwt:Secret is not set. Supply it via the Jwt__Secret environment variable.");
+    return;
+}
+if (string.IsNullOrEmpty(connStr) || placeholders.Any(connStr.Contains))
+{
+    Console.Error.WriteLine("ERROR: Connection string is not configured. Supply it via the ConnectionStrings__DefaultConnection environment variable.");
+    return;
+}
+if (jwtSecret.Length < 32)
+{
+    Console.Error.WriteLine("ERROR: Jwt:Secret must be at least 32 characters.");
+    return;
+}
+
 var services = new ServiceCollection()
     .AddDbContext<AppDbContext>(o =>
         o.UseNpgsql(config.GetConnectionString("DefaultConnection")))
@@ -387,9 +407,23 @@ async Task RunStudentMode(ApplicationUser user, IChatService chatService, RAGSer
 
         if (input.StartsWith("/load "))
         {
-            var path = input[6..].Trim();
-            if (!File.Exists(path)) { Console.WriteLine($"Файлът не е намерен: {path}"); continue; }
-            await ragService.AddTemporaryPDFAsync(path);
+            var uploadsDir = Path.GetFullPath(
+                Path.Combine(Directory.GetCurrentDirectory(), "uploads"));
+            Directory.CreateDirectory(uploadsDir);
+
+            var requested = input[6..].Trim();
+            var fullPath = Path.GetFullPath(
+                Path.Combine(uploadsDir, Path.GetFileName(requested)));
+
+            if (!fullPath.StartsWith(uploadsDir + Path.DirectorySeparatorChar,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Грешка: разрешени са само файлове от папката uploads/.");
+                continue;
+            }
+
+            if (!File.Exists(fullPath)) { Console.WriteLine($"Файлът не е намерен: {Path.GetFileName(requested)}"); continue; }
+            await ragService.AddTemporaryPDFAsync(fullPath);
             continue;
         }
 
