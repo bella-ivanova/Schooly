@@ -8,10 +8,9 @@ public class OCRService
     private readonly HttpClient _httpClient;
     private readonly string _model;
 
-    public OCRService(string model)
+    public OCRService(HttpClient httpClient, string model)
     {
-        _httpClient = new HttpClient();
-        _httpClient.Timeout = Timeout.InfiniteTimeSpan;
+        _httpClient = httpClient;
         _model = model;
     }
 

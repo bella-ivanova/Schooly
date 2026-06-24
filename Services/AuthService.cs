@@ -1,6 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using StudyAssistant.Data;
@@ -11,12 +13,14 @@ namespace StudyAssistant.Services;
 public class AuthService
 {
     private readonly IUserRepository _users;
-    private readonly IConfiguration _config;
+    private readonly IConfiguration  _config;
+    private readonly AppDbContext    _db;
 
-    public AuthService(IUserRepository users, IConfiguration config)
+    public AuthService(IUserRepository users, IConfiguration config, AppDbContext db)
     {
         _users  = users;
         _config = config;
+        _db     = db;
     }
 
     // Registers a new user. Returns the created user on success.
@@ -85,63 +89,82 @@ public class AuthService
         return await _users.ResetPasswordAsync(user, token, newPassword);
     }
 
-    // Validates a JWT and returns its claims. Returns null if invalid or expired.
-    public ClaimsPrincipal? ValidateToken(string token)
+    public string GenerateJwt(ApplicationUser user)
     {
         var secret   = _config["Jwt:Secret"]   ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
         var issuer   = _config["Jwt:Issuer"]   ?? "StudyAssistant";
         var audience = _config["Jwt:Audience"] ?? "StudyAssistantUsers";
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
-        var handler = new JwtSecurityTokenHandler();
-
-        try
-        {
-            return handler.ValidateToken(token, new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey         = key,
-                ValidateIssuer           = true,
-                ValidIssuer              = issuer,
-                ValidateAudience         = true,
-                ValidAudience            = audience,
-                ValidateLifetime         = true,
-                ClockSkew                = TimeSpan.Zero
-            }, out _);
-        }
-        catch { return null; }
-    }
-
-    // ── Helpers ────────────────────────────────────────────────────────────
-
-    public string GenerateJwt(ApplicationUser user)
-    {
-        var secret  = _config["Jwt:Secret"]   ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
-        var issuer  = _config["Jwt:Issuer"]   ?? "StudyAssistant";
-        var audience = _config["Jwt:Audience"] ?? "StudyAssistantUsers";
-        var expHours = int.TryParse(_config["Jwt:ExpiryHours"], out var h) ? h : 24;
+        var expMinutes = int.TryParse(_config["Jwt:ExpiryMinutes"], out var m) ? m : 60;
 
         var key   = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
         {
-            new Claim(JwtRegisteredClaimNames.Sub,   user.Id),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email ?? ""),
+            new Claim(JwtRegisteredClaimNames.Sub,        user.Id),
+            new Claim(JwtRegisteredClaimNames.Email,      user.Email ?? ""),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName ?? ""),
             new Claim("role",  user.Role.ToString()),
             new Claim("grade", user.Grade?.ToString() ?? ""),
-            new Claim(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString())
+            new Claim(JwtRegisteredClaimNames.Jti,        Guid.NewGuid().ToString())
         };
 
         var token = new JwtSecurityToken(
-            issuer:    issuer,
-            audience:  audience,
-            claims:    claims,
-            expires:   DateTime.UtcNow.AddHours(expHours),
+            issuer:             issuer,
+            audience:           audience,
+            claims:             claims,
+            expires:            DateTime.UtcNow.AddMinutes(expMinutes),
             signingCredentials: creds
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    public async Task<string> GenerateRefreshTokenAsync(ApplicationUser user)
+    {
+        var expiryDays = int.TryParse(_config["Jwt:RefreshTokenExpiryDays"], out var d) ? d : 7;
+
+        var tokenBytes = RandomNumberGenerator.GetBytes(64);
+        var tokenValue = Convert.ToHexString(tokenBytes).ToLowerInvariant();
+
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            Token     = tokenValue,
+            UserId    = user.Id,
+            ExpiresAt = DateTime.UtcNow.AddDays(expiryDays),
+            CreatedAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+
+        return tokenValue;
+    }
+
+    public async Task<(string? Jwt, string? NewRefreshToken, string? Error)> ExchangeRefreshTokenAsync(string token)
+    {
+        var stored = await _db.RefreshTokens
+            .Include(r => r.User)
+            .SingleOrDefaultAsync(r => r.Token == token);
+
+        if (stored == null || stored.IsRevoked || stored.ExpiresAt <= DateTime.UtcNow)
+            return (null, null, "Invalid or expired refresh token.");
+
+        stored.IsRevoked = true;
+        await _db.SaveChangesAsync();
+
+        var newRefreshToken = await GenerateRefreshTokenAsync(stored.User);
+        var newJwt          = GenerateJwt(stored.User);
+
+        return (newJwt, newRefreshToken, null);
+    }
+
+    public async Task<bool> RevokeRefreshTokenAsync(string token)
+    {
+        var stored = await _db.RefreshTokens.SingleOrDefaultAsync(r => r.Token == token);
+        if (stored == null || stored.IsRevoked)
+            return false;
+
+        stored.IsRevoked = true;
+        await _db.SaveChangesAsync();
+        return true;
     }
 }

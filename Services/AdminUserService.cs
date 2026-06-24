@@ -75,6 +75,12 @@ public class AdminUserService
             return;
         }
 
+        if (student.Role != UserRole.Student)
+        {
+            Console.WriteLine($"Потребителят '{studentUsername}' не е ученик и не може да бъде добавен в клас.");
+            return;
+        }
+
         var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == school);
         if (cls == null)
         {

@@ -13,6 +13,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ChatMessage> ChatMessages { get; set; }
     public DbSet<Subject> Subjects { get; set; }
     public DbSet<TeacherSubject> TeacherSubjects { get; set; }
+    public DbSet<RefreshToken> RefreshTokens { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -98,6 +99,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
              .HasForeignKey(m => m.SubjectId)
              .IsRequired(false)
              .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<RefreshToken>(b =>
+        {
+            b.Property(r => r.Token).IsRequired().HasMaxLength(128);
+            b.HasIndex(r => r.Token).IsUnique();
+            b.HasOne(r => r.User)
+             .WithMany()
+             .HasForeignKey(r => r.UserId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

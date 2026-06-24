@@ -19,11 +19,10 @@ public class ZhipuAIChatService : IChatService
 
     public double Temperature { get; set; } = 0.7;
 
-    public ZhipuAIChatService(string model, string apiKey)
+    public ZhipuAIChatService(HttpClient httpClient, string model, string apiKey)
     {
-        // Strip Ollama's ":cloud" tag — ZhipuAI only recognises the base model name.
         _model = model.Split(':')[0];
-        _httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        _httpClient = httpClient;
         _httpClient.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", apiKey);
     }

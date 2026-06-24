@@ -113,6 +113,18 @@ public class SchoolAdminService
             return;
         }
 
+        if (student.Role != UserRole.Student)
+        {
+            Console.WriteLine($"Потребителят '{studentUsername}' не е ученик и не може да бъде добавен в клас.");
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(student.School) && student.School != _school)
+        {
+            Console.WriteLine($"Ученикът '{studentUsername}' принадлежи към друго училище и не може да бъде преместен.");
+            return;
+        }
+
         var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == _school);
         if (cls == null)
         {

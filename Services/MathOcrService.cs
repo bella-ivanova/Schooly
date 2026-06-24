@@ -7,10 +7,9 @@ public class MathOcrService
     private readonly HttpClient _httpClient;
     private const string ServerUrl = "http://127.0.0.1:8503/pix2text";
 
-    public MathOcrService()
+    public MathOcrService(HttpClient httpClient)
     {
-        // Pix2Text can be slow on large pages — no timeout
-        _httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        _httpClient = httpClient;
     }
 
     // Sends a PNG page image to the Pix2Text server and gets back text with

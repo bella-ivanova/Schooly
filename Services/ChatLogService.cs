@@ -42,7 +42,7 @@ public class ChatLogService
     public async Task<(string subject, string topic)> DetectSubjectTopicAsync(string question)
     {
         var prompt =
-            $"Given this student question: '{question}', reply with ONLY a JSON object with no extra text: " +
+            $"Given this student question: <question>{question}</question>, reply with ONLY a JSON object with no extra text: " +
             "{\"subject\": \"<Bulgarian school curriculum subject name>\", \"topic\": \"<short topic label in Bulgarian>\"}";
 
         try

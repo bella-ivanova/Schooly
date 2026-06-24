@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -24,14 +25,16 @@ public class RateLimiter
     private static readonly JsonSerializerOptions JsonOpts = new()
         { WriteIndented = false, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
-    private Dictionary<string, LoginEntry> _loginAttempts
+    private readonly Lock _fileLock = new();
+
+    private ConcurrentDictionary<string, LoginEntry> _loginAttempts
         = new(StringComparer.OrdinalIgnoreCase);
 
-    private Dictionary<string, DateTime> _passwordResetRequests
+    private ConcurrentDictionary<string, DateTime> _passwordResetRequests
         = new(StringComparer.OrdinalIgnoreCase);
 
     // email → last successful registration attempt
-    private Dictionary<string, DateTime> _registrationRequests
+    private ConcurrentDictionary<string, DateTime> _registrationRequests
         = new(StringComparer.OrdinalIgnoreCase);
 
     public RateLimiter() => Load();
@@ -68,7 +71,7 @@ public class RateLimiter
 
     public void RecordLoginSuccess(string usernameOrEmail)
     {
-        _loginAttempts.Remove(usernameOrEmail);
+        _loginAttempts.TryRemove(usernameOrEmail, out _);
         Save();
     }
 
@@ -124,41 +127,47 @@ public class RateLimiter
 
     private void Save()
     {
-        try
+        lock (_fileLock)
         {
-            var now = DateTime.UtcNow;
+            try
+            {
+                var now = DateTime.UtcNow;
 
-            var activeLogins = _loginAttempts
-                .Where(kv => kv.Value.Count > 0)
-                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+                var activeLogins = _loginAttempts
+                    .Where(kv => kv.Value.Count > 0)
+                    .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
 
-            var activeResets = _passwordResetRequests
-                .Where(kv => now - kv.Value < PasswordResetCooldown)
-                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+                var activeResets = _passwordResetRequests
+                    .Where(kv => now - kv.Value < PasswordResetCooldown)
+                    .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
 
-            var activeRegs = _registrationRequests
-                .Where(kv => now - kv.Value < RegistrationCooldown)
-                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+                var activeRegs = _registrationRequests
+                    .Where(kv => now - kv.Value < RegistrationCooldown)
+                    .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
 
-            var state = new PersistedState(activeLogins, activeResets, activeRegs);
-            File.WriteAllText(StateFile, JsonSerializer.Serialize(state, JsonOpts));
+                var state = new PersistedState(activeLogins, activeResets, activeRegs);
+                File.WriteAllText(StateFile, JsonSerializer.Serialize(state, JsonOpts));
+            }
+            catch { /* non-critical; in-memory state still works */ }
         }
-        catch { /* non-critical; in-memory state still works */ }
     }
 
     private void Load()
     {
-        try
+        lock (_fileLock)
         {
-            if (!File.Exists(StateFile)) return;
-            var state = JsonSerializer.Deserialize<PersistedState>(File.ReadAllText(StateFile), JsonOpts);
-            if (state is null) return;
+            try
+            {
+                if (!File.Exists(StateFile)) return;
+                var state = JsonSerializer.Deserialize<PersistedState>(File.ReadAllText(StateFile), JsonOpts);
+                if (state is null) return;
 
-            _loginAttempts        = new(state.LoginAttempts,        StringComparer.OrdinalIgnoreCase);
-            _passwordResetRequests = new(state.PasswordResetRequests, StringComparer.OrdinalIgnoreCase);
-            _registrationRequests  = new(state.RegistrationRequests,  StringComparer.OrdinalIgnoreCase);
+                _loginAttempts        = new(state.LoginAttempts,        StringComparer.OrdinalIgnoreCase);
+                _passwordResetRequests = new(state.PasswordResetRequests, StringComparer.OrdinalIgnoreCase);
+                _registrationRequests  = new(state.RegistrationRequests,  StringComparer.OrdinalIgnoreCase);
+            }
+            catch { /* corrupt file — start fresh */ }
         }
-        catch { /* corrupt file — start fresh */ }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
