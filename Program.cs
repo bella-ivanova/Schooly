@@ -34,7 +34,7 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
-              .AllowAnyMethod()));
+              .WithMethods("GET", "POST", "PUT", "DELETE")));
 
 builder.Services.AddControllers();
 
