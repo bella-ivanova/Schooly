@@ -3,3 +3,4 @@ obj/
 .DS_Store
 .qdrant-initialized
 appsettings.Local.json
+storage/
