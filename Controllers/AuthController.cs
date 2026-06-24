@@ -169,7 +169,7 @@ public record RegisterRequest(
     [MaxLength(200)] string? School,
     [MaxLength(100)] string? TeacherRegistrationCode);
 
-public record RefreshRequest([Required, MaxLength(128)] string RefreshToken);
+public record RefreshRequest([Required, MaxLength(256)] string RefreshToken);
 
 public record ForgotPasswordRequest([Required, MaxLength(254)] string Email);
 
