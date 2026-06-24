@@ -14,6 +14,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Subject> Subjects { get; set; }
     public DbSet<TeacherSubject> TeacherSubjects { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
+    public DbSet<RateLimitEntry> RateLimitEntries { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -110,6 +111,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
              .HasForeignKey(r => r.UserId)
              .IsRequired()
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RateLimitEntry>(b =>
+        {
+            b.HasKey(e => new { e.Key, e.Type });
+            b.Property(e => e.Key).HasMaxLength(256);
+            b.Property(e => e.Type).HasMaxLength(32);
         });
     }
 }

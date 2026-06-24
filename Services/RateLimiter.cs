@@ -1,51 +1,38 @@
-using System.Collections.Concurrent;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
+using StudyAssistant.Data;
+using StudyAssistant.Models;
 
 namespace StudyAssistant.Services;
 
-public class RateLimiter
+public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
 {
     // Progressive delays per consecutive failure (index = failure count, capped at last entry).
     // Replaces the hard 15-min lockout so an attacker cannot permanently deny access to any account.
     private static readonly TimeSpan[] LoginDelays =
     [
-        TimeSpan.Zero,            // 1st failure: no wait
-        TimeSpan.FromSeconds(3),  // 2nd
-        TimeSpan.FromSeconds(10), // 3rd
-        TimeSpan.FromSeconds(30), // 4th
-        TimeSpan.FromSeconds(60), // 5th and beyond
+        TimeSpan.Zero,            // 0 failures: no wait
+        TimeSpan.FromSeconds(3),  // 1st failure
+        TimeSpan.FromSeconds(10), // 2nd
+        TimeSpan.FromSeconds(30), // 3rd
+        TimeSpan.FromSeconds(60), // 4th and beyond
     ];
-    private static readonly TimeSpan PasswordResetCooldown  = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan RegistrationCooldown   = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan PasswordResetCooldown = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan RegistrationCooldown  = TimeSpan.FromMinutes(2);
 
-    private static readonly string StateFile = Path.Combine(
-        AppContext.BaseDirectory, "rate_limiter_state.json");
-
-    private static readonly JsonSerializerOptions JsonOpts = new()
-        { WriteIndented = false, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
-
-    private readonly Lock _fileLock = new();
-
-    private ConcurrentDictionary<string, LoginEntry> _loginAttempts
-        = new(StringComparer.OrdinalIgnoreCase);
-
-    private ConcurrentDictionary<string, DateTime> _passwordResetRequests
-        = new(StringComparer.OrdinalIgnoreCase);
-
-    // email → last successful registration attempt
-    private ConcurrentDictionary<string, DateTime> _registrationRequests
-        = new(StringComparer.OrdinalIgnoreCase);
-
-    public RateLimiter() => Load();
+    private const string LoginType         = "login";
+    private const string PasswordResetType = "password_reset";
+    private const string RegistrationType  = "registration";
 
     // ── Login ────────────────────────────────────────────────────────────────
 
     public bool IsLoginLocked(string usernameOrEmail, out TimeSpan remaining)
     {
         remaining = TimeSpan.Zero;
-        if (!_loginAttempts.TryGetValue(usernameOrEmail, out var entry) || entry.NextAttemptAfter is null)
-            return false;
+        var key = usernameOrEmail.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == LoginType);
+
+        if (entry is null || entry.NextAttemptAfter is null) return false;
 
         if (DateTime.UtcNow < entry.NextAttemptAfter)
         {
@@ -54,31 +41,61 @@ public class RateLimiter
         }
 
         // Delay expired — clear it but keep the failure count so delays keep growing
-        _loginAttempts[usernameOrEmail] = entry with { NextAttemptAfter = null };
-        Save();
+        entry.NextAttemptAfter = null;
+        db.SaveChanges();
         return false;
     }
 
     public void RecordLoginFailure(string usernameOrEmail)
     {
-        _loginAttempts.TryGetValue(usernameOrEmail, out var entry);
-        var newCount    = entry.Count + 1;
-        var delay       = LoginDelays[Math.Min(newCount, LoginDelays.Length - 1)];
-        var nextAllowed = delay > TimeSpan.Zero ? DateTime.UtcNow.Add(delay) : (DateTime?)null;
-        _loginAttempts[usernameOrEmail] = new LoginEntry(newCount, nextAllowed);
-        Save();
+        var key = usernameOrEmail.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == LoginType);
+
+        int newCount;
+        DateTime? nextAllowed;
+
+        if (entry is null)
+        {
+            newCount = 1;
+            var delay = LoginDelays[Math.Min(newCount, LoginDelays.Length - 1)];
+            nextAllowed = delay > TimeSpan.Zero ? DateTime.UtcNow.Add(delay) : null;
+            db.RateLimitEntries.Add(new RateLimitEntry
+            {
+                Key = key, Type = LoginType,
+                FailureCount = newCount, NextAttemptAfter = nextAllowed
+            });
+        }
+        else
+        {
+            newCount = entry.FailureCount + 1;
+            var delay = LoginDelays[Math.Min(newCount, LoginDelays.Length - 1)];
+            nextAllowed = delay > TimeSpan.Zero ? DateTime.UtcNow.Add(delay) : null;
+            entry.FailureCount = newCount;
+            entry.NextAttemptAfter = nextAllowed;
+        }
+
+        db.SaveChanges();
     }
 
     public void RecordLoginSuccess(string usernameOrEmail)
     {
-        _loginAttempts.TryRemove(usernameOrEmail, out _);
-        Save();
+        var key = usernameOrEmail.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == LoginType);
+        if (entry is not null)
+        {
+            db.RateLimitEntries.Remove(entry);
+            db.SaveChanges();
+        }
     }
 
     public int RemainingAttemptsBeforeDelay(string usernameOrEmail)
     {
-        _loginAttempts.TryGetValue(usernameOrEmail, out var entry);
-        return Math.Max(0, LoginDelays.Length - 1 - entry.Count);
+        var key = usernameOrEmail.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == LoginType);
+        return Math.Max(0, LoginDelays.Length - 1 - (entry?.FailureCount ?? 0));
     }
 
     // ── Password reset ───────────────────────────────────────────────────────
@@ -86,8 +103,12 @@ public class RateLimiter
     public bool IsPasswordResetThrottled(string email, out TimeSpan remaining)
     {
         remaining = TimeSpan.Zero;
-        if (!_passwordResetRequests.TryGetValue(email, out var lastRequest)) return false;
-        var elapsed = DateTime.UtcNow - lastRequest;
+        var key = email.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == PasswordResetType);
+
+        if (entry?.LastRequestAt is null) return false;
+        var elapsed = DateTime.UtcNow - entry.LastRequestAt.Value;
         if (elapsed < PasswordResetCooldown)
         {
             remaining = PasswordResetCooldown - elapsed;
@@ -98,8 +119,16 @@ public class RateLimiter
 
     public void RecordPasswordResetRequest(string email)
     {
-        _passwordResetRequests[email] = DateTime.UtcNow;
-        Save();
+        var key = email.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == PasswordResetType);
+
+        if (entry is null)
+            db.RateLimitEntries.Add(new RateLimitEntry { Key = key, Type = PasswordResetType, LastRequestAt = DateTime.UtcNow });
+        else
+            entry.LastRequestAt = DateTime.UtcNow;
+
+        db.SaveChanges();
     }
 
     // ── Registration ─────────────────────────────────────────────────────────
@@ -107,8 +136,12 @@ public class RateLimiter
     public bool IsRegistrationThrottled(string email, out TimeSpan remaining)
     {
         remaining = TimeSpan.Zero;
-        if (!_registrationRequests.TryGetValue(email, out var lastAttempt)) return false;
-        var elapsed = DateTime.UtcNow - lastAttempt;
+        var key = email.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == RegistrationType);
+
+        if (entry?.LastRequestAt is null) return false;
+        var elapsed = DateTime.UtcNow - entry.LastRequestAt.Value;
         if (elapsed < RegistrationCooldown)
         {
             remaining = RegistrationCooldown - elapsed;
@@ -119,55 +152,16 @@ public class RateLimiter
 
     public void RecordRegistration(string email)
     {
-        _registrationRequests[email] = DateTime.UtcNow;
-        Save();
-    }
+        var key = email.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == RegistrationType);
 
-    // ── Persistence ──────────────────────────────────────────────────────────
+        if (entry is null)
+            db.RateLimitEntries.Add(new RateLimitEntry { Key = key, Type = RegistrationType, LastRequestAt = DateTime.UtcNow });
+        else
+            entry.LastRequestAt = DateTime.UtcNow;
 
-    private void Save()
-    {
-        lock (_fileLock)
-        {
-            try
-            {
-                var now = DateTime.UtcNow;
-
-                var activeLogins = _loginAttempts
-                    .Where(kv => kv.Value.Count > 0)
-                    .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
-
-                var activeResets = _passwordResetRequests
-                    .Where(kv => now - kv.Value < PasswordResetCooldown)
-                    .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
-
-                var activeRegs = _registrationRequests
-                    .Where(kv => now - kv.Value < RegistrationCooldown)
-                    .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
-
-                var state = new PersistedState(activeLogins, activeResets, activeRegs);
-                File.WriteAllText(StateFile, JsonSerializer.Serialize(state, JsonOpts));
-            }
-            catch { /* non-critical; in-memory state still works */ }
-        }
-    }
-
-    private void Load()
-    {
-        lock (_fileLock)
-        {
-            try
-            {
-                if (!File.Exists(StateFile)) return;
-                var state = JsonSerializer.Deserialize<PersistedState>(File.ReadAllText(StateFile), JsonOpts);
-                if (state is null) return;
-
-                _loginAttempts        = new(state.LoginAttempts,        StringComparer.OrdinalIgnoreCase);
-                _passwordResetRequests = new(state.PasswordResetRequests, StringComparer.OrdinalIgnoreCase);
-                _registrationRequests  = new(state.RegistrationRequests,  StringComparer.OrdinalIgnoreCase);
-            }
-            catch { /* corrupt file — start fresh */ }
-        }
+        db.SaveChanges();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -176,13 +170,4 @@ public class RateLimiter
         remaining.TotalSeconds < 90
             ? $"{(int)remaining.TotalSeconds} сек."
             : $"{(int)remaining.TotalMinutes} мин.";
-
-    // ── DTOs ─────────────────────────────────────────────────────────────────
-
-    public record LoginEntry(int Count, DateTime? NextAttemptAfter);
-
-    private record PersistedState(
-        Dictionary<string, LoginEntry> LoginAttempts,
-        Dictionary<string, DateTime>   PasswordResetRequests,
-        Dictionary<string, DateTime>   RegistrationRequests);
 }

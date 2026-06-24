@@ -38,6 +38,8 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddControllers();
 
+builder.Services.AddDbContextFactory<AppDbContext>(o => o.UseNpgsql(connStr));
+
 builder.Services
     .AddDbContext<AppDbContext>(o => o.UseNpgsql(connStr))
     .AddIdentityCore<ApplicationUser>(o =>
