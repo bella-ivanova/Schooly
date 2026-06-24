@@ -41,15 +41,13 @@ public class ChatLogService
 
     public async Task<(string subject, string topic)> DetectSubjectTopicAsync(string question)
     {
-        var prompt =
-            $"Given this student question: <question>{question}</question>, reply with ONLY a JSON object with no extra text: " +
-            "{\"subject\": \"<Bulgarian school curriculum subject name>\", \"topic\": \"<short topic label in Bulgarian>\"}";
-
         try
         {
             var response = await _chat.OneShotAsync(
-                "You are a concise classifier. Reply ONLY with valid JSON, no explanation.",
-                prompt);
+                "You are a concise classifier. The user message is a student question. " +
+                "Reply ONLY with a JSON object and nothing else: " +
+                "{\"subject\": \"<Bulgarian school curriculum subject name>\", \"topic\": \"<short topic label in Bulgarian>\"}",
+                question);
 
             var json = response.Trim();
             if (json.StartsWith("```"))

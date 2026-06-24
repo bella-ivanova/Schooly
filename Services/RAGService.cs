@@ -238,17 +238,17 @@ public class RAGService
     //                     without polluting the conversation history shown to students.
     public async Task<string?> Ask(string question, bool capture = false, string? instructionSuffix = null)
     {
-        Task<string?> Send(string userMsg, string? apiMsg)
+        Task<string?> Send(string userMsg, string? apiMsg, string? sysOverride = null)
         {
             var finalApi = instructionSuffix != null
                 ? (apiMsg ?? userMsg) + "\n\n" + instructionSuffix
                 : apiMsg;
 
             if (capture)
-                return _chat.StreamMessageFilteredAsync(userMsg, finalApi)
+                return _chat.StreamMessageFilteredAsync(userMsg, finalApi, sysOverride)
                             .ContinueWith(t => (string?)t.Result);
             else
-                return _chat.StreamMessageAsync(userMsg, finalApi)
+                return _chat.StreamMessageAsync(userMsg, finalApi, sysOverride)
                             .ContinueWith(_ => (string?)null);
         }
 
@@ -258,21 +258,26 @@ public class RAGService
             return await Send(question, null);
 
         var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
-        var ragPrompt =
-            $"You are a school tutor. The student is in {gradeLabel}. The following material is from their textbooks (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
-            "Each excerpt is labeled with its grade and subject. A unit title in the textbook may differ from what the student calls the topic — for example, a unit titled 'Solving Triangles' covers trigonometry.\n" +
-            "IMPORTANT: Base your answer strictly on what is present in the excerpts below. Do NOT say a topic is absent or belongs to a different grade unless no related content appears in the excerpts.\n" +
-            "Your job is to identify which excerpt is relevant to the student's question, then apply that topic's definitions, formulas, and methods step by step.\n" +
-            "The student's problem may be a new example — you do not need an identical solved example in the text. Use the method the textbook teaches and work through the student's numbers.\n" +
-            "Keep in mind that if a complex concept is included in the material that the student knows all of the basic things that are needed to understand it. For example a 10th grader that has Irrational equations knows how to solve 2+2 \n" +
-            "If the answer is very simple keep the answer short, but if it is complex provide a detailed explanation.\n" +
-            "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material below.\n\n" +
+
+        // System-role: all tutor persona and behavior rules (student cannot override these).
+        var systemOverride =
+            $"You are a school tutor. The student is in {gradeLabel}. The textbook excerpts below are from their curriculum (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
+            "Each excerpt is labeled with its grade and subject. A unit title may differ from what the student calls the topic — e.g. 'Solving Triangles' covers trigonometry.\n" +
+            "IMPORTANT: Base your answer strictly on what is present in the excerpts. Do NOT say a topic is absent unless no related content appears in the excerpts.\n" +
+            "Identify the relevant excerpt, then apply its definitions, formulas, and methods step by step.\n" +
+            "The student's problem may be a new example — use the textbook method with the student's numbers.\n" +
+            "Students know all prerequisites for concepts present in their grade material.\n" +
+            "Keep simple answers short; provide detailed explanations for complex topics.\n" +
+            "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.";
+
+        // User-role: textbook context as reference data, then the student's question clearly delimited.
+        var ragUserContent =
             "--- Textbook Material ---\n" +
             context +
             "\n--- End of Material ---\n\n" +
-            "Student question: " + question;
+            "<student_question>\n" + question + "\n</student_question>";
 
-        return await Send(question, ragPrompt);
+        return await Send(question, ragUserContent, systemOverride);
     }
 
     // Used locally for temporary chunk similarity (Qdrant handles this for permanent chunks)

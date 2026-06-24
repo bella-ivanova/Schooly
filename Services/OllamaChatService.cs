@@ -79,7 +79,7 @@ public class OllamaChatService : IChatService
     // newUserMessage  — stored in conversation history so the AI remembers the exchange.
     // apiMessage      — what actually gets sent to the model (used by RAG to inject
     //                   textbook context around the question without polluting history).
-    public async Task StreamMessageAsync(string newUserMessage, string? apiMessage = null)
+    public async Task StreamMessageAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null)
     {
         _messages.Add(new Message { Role = ChatRole.User, Content = newUserMessage });
 
@@ -89,6 +89,12 @@ public class OllamaChatService : IChatService
             ? [.._messages.Take(_messages.Count - 1),
                new Message { Role = ChatRole.User, Content = apiMessage }]
             : _messages;
+
+        // If a per-request system prompt is supplied, prepend it and strip any
+        // existing system message so the caller controls the role boundary.
+        if (systemPromptOverride != null)
+            apiMessages = [new Message { Role = ChatRole.System, Content = systemPromptOverride },
+                           ..apiMessages.Where(m => m.Role != ChatRole.System)];
 
         var request = new ChatRequest
         {
@@ -134,7 +140,7 @@ public class OllamaChatService : IChatService
     //
     // Uses a small look-ahead buffer (length of the opening tag) to detect the
     // tag even when it arrives split across multiple tokens.
-    public async Task<string> StreamMessageFilteredAsync(string newUserMessage, string? apiMessage = null)
+    public async Task<string> StreamMessageFilteredAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null)
     {
         _messages.Add(new Message { Role = ChatRole.User, Content = newUserMessage });
 
@@ -142,6 +148,10 @@ public class OllamaChatService : IChatService
             ? [.._messages.Take(_messages.Count - 1),
                new Message { Role = ChatRole.User, Content = apiMessage }]
             : _messages;
+
+        if (systemPromptOverride != null)
+            apiMessages = [new Message { Role = ChatRole.System, Content = systemPromptOverride },
+                           ..apiMessages.Where(m => m.Role != ChatRole.System)];
 
         var request = new ChatRequest
         {

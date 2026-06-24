@@ -76,30 +76,36 @@ public class ZhipuAIChatService : IChatService
         }
     }
 
-    public async Task StreamMessageAsync(string newUserMessage, string? apiMessage = null)
+    public async Task StreamMessageAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null)
     {
         _messages.Add(new ChatMsg("user", newUserMessage));
-        var fullResponse = await SendStreamAsync(apiMessage ?? newUserMessage, print: true);
+        var fullResponse = await SendStreamAsync(apiMessage ?? newUserMessage, print: true, systemPromptOverride: systemPromptOverride);
         _messages.Add(new ChatMsg("assistant", fullResponse));
     }
 
-    public async Task<string> StreamMessageFilteredAsync(string newUserMessage, string? apiMessage = null)
+    public async Task<string> StreamMessageFilteredAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null)
     {
         _messages.Add(new ChatMsg("user", newUserMessage));
-        var fullResponse = await SendStreamAsync(apiMessage ?? newUserMessage, print: true, filterGeom: true);
+        var fullResponse = await SendStreamAsync(apiMessage ?? newUserMessage, print: true, filterGeom: true, systemPromptOverride: systemPromptOverride);
         _messages.Add(new ChatMsg("assistant", fullResponse));
         return fullResponse;
     }
 
     // ── Core streaming implementation ─────────────────────────────────────────
-    private async Task<string> SendStreamAsync(string userContent, bool print, bool filterGeom = false)
+    private async Task<string> SendStreamAsync(string userContent, bool print, bool filterGeom = false, string? systemPromptOverride = null)
     {
-        // Build the messages list: replace last user turn with userContent
-        // (same pattern as OllamaChatService — userContent may be a RAG-enriched prompt)
-        var apiMessages = _messages
+        // Build the messages list: replace last user turn with userContent.
+        // If a per-request system prompt is supplied, prepend it and strip any
+        // existing system message so the caller controls the role boundary.
+        IEnumerable<ChatMsg> baseMessages = _messages
             .Take(_messages.Count - 1)
-            .Append(new ChatMsg("user", userContent))
-            .Select(m => new { role = m.Role, content = m.Content });
+            .Append(new ChatMsg("user", userContent));
+
+        if (systemPromptOverride != null)
+            baseMessages = new[] { new ChatMsg("system", systemPromptOverride) }
+                .Concat(baseMessages.Where(m => m.Role != "system"));
+
+        var apiMessages = baseMessages.Select(m => new { role = m.Role, content = m.Content });
 
         var body = JsonSerializer.Serialize(new
         {

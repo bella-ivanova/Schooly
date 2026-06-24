@@ -18,19 +18,21 @@ public class ExamService
         if (string.IsNullOrWhiteSpace(chunks))
             return $"Няма намерен материал за темата '{topic}'. Опитай с друга тема.";
 
-        var userPrompt =
-            $"Using ONLY the following textbook material for Grade {grade}, generate a mock exam on the topic '{topic}'.\n" +
-            "Include:\n" +
+        var systemPrompt =
+            "You are a school exam generator. Use ONLY the provided textbook material.\n" +
+            "Generate a mock exam that includes:\n" +
             "- 3 multiple choice questions (with 4 options each, mark the correct one with *)\n" +
             "- 2 short answer questions\n" +
             "- 1 problem-solving question with full working space\n" +
-            "Format clearly with numbered sections. Write in Bulgarian.\n" +
+            "Format clearly with numbered sections. Write in Bulgarian.";
+
+        var userPrompt =
+            $"Grade: {grade}\n" +
+            $"Topic: {topic}\n" +
             "--- Textbook Material ---\n" +
             chunks +
             "\n--- End of Material ---";
 
-        return await _chat.OneShotAsync(
-            "You are a school exam generator. Generate clear, well-structured tests.",
-            userPrompt);
+        return await _chat.OneShotAsync(systemPrompt, userPrompt);
     }
 }
