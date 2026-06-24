@@ -1,3 +1,4 @@
+using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -141,15 +142,29 @@ public class AuthService
 
     public async Task<(string? Jwt, string? NewRefreshToken, string? Error)> ExchangeRefreshTokenAsync(string token)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+
         var stored = await _db.RefreshTokens
             .Include(r => r.User)
             .SingleOrDefaultAsync(r => r.Token == token);
 
         if (stored == null || stored.IsRevoked || stored.ExpiresAt <= DateTime.UtcNow)
+        {
+            await tx.RollbackAsync();
             return (null, null, "Invalid or expired refresh token.");
+        }
 
         stored.IsRevoked = true;
-        await _db.SaveChangesAsync();
+
+        try
+        {
+            await _db.SaveChangesAsync();
+            await tx.CommitAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return (null, null, "Invalid or expired refresh token.");
+        }
 
         var newRefreshToken = await GenerateRefreshTokenAsync(stored.User);
         var newJwt          = GenerateJwt(stored.User);
