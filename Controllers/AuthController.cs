@@ -155,25 +155,25 @@ public class AuthController : ControllerBase
 }
 
 public record LoginRequest(
-    [MaxLength(254)] string UsernameOrEmail,
-    [MaxLength(128)] string Password);
+    [Required, MaxLength(254)] string UsernameOrEmail,
+    [Required, MaxLength(128)] string Password);
 
 public record RegisterRequest(
-    [MaxLength(50)]  string  Username,
-    [MaxLength(254)] string  Email,
-    [MaxLength(128)] string  Password,
-    [MaxLength(150)] string  FullName,
-    [MaxLength(20)]  string  Role,
+    [Required, MaxLength(50)]  string  Username,
+    [Required, MaxLength(254)] string  Email,
+    [Required, MaxLength(128)] string  Password,
+    [Required, MaxLength(150)] string  FullName,
+    [Required, MaxLength(20)]  string  Role,
     int?    Grade,
     [MaxLength(5)]   string? ClassLetter,
     [MaxLength(200)] string? School,
     [MaxLength(100)] string? TeacherRegistrationCode);
 
-public record RefreshRequest([MaxLength(128)] string RefreshToken);
+public record RefreshRequest([Required, MaxLength(128)] string RefreshToken);
 
-public record ForgotPasswordRequest([MaxLength(254)] string Email);
+public record ForgotPasswordRequest([Required, MaxLength(254)] string Email);
 
 public record ResetPasswordRequest(
-    [MaxLength(254)]  string Email,
-    [MaxLength(2048)] string Token,
-    [MaxLength(128)]  string NewPassword);
+    [Required, MaxLength(254)]  string Email,
+    [Required, MaxLength(2048)] string Token,
+    [Required, MaxLength(128)]  string NewPassword);
