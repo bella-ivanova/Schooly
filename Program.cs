@@ -127,6 +127,7 @@ builder.Services.AddScoped<RAGService>();
 builder.Services.AddScoped<ChatLogService>();
 builder.Services.AddScoped<TeacherDashboardService>();
 builder.Services.AddScoped<SchoolAdminService>();
+builder.Services.AddScoped<AdminUserService>();
 
 // ── App pipeline ──────────────────────────────────────────────────────────
 var app = builder.Build();

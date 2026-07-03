@@ -99,6 +99,17 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [ ] `GET /api/admin/subjects` returns all subjects for the caller's school
 - [ ] `GET /api/admin/users` returns all users in the caller's school with role, grade, and class info
 - [ ] Non-SchoolAdmin JWT receives 403 on all `/api/admin` endpoints; unauthenticated requests receive 401
+- [ ] `POST /api/global-admin/schools` registers a new school name; rejects duplicates (school already has classes or users)
+- [ ] `GET /api/global-admin/users` returns all users across all schools with id, username, fullName, role, grade, and class name
+- [ ] `GET /api/global-admin/classes` returns all classes across all schools with id, name, homeroom teacher username, and student count
+- [ ] `POST /api/global-admin/classes` creates a class for any school; optional homeroom teacher looked up by ID
+- [ ] `DELETE /api/global-admin/classes/{classId}` deletes a class and unlinks all its students
+- [ ] `POST /api/global-admin/subjects` creates a subject for a given school; rejects duplicates
+- [ ] `DELETE /api/global-admin/subjects/{subjectId}` deletes a subject by ID
+- [ ] `POST /api/global-admin/classes/{classId}/students` assigns a student (by userId) to a class; rejects non-students
+- [ ] `POST /api/global-admin/classes/{classId}/teachers` assigns a teacher to a class for a subject; auto-creates the subject if it does not exist
+- [ ] `PUT /api/global-admin/users/{userId}/role` promotes a user to SchoolAdmin and assigns them to a school
+- [ ] Non-Admin JWT receives 403 on all `/api/global-admin` endpoints; unauthenticated requests receive 401
 
 ---
 

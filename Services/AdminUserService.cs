@@ -15,6 +15,51 @@ public class AdminUserService
         _users = users;
     }
 
+    // ── School ────────────────────────────────────────────────────────────────
+
+    public async Task<(bool Success, string? Error)> CreateSchoolAsync(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, "School name is required.");
+
+        var alreadyExists = await _db.Classes.AnyAsync(c => c.School == name)
+                         || await _db.Set<ApplicationUser>().AnyAsync(u => u.School == name);
+        if (alreadyExists)
+            return (false, $"A school named '{name}' already exists.");
+
+        return (true, null);
+    }
+
+    public async Task CreateSchoolAsync()
+    {
+        Console.Write("Название на училището: ");
+        var name = Console.ReadLine()?.Trim() ?? "";
+        var (success, error) = await CreateSchoolAsync(name);
+        Console.WriteLine(success ? $"Училище '{name}' е регистрирано." : error);
+    }
+
+    // ── Classes ───────────────────────────────────────────────────────────────
+
+    public async Task<(bool Success, string? Error)> AddClassAsync(
+        string school, string name, string? homeroomTeacherId)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, "Class name is required.");
+        if (string.IsNullOrWhiteSpace(school))
+            return (false, "School name is required.");
+
+        if (homeroomTeacherId != null)
+        {
+            var teacher = await _users.GetByIdAsync(homeroomTeacherId);
+            if (teacher == null)
+                return (false, "Teacher not found.");
+        }
+
+        _db.Classes.Add(new Class { Name = name, School = school, HomeroomTeacherId = homeroomTeacherId });
+        await _db.SaveChangesAsync();
+        return (true, null);
+    }
+
     public async Task AddClassAsync()
     {
         Console.Write("Име на клас (напр. 10А): ");
@@ -36,9 +81,25 @@ public class AdminUserService
             homeroomTeacherId = teacher.Id;
         }
 
-        _db.Classes.Add(new Class { Name = name, School = school, HomeroomTeacherId = homeroomTeacherId });
-        await _db.SaveChangesAsync();
-        Console.WriteLine($"Клас '{name}' е създаден.");
+        var (success, error) = await AddClassAsync(school, name, homeroomTeacherId);
+        Console.WriteLine(success ? $"Клас '{name}' е създаден." : error);
+    }
+
+    public async Task<IReadOnlyList<ClassSummaryDto>> ListClassesAsync(string? school = null)
+    {
+        var query = _db.Classes
+            .Include(c => c.HomeroomTeacher)
+            .Include(c => c.Students)
+            .AsQueryable();
+
+        if (school != null)
+            query = query.Where(c => c.School == school);
+
+        var classes = await query.OrderBy(c => c.Name).ToListAsync();
+
+        return classes
+            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.HomeroomTeacher?.UserName, c.Students.Count))
+            .ToList();
     }
 
     public async Task ListClassesAsync()
@@ -59,6 +120,61 @@ public class AdminUserService
             Console.WriteLine($"  {c.Name} — {c.School} | Класен: {c.HomeroomTeacher?.UserName ?? "—"} | Ученици: {c.Students.Count}");
     }
 
+    public async Task<(bool Success, string? Error)> DeleteClassAsync(int classId)
+    {
+        var cls = await _db.Classes
+            .Include(c => c.Students)
+            .FirstOrDefaultAsync(c => c.Id == classId);
+
+        if (cls == null)
+            return (false, "Class not found.");
+
+        foreach (var s in cls.Students)
+            s.ClassId = null;
+
+        _db.Classes.Remove(cls);
+        await _db.SaveChangesAsync();
+        return (true, null);
+    }
+
+    public async Task DeleteClassAsync()
+    {
+        Console.Write("Клас за изтриване: ");
+        var className = Console.ReadLine()?.Trim() ?? "";
+        Console.Write("Училище: ");
+        var school = Console.ReadLine()?.Trim() ?? "";
+
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == school);
+        if (cls == null)
+        {
+            Console.WriteLine($"Клас '{className}' не е намерен.");
+            return;
+        }
+
+        var (success, error) = await DeleteClassAsync(cls.Id);
+        Console.WriteLine(success ? $"Клас '{className}' е изтрит. Учениците са освободени." : error);
+    }
+
+    // ── Students ──────────────────────────────────────────────────────────────
+
+    public async Task<(bool Success, string? Error)> AssignStudentToClassAsync(string studentId, int classId)
+    {
+        var student = await _users.GetByIdAsync(studentId);
+        if (student == null)
+            return (false, "User not found.");
+        if (student.Role != UserRole.Student)
+            return (false, "User is not a student.");
+
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId);
+        if (cls == null)
+            return (false, "Class not found.");
+
+        student.ClassId = cls.Id;
+        student.School  = cls.School;
+        await _users.UpdateAsync(student);
+        return (true, null);
+    }
+
     public async Task AssignStudentAsync()
     {
         Console.Write("Потребителско име на ученика: ");
@@ -75,12 +191,6 @@ public class AdminUserService
             return;
         }
 
-        if (student.Role != UserRole.Student)
-        {
-            Console.WriteLine($"Потребителят '{studentUsername}' не е ученик и не може да бъде добавен в клас.");
-            return;
-        }
-
         var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == school);
         if (cls == null)
         {
@@ -88,10 +198,35 @@ public class AdminUserService
             return;
         }
 
-        student.ClassId = cls.Id;
-        student.School  = cls.School;
-        await _users.UpdateAsync(student);
-        Console.WriteLine($"Ученик '{studentUsername}' е добавен в клас '{className}'.");
+        var (success, error) = await AssignStudentToClassAsync(student.Id, cls.Id);
+        Console.WriteLine(success ? $"Ученик '{studentUsername}' е добавен в клас '{className}'." : error);
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(string? school = null)
+    {
+        var query = _db.Set<ApplicationUser>()
+            .Include(u => u.Class)
+            .AsQueryable();
+
+        if (school != null)
+            query = query.Where(u => u.School == school);
+
+        var users = await query
+            .OrderBy(u => u.Role)
+            .ThenBy(u => u.UserName)
+            .ToListAsync();
+
+        return users
+            .Select(u => new UserSummaryDto(
+                u.Id,
+                u.UserName ?? "",
+                u.FullName,
+                u.Role.ToString(),
+                u.Grade,
+                u.Class?.Name))
+            .ToList();
     }
 
     public async Task ListUsersAsync()
@@ -117,6 +252,21 @@ public class AdminUserService
         }
     }
 
+    public async Task<(bool Success, string? Error)> MakeSchoolAdminAsync(string userId, string school)
+    {
+        if (string.IsNullOrWhiteSpace(school))
+            return (false, "School name is required.");
+
+        var user = await _users.GetByIdAsync(userId);
+        if (user == null)
+            return (false, "User not found.");
+
+        user.Role   = UserRole.SchoolAdmin;
+        user.School = school;
+        await _users.UpdateAsync(user);
+        return (true, null);
+    }
+
     public async Task MakeSchoolAdminAsync()
     {
         Console.Write("Потребителско име: ");
@@ -131,10 +281,42 @@ public class AdminUserService
             return;
         }
 
-        user.Role   = UserRole.SchoolAdmin;
-        user.School = school;
-        await _users.UpdateAsync(user);
-        Console.WriteLine($"'{username}' е вече училищен администратор на '{school}'.");
+        var (success, error) = await MakeSchoolAdminAsync(user.Id, school);
+        Console.WriteLine(success ? $"'{username}' е вече училищен администратор на '{school}'." : error);
+    }
+
+    // ── Teachers ──────────────────────────────────────────────────────────────
+
+    public async Task<(bool Success, string? Error)> AssignTeacherToClassAsync(
+        string school, int classId, string teacherId, string subjectName)
+    {
+        if (string.IsNullOrWhiteSpace(subjectName))
+            return (false, "Subject name is required.");
+
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.School == school);
+        if (cls == null)
+            return (false, "Class not found.");
+
+        var teacher = await _users.GetByIdAsync(teacherId);
+        if (teacher == null)
+            return (false, "Teacher not found.");
+
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Name == subjectName && s.School == school);
+        if (subject == null)
+        {
+            subject = new Subject { Name = subjectName, School = school };
+            _db.Subjects.Add(subject);
+            await _db.SaveChangesAsync();
+        }
+
+        var existing = await _db.ClassTeachers.FirstOrDefaultAsync(
+            ct => ct.ClassId == cls.Id && ct.TeacherId == teacher.Id && ct.SubjectId == subject.Id);
+        if (existing != null)
+            return (false, "Teacher is already assigned to this subject in that class.");
+
+        _db.ClassTeachers.Add(new ClassTeacher { ClassId = cls.Id, TeacherId = teacher.Id, SubjectId = subject.Id });
+        await _db.SaveChangesAsync();
+        return (true, null);
     }
 
     public async Task AssignTeacherToClassAsync()
@@ -162,25 +344,28 @@ public class AdminUserService
             return;
         }
 
-        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Name == subjectName && s.School == school);
-        if (subject == null)
-        {
-            subject = new Subject { Name = subjectName, School = school };
-            _db.Subjects.Add(subject);
-            await _db.SaveChangesAsync();
-        }
+        var (success, error) = await AssignTeacherToClassAsync(school, cls.Id, teacher.Id, subjectName);
+        Console.WriteLine(success
+            ? $"Учител '{teacherUsername}' е назначен на '{subjectName}' в клас '{className}'."
+            : error);
+    }
 
-        var existing = await _db.ClassTeachers.FirstOrDefaultAsync(
-            ct => ct.ClassId == cls.Id && ct.TeacherId == teacher.Id && ct.SubjectId == subject.Id);
-        if (existing != null)
-        {
-            Console.WriteLine($"Учителят вече преподава '{subjectName}' в клас '{className}'.");
-            return;
-        }
+    // ── Subjects ──────────────────────────────────────────────────────────────
 
-        _db.ClassTeachers.Add(new ClassTeacher { ClassId = cls.Id, TeacherId = teacher.Id, SubjectId = subject.Id });
+    public async Task<(bool Success, string? Error)> CreateSubjectAsync(string school, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, "Subject name is required.");
+        if (string.IsNullOrWhiteSpace(school))
+            return (false, "School name is required.");
+
+        var exists = await _db.Subjects.AnyAsync(s => s.Name == name && s.School == school);
+        if (exists)
+            return (false, $"Subject '{name}' already exists in '{school}'.");
+
+        _db.Subjects.Add(new Subject { Name = name, School = school });
         await _db.SaveChangesAsync();
-        Console.WriteLine($"Учител '{teacherUsername}' е назначен на '{subjectName}' в клас '{className}'.");
+        return (true, null);
     }
 
     public async Task CreateSubjectAsync()
@@ -190,16 +375,19 @@ public class AdminUserService
         Console.Write("Училище: ");
         var school = Console.ReadLine()?.Trim() ?? "";
 
-        var exists = await _db.Subjects.AnyAsync(s => s.Name == name && s.School == school);
-        if (exists)
-        {
-            Console.WriteLine($"Предмет '{name}' вече съществува в '{school}'.");
-            return;
-        }
+        var (success, error) = await CreateSubjectAsync(school, name);
+        Console.WriteLine(success ? $"Предмет '{name}' е създаден в '{school}'." : error);
+    }
 
-        _db.Subjects.Add(new Subject { Name = name, School = school });
+    public async Task<(bool Success, string? Error)> DeleteSubjectAsync(int subjectId)
+    {
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId);
+        if (subject == null)
+            return (false, $"Subject with ID {subjectId} not found.");
+
+        _db.Subjects.Remove(subject);
         await _db.SaveChangesAsync();
-        Console.WriteLine($"Предмет '{name}' е създаден в '{school}'.");
+        return (true, null);
     }
 
     public async Task DeleteSubjectAsync()
@@ -220,33 +408,7 @@ public class AdminUserService
             return;
         }
 
-        _db.Subjects.Remove(subject);
-        await _db.SaveChangesAsync();
-        Console.WriteLine($"Предмет '{subject.Name}' е изтрит.");
-    }
-
-    public async Task DeleteClassAsync()
-    {
-        Console.Write("Клас за изтриване: ");
-        var className = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("Училище: ");
-        var school = Console.ReadLine()?.Trim() ?? "";
-
-        var cls = await _db.Classes
-            .Include(c => c.Students)
-            .FirstOrDefaultAsync(c => c.Name == className && c.School == school);
-
-        if (cls == null)
-        {
-            Console.WriteLine($"Клас '{className}' не е намерен.");
-            return;
-        }
-
-        foreach (var s in cls.Students)
-            s.ClassId = null;
-
-        _db.Classes.Remove(cls);
-        await _db.SaveChangesAsync();
-        Console.WriteLine($"Клас '{className}' е изтрит. Учениците са освободени.");
+        var (success, error) = await DeleteSubjectAsync(subject.Id);
+        Console.WriteLine(success ? $"Предмет '{subject.Name}' е изтрит." : error);
     }
 }
