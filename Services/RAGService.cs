@@ -134,7 +134,7 @@ public class RAGService
     }
 
     // Adds a PDF temporarily for the current chat session only (not saved to Qdrant).
-    public async Task AddTemporaryPDFAsync(string pdfPath, string subject = "")
+    public async Task<int> AddTemporaryPDFAsync(string pdfPath, string subject = "")
     {
         var text = PDFLoader.LoadText(pdfPath);
         text = PDFLoader.CleanText(text);
@@ -146,6 +146,7 @@ public class RAGService
 
         var label = string.IsNullOrWhiteSpace(subject) ? "" : $" [{subject}]";
         Console.WriteLine($"Loaded '{Path.GetFileName(pdfPath)}'{label} temporarily — {chunks.Count} chunks.");
+        return chunks.Count;
     }
 
     public void ClearTemporaryChunks() => _temporaryChunks.Clear();
@@ -283,6 +284,42 @@ public class RAGService
             "<student_question>\n" + question + "\n</student_question>";
 
         return await Send(question, ragUserContent, systemOverride);
+    }
+
+    // HTTP streaming variant of Ask(). Yields tokens as they arrive so ChatController
+    // can write them to an SSE response. Chat-log saving is the caller's responsibility.
+    public async IAsyncEnumerable<string> AskStreamAsync(string question)
+    {
+        question = InputSanitizer.SanitizeUserInput(question, maxLength: 2000);
+
+        var context = await GetContextAsync(question);
+
+        string? apiMsg      = null;
+        string? sysOverride = null;
+
+        if (!string.IsNullOrEmpty(context))
+        {
+            var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
+
+            sysOverride =
+                $"You are a school tutor. The student is in {gradeLabel}. The textbook excerpts below are from their curriculum (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
+                "Each excerpt is labeled with its grade and subject. A unit title may differ from what the student calls the topic — e.g. 'Solving Triangles' covers trigonometry.\n" +
+                "IMPORTANT: Base your answer strictly on what is present in the excerpts. Do NOT say a topic is absent unless no related content appears in the excerpts.\n" +
+                "Identify the relevant excerpt, then apply its definitions, formulas, and methods step by step.\n" +
+                "The student's problem may be a new example — use the textbook method with the student's numbers.\n" +
+                "Students know all prerequisites for concepts present in their grade material.\n" +
+                "Keep simple answers short; provide detailed explanations for complex topics.\n" +
+                "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.";
+
+            apiMsg =
+                "--- Textbook Material ---\n" +
+                context +
+                "\n--- End of Material ---\n\n" +
+                "<student_question>\n" + question + "\n</student_question>";
+        }
+
+        await foreach (var token in _chat.StreamTokensAsync(question, apiMsg, sysOverride))
+            yield return token;
     }
 
     // Used locally for temporary chunk similarity (Qdrant handles this for permanent chunks)

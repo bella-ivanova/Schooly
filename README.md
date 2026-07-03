@@ -21,15 +21,15 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Weak-spot detection: aggregates most-asked topics per student
 - Database schema: 9 migrations applied (PostgreSQL)
 - Security hardening pass: TOCTOU-safe refresh token revocation, prompt injection sanitisation, generic rate limit error messages, HSTS, CORS header restriction, ForwardedHeaders middleware
+- Student chat: `POST /api/chat/message` — grade-filtered RAG, SSE token streaming, stereometry scene extraction, chat-log persistence
+- PDF session upload: `POST /api/chat/upload` — ingests a PDF into a per-request temporary vector store that affects subsequent chat queries
 
 ### In Progress
-- Student chat HTTP endpoint (`POST /api/chat/message`) — service layer complete, controller not yet wired
 - Teacher dashboard HTTP endpoint — `TeacherDashboardService` exists, not exposed via controller
 - School admin HTTP endpoints — all admin operations are currently CLI-only
+- Practice question HTTP endpoint — `PracticeQuestionService` exists, not wired
 
 ### Not Started
-- PDF upload endpoint for students — `TempFileManager` and session-store ingestion exist in `RAGService`, no HTTP route yet
-- Practice question HTTP endpoint — `PracticeQuestionService` exists, not wired
 - Frontend application (Vue/React, separate repository, expected at `localhost:3000` or `:5173`)
 
 ## Production Deployment Notes

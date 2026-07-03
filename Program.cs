@@ -9,6 +9,7 @@ using StudyAssistant.Models;
 using StudyAssistant.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
 // Fail fast if secrets are missing or still hold placeholder values.
 var jwtSecret      = builder.Configuration["Jwt:Secret"] ?? "";
@@ -105,6 +106,25 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpClient("ocr",    c => c.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddHttpClient("mathocr", c => c.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddHttpClient("zhipuai", c => c.Timeout = Timeout.InfiniteTimeSpan);
+
+// ── LLM / RAG services ────────────────────────────────────────────────────
+var ollamaModel  = builder.Configuration["Llm:OllamaModel"]      ?? "llama3.2";
+var embedModel   = builder.Configuration["Llm:OllamaEmbedModel"]  ?? "nomic-embed-text";
+var visionModel  = builder.Configuration["Llm:OllamaVisionModel"] ?? "llava";
+var qdrantHost   = builder.Configuration["Qdrant:Host"]           ?? "localhost";
+var qdrantPort   = int.TryParse(builder.Configuration["Qdrant:Port"], out var qp) ? qp : 6334;
+
+// IChatService is Scoped so each request gets a fresh conversation history.
+builder.Services.AddScoped<IChatService>(_ => new OllamaChatService(ollamaModel));
+builder.Services.AddScoped<EmbeddingService>(_ => new EmbeddingService(embedModel));
+builder.Services.AddScoped<QdrantService>(_ => new QdrantService(qdrantHost, qdrantPort));
+builder.Services.AddScoped<OCRService>(sp =>
+    new OCRService(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ocr"), visionModel));
+builder.Services.AddScoped<MathOcrService>(sp =>
+    new MathOcrService(sp.GetRequiredService<IHttpClientFactory>().CreateClient("mathocr")));
+// RAGService must be Scoped — _currentGrade and _temporaryChunks are per-request state.
+builder.Services.AddScoped<RAGService>();
+builder.Services.AddScoped<ChatLogService>();
 
 // ── App pipeline ──────────────────────────────────────────────────────────
 var app = builder.Build();

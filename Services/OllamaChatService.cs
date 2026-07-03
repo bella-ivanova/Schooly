@@ -221,4 +221,50 @@ public class OllamaChatService : IChatService
         _messages.Add(new Message { Role = ChatRole.Assistant, Content = fullResponse.ToString() });
         return fullResponse.ToString();
     }
+
+    // Yields tokens as they arrive so HTTP endpoints can stream via SSE.
+    // Does not write to Console — callers decide how to surface the output.
+    public async IAsyncEnumerable<string> StreamTokensAsync(
+        string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null)
+    {
+        _messages.Add(new Message { Role = ChatRole.User, Content = newUserMessage });
+
+        IEnumerable<Message> apiMessages = apiMessage != null
+            ? [.._messages.Take(_messages.Count - 1),
+               new Message { Role = ChatRole.User, Content = apiMessage }]
+            : _messages;
+
+        if (systemPromptOverride != null)
+            apiMessages = [new Message { Role = ChatRole.System, Content = systemPromptOverride },
+                           ..apiMessages.Where(m => m.Role != ChatRole.System)];
+
+        var request = new ChatRequest
+        {
+            Model    = _model,
+            Messages = apiMessages,
+            Stream   = true,
+            Options  = new RequestOptions { Temperature = (float)Temperature }
+        };
+
+        var fullResponse = new System.Text.StringBuilder();
+
+        try
+        {
+            await foreach (var token in _ollama.ChatAsync(request))
+            {
+                if (token == null) continue;
+                var chunk = token.Message?.Content;
+                if (!string.IsNullOrEmpty(chunk))
+                {
+                    fullResponse.Append(chunk);
+                    yield return chunk;
+                }
+            }
+        }
+        finally
+        {
+            // Always persist to history, even if the stream was interrupted
+            _messages.Add(new Message { Role = ChatRole.Assistant, Content = fullResponse.ToString() });
+        }
+    }
 }

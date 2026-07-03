@@ -22,13 +22,15 @@
 
 ```
 Controllers/        HTTP endpoints only — no business logic, no DB access
+  AuthController.cs      /api/auth — login, register, logout, token refresh, password reset
+  ChatController.cs      /api/chat/message (SSE streaming) and /api/chat/upload (session PDF ingest)
 Services/           All business logic and external integrations
   AuthService.cs         User/token lifecycle (registration, login, JWT, refresh tokens, password reset)
   IEmailService.cs       Email abstraction interface (SmtpEmailService implements it via MailKit)
   SmtpEmailService.cs    SMTP email delivery — sends 6-digit password reset codes
   RateLimiter.cs         Brute-force protection — singleton, database-backed, survives restarts
   IChatService.cs        LLM abstraction interface (OllamaChatService and ZhipuAIChatService implement it)
-  RAGService.cs          Retrieval + LLM orchestration (embeds query → searches Qdrant → calls LLM)
+  RAGService.cs          Retrieval + LLM orchestration (embeds query → searches Qdrant → calls LLM); `AskStreamAsync` is the HTTP-facing entry point that yields tokens, `Ask` is the CLI entry point
   EmbeddingService.cs    Text → 768-dim vector via Ollama nomic-embed-text
   QdrantService.cs       Vector DB CRUD (upsert, search with grade filter, delete by file)
   PDFLoader.cs           PDF → text via triple-method fallback (static utility)

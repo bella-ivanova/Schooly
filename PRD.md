@@ -31,13 +31,13 @@ Both the user message and the assistant response are persisted to the `chat_mess
 
 ## Acceptance Criteria
 
-- [ ] `POST /api/chat/message` exists, requires a valid JWT, and streams the LLM response
-- [ ] RAG context is grade-filtered: a grade-8 student never receives chunks from grade-9 or higher material
-- [ ] When the LLM output contains a `<STEREO>` block, the response includes a structured `scene` field with the extracted JSON; the text field contains the response with the block removed
-- [ ] Off-curriculum questions produce a polite refusal message, not a hallucinated answer
-- [ ] `POST /api/chat/upload` accepts a PDF, ingests it into a session-scoped temporary store, and affects all subsequent `/api/chat/message` calls in that session
-- [ ] Every chat exchange writes two rows to `chat_messages` — one with `role = "user"`, one with `role = "assistant"` — both with a populated `subject_id` and `topic`
-- [ ] The streaming response reaches the client in real time (tokens visible as they are generated, not batched at the end)
+- [x] `POST /api/chat/message` exists, requires a valid JWT, and streams the LLM response
+- [x] RAG context is grade-filtered: a grade-8 student never receives chunks from grade-9 or higher material
+- [x] When the LLM output contains a `<STEREO>` block, the response includes a structured `scene` field with the extracted JSON; the text field contains the response with the block removed
+- [x] Off-curriculum questions produce a polite refusal message, not a hallucinated answer
+- [x] `POST /api/chat/upload` accepts a PDF, ingests it into a session-scoped temporary store, and affects all subsequent `/api/chat/message` calls in that session
+- [x] Every chat exchange writes two rows to `chat_messages` — one with `role = "user"`, one with `role = "assistant"` — both with a populated `subject_id` and `topic`
+- [x] The streaming response reaches the client in real time (tokens visible as they are generated, not batched at the end)
 - [ ] Token expiry during a session is handled transparently via refresh token exchange on the client side
 
 ---

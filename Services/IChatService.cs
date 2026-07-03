@@ -7,4 +7,5 @@ public interface IChatService
     Task<string> OneShotAsync(string systemPrompt, string userMessage);
     Task StreamMessageAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null);
     Task<string> StreamMessageFilteredAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null);
+    IAsyncEnumerable<string> StreamTokensAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null);
 }
