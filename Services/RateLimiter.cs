@@ -20,115 +20,142 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
     private static readonly TimeSpan RegistrationCooldown  = TimeSpan.FromMinutes(2);
 
     private const string LoginType         = "login";
+    private const string IpLoginType       = "ip_login";
     private const string PasswordResetType = "password_reset";
     private const string RegistrationType  = "registration";
 
     // ── Login ────────────────────────────────────────────────────────────────
 
-    public bool IsLoginLocked(string usernameOrEmail, out TimeSpan remaining)
+    public bool IsLoginLocked(string usernameOrEmail, string? ip, out TimeSpan remaining)
     {
         remaining = TimeSpan.Zero;
-        var key = usernameOrEmail.ToLowerInvariant();
         using var db = dbFactory.CreateDbContext();
+
+        // Account-based check
+        var key   = usernameOrEmail.ToLowerInvariant();
         var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == LoginType);
-
-        if (entry is null || entry.NextAttemptAfter is null) return false;
-
-        if (DateTime.UtcNow < entry.NextAttemptAfter)
+        if (entry?.NextAttemptAfter != null)
         {
-            remaining = entry.NextAttemptAfter.Value - DateTime.UtcNow;
-            return true;
+            if (DateTime.UtcNow < entry.NextAttemptAfter)
+            {
+                remaining = entry.NextAttemptAfter.Value - DateTime.UtcNow;
+                return true;
+            }
+            db.RateLimitEntries
+                .Where(e => e.Key == key && e.Type == LoginType
+                         && e.NextAttemptAfter != null && e.NextAttemptAfter <= DateTime.UtcNow)
+                .ExecuteUpdate(s => s.SetProperty(e => e.NextAttemptAfter, (DateTime?)null));
         }
 
-        // Delay expired — clear it but keep the failure count so delays keep growing
-        entry.NextAttemptAfter = null;
-        db.SaveChanges();
+        // IP-based check — secondary, loose limit (3 free attempts, caps at 30 s)
+        if (ip is not null)
+        {
+            var ipKey   = "ip:" + ip;
+            var ipEntry = db.RateLimitEntries.FirstOrDefault(e => e.Key == ipKey && e.Type == IpLoginType);
+            if (ipEntry?.NextAttemptAfter != null)
+            {
+                if (DateTime.UtcNow < ipEntry.NextAttemptAfter)
+                {
+                    remaining = ipEntry.NextAttemptAfter.Value - DateTime.UtcNow;
+                    return true;
+                }
+                db.RateLimitEntries
+                    .Where(e => e.Key == ipKey && e.Type == IpLoginType
+                             && e.NextAttemptAfter != null && e.NextAttemptAfter <= DateTime.UtcNow)
+                    .ExecuteUpdate(s => s.SetProperty(e => e.NextAttemptAfter, (DateTime?)null));
+            }
+        }
+
         return false;
     }
 
-    public void RecordLoginFailure(string usernameOrEmail)
+    // Atomically increments the failure count and sets the progressive delay in one round-trip.
+    // Returns the new failure count so callers can compute attemptsBeforeDelay without a second query.
+    public int RecordLoginFailure(string usernameOrEmail, string? ip)
     {
         var key = usernameOrEmail.ToLowerInvariant();
         using var db = dbFactory.CreateDbContext();
-        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == LoginType);
 
-        int newCount;
-        DateTime? nextAllowed;
+        var count = db.Database.SqlQuery<int>($"""
+            INSERT INTO rate_limit_entries (key, type, failure_count, next_attempt_after)
+            VALUES ({key}, {LoginType}, 1, NOW() + INTERVAL '3 seconds')
+            ON CONFLICT (key, type) DO UPDATE
+              SET failure_count      = rate_limit_entries.failure_count + 1,
+                  next_attempt_after = NOW() + (
+                    CASE LEAST(rate_limit_entries.failure_count + 1, 4)
+                      WHEN 1 THEN INTERVAL '3 seconds'
+                      WHEN 2 THEN INTERVAL '10 seconds'
+                      WHEN 3 THEN INTERVAL '30 seconds'
+                      ELSE         INTERVAL '60 seconds'
+                    END
+                  )
+            RETURNING failure_count
+            """).First();
 
-        if (entry is null)
+        // Secondary IP-based counter: 3 free attempts, then 3 s / 10 s / 30 s (capped).
+        if (ip is not null)
         {
-            newCount = 1;
-            var delay = LoginDelays[Math.Min(newCount, LoginDelays.Length - 1)];
-            nextAllowed = delay > TimeSpan.Zero ? DateTime.UtcNow.Add(delay) : null;
-            db.RateLimitEntries.Add(new RateLimitEntry
-            {
-                Key = key, Type = LoginType,
-                FailureCount = newCount, NextAttemptAfter = nextAllowed
-            });
-        }
-        else
-        {
-            newCount = entry.FailureCount + 1;
-            var delay = LoginDelays[Math.Min(newCount, LoginDelays.Length - 1)];
-            nextAllowed = delay > TimeSpan.Zero ? DateTime.UtcNow.Add(delay) : null;
-            entry.FailureCount = newCount;
-            entry.NextAttemptAfter = nextAllowed;
+            var ipKey = "ip:" + ip;
+            db.Database.ExecuteSql($"""
+                INSERT INTO rate_limit_entries (key, type, failure_count, next_attempt_after)
+                VALUES ({ipKey}, {IpLoginType}, 1, NULL)
+                ON CONFLICT (key, type) DO UPDATE
+                  SET failure_count      = rate_limit_entries.failure_count + 1,
+                      next_attempt_after = CASE
+                        WHEN rate_limit_entries.failure_count + 1 < 3  THEN NULL
+                        WHEN rate_limit_entries.failure_count + 1 = 3  THEN NOW() + INTERVAL '3 seconds'
+                        WHEN rate_limit_entries.failure_count + 1 = 4  THEN NOW() + INTERVAL '10 seconds'
+                        ELSE                                                 NOW() + INTERVAL '30 seconds'
+                      END
+                """);
         }
 
-        db.SaveChanges();
+        return count;
     }
 
     public void RecordLoginSuccess(string usernameOrEmail)
     {
         var key = usernameOrEmail.ToLowerInvariant();
         using var db = dbFactory.CreateDbContext();
-        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == LoginType);
-        if (entry is not null)
-        {
-            db.RateLimitEntries.Remove(entry);
-            db.SaveChanges();
-        }
+        db.RateLimitEntries
+            .Where(e => e.Key == key && e.Type == LoginType)
+            .ExecuteDelete();
     }
 
-    public int RemainingAttemptsBeforeDelay(string usernameOrEmail)
-    {
-        var key = usernameOrEmail.ToLowerInvariant();
-        using var db = dbFactory.CreateDbContext();
-        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == LoginType);
-        return Math.Max(0, LoginDelays.Length - 1 - (entry?.FailureCount ?? 0));
-    }
+    public static int AttemptsBeforeDelay(int failureCount) =>
+        Math.Max(0, LoginDelays.Length - 1 - failureCount);
 
     // ── Password reset ───────────────────────────────────────────────────────
 
-    public bool IsPasswordResetThrottled(string email, out TimeSpan remaining)
-    {
-        remaining = TimeSpan.Zero;
-        var key = email.ToLowerInvariant();
-        using var db = dbFactory.CreateDbContext();
-        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == PasswordResetType);
-
-        if (entry?.LastRequestAt is null) return false;
-        var elapsed = DateTime.UtcNow - entry.LastRequestAt.Value;
-        if (elapsed < PasswordResetCooldown)
-        {
-            remaining = PasswordResetCooldown - elapsed;
-            return true;
-        }
-        return false;
-    }
-
-    public void RecordPasswordResetRequest(string email)
+    // Atomically claims a password-reset slot if the cooldown has expired.
+    // Must be called before the async reset work; returns throttled=true when the slot is still held.
+    public (bool throttled, TimeSpan remaining) TryRecordPasswordResetRequest(string email)
     {
         var key = email.ToLowerInvariant();
         using var db = dbFactory.CreateDbContext();
-        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == PasswordResetType);
 
-        if (entry is null)
-            db.RateLimitEntries.Add(new RateLimitEntry { Key = key, Type = PasswordResetType, LastRequestAt = DateTime.UtcNow });
-        else
-            entry.LastRequestAt = DateTime.UtcNow;
+        // ON CONFLICT DO UPDATE WHERE only fires when the cooldown has passed; returns 0 rows when throttled.
+        var claimed = db.Database.SqlQuery<int>($"""
+            INSERT INTO rate_limit_entries (key, type, last_request_at, failure_count)
+            VALUES ({key}, {PasswordResetType}, NOW(), 0)
+            ON CONFLICT (key, type) DO UPDATE
+              SET last_request_at = EXCLUDED.last_request_at
+              WHERE rate_limit_entries.last_request_at IS NULL
+                 OR rate_limit_entries.last_request_at < NOW() - {PasswordResetCooldown}
+            RETURNING 1
+            """).FirstOrDefault();
 
-        db.SaveChanges();
+        if (claimed != 0) return (false, TimeSpan.Zero);
+
+        // Slot not claimed — read the held timestamp to compute the wait for the caller.
+        var lastAt = db.RateLimitEntries
+            .Where(e => e.Key == key && e.Type == PasswordResetType)
+            .Select(e => e.LastRequestAt)
+            .FirstOrDefault();
+
+        if (lastAt is null) return (false, TimeSpan.Zero);
+        var remaining = PasswordResetCooldown - (DateTime.UtcNow - lastAt.Value);
+        return (true, remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
     }
 
     // ── Registration ─────────────────────────────────────────────────────────
@@ -154,14 +181,12 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
     {
         var key = email.ToLowerInvariant();
         using var db = dbFactory.CreateDbContext();
-        var entry = db.RateLimitEntries.FirstOrDefault(e => e.Key == key && e.Type == RegistrationType);
-
-        if (entry is null)
-            db.RateLimitEntries.Add(new RateLimitEntry { Key = key, Type = RegistrationType, LastRequestAt = DateTime.UtcNow });
-        else
-            entry.LastRequestAt = DateTime.UtcNow;
-
-        db.SaveChanges();
+        db.Database.ExecuteSql($"""
+            INSERT INTO rate_limit_entries (key, type, last_request_at, failure_count)
+            VALUES ({key}, {RegistrationType}, NOW(), 0)
+            ON CONFLICT (key, type) DO UPDATE
+              SET last_request_at = EXCLUDED.last_request_at
+            """);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

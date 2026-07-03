@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace StudyAssistant.Services;
 
 /// <summary>
@@ -6,7 +8,7 @@ namespace StudyAssistant.Services;
 /// </summary>
 public static class TempFileManager
 {
-    private static readonly List<string> _paths = [];
+    private static readonly ConcurrentBag<string> _paths = [];
 
     public static void RegisterTempFile(string path) => _paths.Add(path);
 

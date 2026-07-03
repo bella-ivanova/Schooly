@@ -30,14 +30,16 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
-        if (_rateLimiter.IsLoginLocked(req.UsernameOrEmail, out var wait))
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        if (_rateLimiter.IsLoginLocked(req.UsernameOrEmail, ip, out var wait))
             return StatusCode(429, new { error = $"Too many failed attempts. Try again in {RateLimiter.FormatRemaining(wait)}." });
 
         var error = await _auth.LoginAsync(req.UsernameOrEmail, req.Password);
         if (error != null)
         {
-            _rateLimiter.RecordLoginFailure(req.UsernameOrEmail);
-            var left = _rateLimiter.RemainingAttemptsBeforeDelay(req.UsernameOrEmail);
+            var newCount = _rateLimiter.RecordLoginFailure(req.UsernameOrEmail, ip);
+            var left = RateLimiter.AttemptsBeforeDelay(newCount);
             return Unauthorized(new
             {
                 error,
@@ -118,11 +120,11 @@ public class AuthController : ControllerBase
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest req)
     {
-        if (_rateLimiter.IsPasswordResetThrottled(req.Email, out var wait))
+        var (throttled, wait) = _rateLimiter.TryRecordPasswordResetRequest(req.Email);
+        if (throttled)
             return StatusCode(429, new { error = $"Reset already requested. Try again in {RateLimiter.FormatRemaining(wait)}." });
 
         var (token, _) = await _auth.RequestPasswordResetAsync(req.Email);
-        _rateLimiter.RecordPasswordResetRequest(req.Email);
 
         // Always 200 regardless of whether the email exists — avoids account enumeration.
         // TODO: email the token instead of returning it once email sending is wired up.
