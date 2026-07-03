@@ -8,12 +8,26 @@ public class AdminUserService
 {
     private readonly AppDbContext _db;
     private readonly IUserRepository _users;
+    private readonly RAGService _rag;
 
-    public AdminUserService(AppDbContext db, IUserRepository users)
+    public AdminUserService(AppDbContext db, IUserRepository users, RAGService rag)
     {
         _db    = db;
         _users = users;
+        _rag   = rag;
     }
+
+    // ── Curriculum Files (Global, RAG-backed) ───────────────────────────────────
+
+    public async Task<List<string>> ListCurriculumFilesAsync(int grade) =>
+        await _rag.GetIngestedFilesAsync(grade);
+
+    public async Task<(bool Success, string? Error, int ChunkCount)> UploadCurriculumFileAsync(
+        int grade, string subject, string fileName, Stream content, bool overwrite) =>
+        await _rag.IngestUploadedFileAsync(grade, subject, fileName, content, overwrite);
+
+    public async Task<bool> DeleteCurriculumFileAsync(int grade, string fileKey) =>
+        await _rag.DeleteGradeFileAsync(grade, fileKey);
 
     // ── School ────────────────────────────────────────────────────────────────
 

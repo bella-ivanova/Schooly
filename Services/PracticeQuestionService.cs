@@ -13,6 +13,9 @@ public class PracticeQuestionService
 
     public async Task<List<string>> GenerateAsync(string originalQuestion, string aiResponse)
     {
+        originalQuestion = InputSanitizer.SanitizeUserInput(originalQuestion, maxLength: 2000);
+        aiResponse       = InputSanitizer.SanitizeUserInput(aiResponse, maxLength: 2000);
+
         var userPrompt =
             $"A student asked: <question>{originalQuestion}</question>\n" +
             $"The tutor answered: <answer>{aiResponse}</answer>\n" +

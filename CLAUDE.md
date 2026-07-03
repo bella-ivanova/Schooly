@@ -26,7 +26,8 @@ Controllers/        HTTP endpoints only — no business logic, no DB access
   ChatController.cs             /api/chat/message (SSE streaming) and /api/chat/upload (session PDF ingest)
   TeacherDashboardController.cs /api/teacher — teacher class list, struggle topics, student activity
   SchoolAdminController.cs      /api/admin — school admin class, subject, and assignment management (SchoolAdmin role only)
-  GlobalAdminController.cs      /api/global-admin — global admin school, class, subject, user, and role management across all schools (Admin role only)
+  GlobalAdminController.cs      /api/global-admin — global admin school, class, subject, user, and role management across all schools (Admin role only), plus curriculum file list/upload/replace/delete per grade
+  StudentController.cs          /api/student — student's own practice questions, weak spots, chat history, and mock exam generation (Student role only)
 Services/           All business logic and external integrations
   AuthService.cs         User/token lifecycle (registration, login, JWT, refresh tokens, password reset)
   IEmailService.cs       Email abstraction interface (SmtpEmailService implements it via MailKit)
@@ -40,7 +41,8 @@ Services/           All business logic and external integrations
   ChatLogService.cs      Chat message persistence + subject/topic tagging via LLM classification
   StereometryService.cs  3D geometry JSON schema definition + <STEREO> block extraction from LLM output
   ExamService.cs         Mock exam generation from curriculum material via RAG
-  AdminUserService.cs    Global admin operations (school, class, subject, teacher, user management across all schools); typed methods back `GlobalAdminController`, parameterless wrappers back the CLI menu; console wrappers resolve school names to School entity IDs internally
+  AdminUserService.cs    Global admin operations (school, class, subject, teacher, user management across all schools); typed methods back `GlobalAdminController`, parameterless wrappers back the CLI menu; console wrappers resolve school names to School entity IDs internally; also wraps `RAGService`'s curriculum file list/upload/delete methods so `GlobalAdminController` never depends on `RAGService` directly
+  PracticeQuestionService.cs Generates 3 follow-up practice questions from a prior chat exchange via one-shot LLM call; sanitises both inputs before prompt interpolation
   SchoolAdminService.cs  HTTP-compatible per-school admin operations — typed parameters + (bool, error) return tuples, no console I/O; `SchoolId` (int FK) is passed per-call by the controller, resolved from the caller's JWT identity via `ApplicationUser.SchoolId`
   TempFileManager.cs     Tracks temp HTML files for cleanup on process exit (static utility)
 Models/             EF Core entity definitions and enums — no business logic

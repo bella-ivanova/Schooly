@@ -65,19 +65,10 @@ public class RAGService
 
             Console.WriteLine($"Ingesting {fileKey}...");
 
-            // Priority: Pix2Text (best for math) → vision OCR → plain PdfPig text
-            var text = _mathOcr != null
-                ? await PDFLoader.LoadTextWithMathOcrAsync(pdfPath, _mathOcr)
-                : _ocr != null
-                    ? await PDFLoader.LoadTextWithOcrAsync(pdfPath, _ocr)
-                    : PDFLoader.LoadText(pdfPath);
-            text = PDFLoader.CleanText(text);
-            var chunks = PDFLoader.ChunkText(text);
-
-            List<float[]> embeddings;
+            int chunkCount;
             try
             {
-                embeddings = await _embeddingService.GetEmbeddingsAsync(chunks);
+                chunkCount = await IngestSingleFileAsync(pdfPath, grade, subject, fileKey);
             }
             catch (Exception ex)
             {
@@ -87,22 +78,8 @@ public class RAGService
                 return;
             }
 
-            var chunkDataList = new List<ChunkData>();
-            for (int i = 0; i < chunks.Count; i++)
-            {
-                chunkDataList.Add(new ChunkData
-                {
-                    Text       = chunks[i],
-                    Embedding  = embeddings[i],
-                    Subject    = subject,
-                    Grade      = grade,
-                    SourceFile = fileKey
-                });
-            }
-
-            await _qdrant.UpsertChunksAsync(chunkDataList);
             totalIngested++;
-            Console.WriteLine($"  → {chunks.Count} chunks stored in Qdrant");
+            Console.WriteLine($"  → {chunkCount} chunks stored in Qdrant");
         }
 
         // Scan subject subfolders (e.g. Grade5/Math/, Grade5/Science/)
@@ -131,6 +108,64 @@ public class RAGService
 
         var skipMsg = skipped > 0 ? $" ({skipped} skipped)" : "";
         Console.WriteLine($"Grade {grade} ingestion complete. {totalIngested} file(s) ingested{skipMsg}.");
+    }
+
+    // Runs the OCR → chunk → embed → upsert pipeline for a single PDF already on disk.
+    private async Task<int> IngestSingleFileAsync(string pdfPath, int grade, string subject, string fileKey)
+    {
+        // Priority: Pix2Text (best for math) → vision OCR → plain PdfPig text
+        var text = _mathOcr != null
+            ? await PDFLoader.LoadTextWithMathOcrAsync(pdfPath, _mathOcr)
+            : _ocr != null
+                ? await PDFLoader.LoadTextWithOcrAsync(pdfPath, _ocr)
+                : PDFLoader.LoadText(pdfPath);
+        text = PDFLoader.CleanText(text);
+        var chunks = PDFLoader.ChunkText(text);
+
+        var embeddings = await _embeddingService.GetEmbeddingsAsync(chunks);
+
+        var chunkDataList = new List<ChunkData>();
+        for (int i = 0; i < chunks.Count; i++)
+        {
+            chunkDataList.Add(new ChunkData
+            {
+                Text       = chunks[i],
+                Embedding  = embeddings[i],
+                Subject    = subject,
+                Grade      = grade,
+                SourceFile = fileKey
+            });
+        }
+
+        await _qdrant.UpsertChunksAsync(chunkDataList);
+        return chunks.Count;
+    }
+
+    // Saves an admin-uploaded PDF under Database/DataPdf/Grade{grade}/{subject}/ and ingests it into Qdrant.
+    // overwrite=false rejects a duplicate fileKey; overwrite=true deletes the existing chunks first.
+    public async Task<(bool Success, string? Error, int ChunkCount)> IngestUploadedFileAsync(
+        int grade, string subject, string fileName, Stream content, bool overwrite)
+    {
+        var fileKey = string.IsNullOrWhiteSpace(subject) ? fileName : Path.Combine(subject, fileName);
+
+        await _qdrant.EnsureCollectionAsync();
+        var alreadyIngested = (await _qdrant.GetIngestedFilesAsync(grade)).ToHashSet();
+        if (alreadyIngested.Contains(fileKey))
+        {
+            if (!overwrite)
+                return (false, $"File '{fileKey}' already exists for grade {grade}.", 0);
+            await DeleteGradeFileAsync(grade, fileKey);
+        }
+
+        var folder = Path.Combine("Database", "DataPdf", $"Grade{grade}", subject);
+        Directory.CreateDirectory(folder);
+        var pdfPath = Path.Combine(folder, fileName);
+
+        await using (var fs = File.Create(pdfPath))
+            await content.CopyToAsync(fs);
+
+        var chunkCount = await IngestSingleFileAsync(pdfPath, grade, subject, fileKey);
+        return (true, null, chunkCount);
     }
 
     // Adds a PDF temporarily for the current chat session only (not saved to Qdrant).

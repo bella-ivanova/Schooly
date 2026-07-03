@@ -14,6 +14,7 @@ public class ExamService
     public async Task<string> GenerateExamAsync(string topic, int grade)
     {
         topic = InputSanitizer.SanitizeUserInput(topic, maxLength: 300);
+        _rag.SetGrade(grade);
         var chunks = await _rag.GetChunksAsync(topic);
 
         if (string.IsNullOrWhiteSpace(chunks))

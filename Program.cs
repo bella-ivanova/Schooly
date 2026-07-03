@@ -128,6 +128,8 @@ builder.Services.AddScoped<ChatLogService>();
 builder.Services.AddScoped<TeacherDashboardService>();
 builder.Services.AddScoped<SchoolAdminService>();
 builder.Services.AddScoped<AdminUserService>();
+builder.Services.AddScoped<PracticeQuestionService>();
+builder.Services.AddScoped<ExamService>();
 
 // ── App pipeline ──────────────────────────────────────────────────────────
 var app = builder.Build();

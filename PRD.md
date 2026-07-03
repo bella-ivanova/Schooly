@@ -72,6 +72,36 @@ Returns all users in the caller's school with their role, grade, and class infor
 **When a non-SchoolAdmin calls any `/api/admin` endpoint:**
 Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middleware.
 
+**When a student calls `POST /api/student/practice-questions`:**
+Given the original question and the AI's answer from a prior chat exchange, generates exactly 3 short follow-up practice questions on the same topic via a one-shot LLM call. Both inputs are sanitised through `InputSanitizer.SanitizeUserInput()` before reaching the prompt. On any LLM/parsing failure, returns an empty list rather than an error.
+
+**When a student calls `GET /api/student/weak-spots?days=N`:**
+Returns the student's own most-asked topics (grouped by topic, with subject and count) over the last N days (default 7, clamped 1–365) where the topic was asked at least twice — the student-facing counterpart to the teacher's per-class struggles view.
+
+**When a student calls `GET /api/student/history?limit=N`:**
+Returns the student's own chat messages (default 50, clamped 1–200), oldest to newest, each with role, content, subject name, topic, and timestamp.
+
+**When a student calls `POST /api/student/exam`:**
+Generates a mock exam for the given topic, grade-filtered to the student's own grade (from the JWT, not the request body). If no curriculum material is found for the topic at that grade, returns a Bulgarian "no material found" message instead of a hallucinated exam.
+
+**When a non-Student calls any `/api/student` endpoint:**
+Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middleware.
+
+**When a global admin calls `GET /api/global-admin/curriculum/grades/{grade}/files`:**
+Returns the list of curriculum PDF file keys (e.g. `Math/algebra.pdf`) currently ingested into Qdrant for that grade.
+
+**When a global admin calls `POST /api/global-admin/curriculum/grades/{grade}/files`:**
+Accepts a multipart PDF upload plus an optional subject field, saves it under `Database/DataPdf/Grade{grade}/{subject}/`, and ingests it into Qdrant. Returns 409 if a file with the resulting key (`{subject}/{filename}`) already exists — use PUT to replace it instead.
+
+**When a global admin calls `PUT /api/global-admin/curriculum/grades/{grade}/files/{fileKey}`:**
+Replaces the content at that exact file key: deletes any existing chunks for it, then re-ingests the newly uploaded PDF. Succeeds whether or not the key existed before (idempotent upsert).
+
+**When a global admin calls `DELETE /api/global-admin/curriculum/grades/{grade}/files/{fileKey}`:**
+Removes the file's chunks from Qdrant. Returns 404 if the key is not found for that grade.
+
+**When a non-Admin calls any `/api/global-admin/curriculum` endpoint:**
+Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middleware.
+
 ---
 
 ## Acceptance Criteria
@@ -110,6 +140,16 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [ ] `POST /api/global-admin/classes/{classId}/teachers` assigns a teacher to a class for a subject — body: `{ schoolId: int, teacherId: string, subjectName: string }`; auto-creates the subject if it does not exist in that school
 - [ ] `PUT /api/global-admin/users/{userId}/role` promotes a user to SchoolAdmin and assigns them to a school — body: `{ schoolId: int }`
 - [ ] Non-Admin JWT receives 403 on all `/api/global-admin` endpoints; unauthenticated requests receive 401
+- [x] `POST /api/student/practice-questions` returns exactly 3 practice questions; inputs are sanitised before reaching the LLM prompt; returns an empty list on failure rather than an error
+- [x] `GET /api/student/weak-spots?days=N` returns the calling student's own most-asked topics only; `days` is clamped to 1–365
+- [x] `GET /api/student/history?limit=N` returns the calling student's own chat messages only, oldest to newest; `limit` is clamped to 1–200
+- [x] `POST /api/student/exam` generates an exam grade-filtered to the calling student's own grade (from JWT); returns a graceful fallback message when no material is found for the topic
+- [x] Non-Student JWT receives 403 on all `/api/student` endpoints; unauthenticated requests receive 401
+- [x] `GET /api/global-admin/curriculum/grades/{grade}/files` lists ingested file keys for that grade
+- [x] `POST /api/global-admin/curriculum/grades/{grade}/files` ingests a new PDF; rejects with 409 if the file key already exists
+- [x] `PUT /api/global-admin/curriculum/grades/{grade}/files/{fileKey}` replaces the content at that key, re-ingesting whether or not it previously existed
+- [x] `DELETE /api/global-admin/curriculum/grades/{grade}/files/{fileKey}` removes the file's chunks; returns 404 if the key does not exist
+- [x] Non-Admin JWT receives 403 on all `/api/global-admin/curriculum` endpoints; unauthenticated requests receive 401
 
 ---
 
@@ -138,6 +178,12 @@ Long messages are truncated or chunked before submission. The system must not cr
 
 **Bulgarian diacritics and Cyrillic text**
 Embedding and LLM services handle UTF-8 natively. The only preprocessing required is the existing `CleanText()` sanitisation in `PDFLoader.cs` (null bytes, control characters). No transliteration or encoding conversion is needed.
+
+**Uploading a curriculum file with a key that already exists**
+`POST /api/global-admin/curriculum/grades/{grade}/files` rejects with 409 rather than silently overwriting — an admin must explicitly use PUT on the same file key to replace existing content, preventing accidental data loss from a duplicate upload.
+
+**Replacing a curriculum file (updated textbook edition)**
+`PUT /api/global-admin/curriculum/grades/{grade}/files/{fileKey}` deletes the old chunks for that key and re-ingests the new upload in one service call, avoiding a window where a student query would see neither the old nor the new content.
 
 ---
 

@@ -94,6 +94,7 @@ public class ChatLogService
     public async Task<List<ChatMessage>> GetHistoryAsync(string userId, int limit = 50)
     {
         return await _db.ChatMessages
+            .Include(m => m.Subject)
             .Where(m => m.UserId == userId)
             .OrderByDescending(m => m.Timestamp)
             .Take(limit)

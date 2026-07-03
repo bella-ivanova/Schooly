@@ -18,7 +18,7 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Stereometry 3D scene JSON schema and `<STEREO>` block extraction from LLM responses
 - Exam generation service: mock exams generated from curriculum material via RAG
 - Chat message persistence with subject and topic tagging
-- Weak-spot detection: aggregates most-asked topics per student
+- Weak-spot detection: aggregates most-asked topics per student, exposed to the student themselves via `GET /api/student/weak-spots?days=N` (distinct from the teacher-facing per-class `GET /api/teacher/classes/{classId}/struggles`)
 - Database schema: 11 migrations defined (PostgreSQL); `AddSchoolEntity` and `SchoolForeignKeys` are pending — run `dotnet ef database update` before starting the server
 - Security hardening pass: TOCTOU-safe refresh token revocation, prompt injection sanitisation, generic rate limit error messages, HSTS, CORS header restriction, ForwardedHeaders middleware
 - Student chat: `POST /api/chat/message` — grade-filtered RAG, SSE token streaming, stereometry scene extraction, chat-log persistence
@@ -26,9 +26,8 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Teacher dashboard HTTP endpoints: `GET /api/teacher/classes`, `GET /api/teacher/classes/{classId}/struggles?days=N`, `GET /api/teacher/activity?days=N` — requires Teacher or SchoolAdmin JWT
 - School admin HTTP endpoints: `GET /api/admin/classes`, `POST /api/admin/classes`, `PUT /api/admin/classes/{classId}/homeroom`, `POST /api/admin/classes/{classId}/students`, `DELETE /api/admin/classes/{classId}/students/{userId}`, `POST /api/admin/classes/{classId}/teachers`, `POST /api/admin/teachers/{teacherId}/subjects/{subjectId}`, `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}`, `GET /api/admin/subjects`, `GET /api/admin/users` — requires SchoolAdmin JWT
 - Global admin HTTP endpoints: `POST /api/global-admin/schools`, `GET /api/global-admin/users`, `GET /api/global-admin/classes`, `POST /api/global-admin/classes`, `DELETE /api/global-admin/classes/{classId}`, `POST /api/global-admin/subjects`, `DELETE /api/global-admin/subjects/{subjectId}`, `POST /api/global-admin/classes/{classId}/students`, `POST /api/global-admin/classes/{classId}/teachers`, `PUT /api/global-admin/users/{userId}/role` — requires Admin JWT; endpoints that target a school accept `schoolId: int` (not a school name string)
-
-### In Progress
-- Practice question HTTP endpoint — `PracticeQuestionService` exists, not wired
+- Curriculum file management HTTP endpoints: `GET /api/global-admin/curriculum/grades/{grade}/files`, `POST /api/global-admin/curriculum/grades/{grade}/files` (multipart upload, 409 on duplicate), `PUT /api/global-admin/curriculum/grades/{grade}/files/{fileKey}` (replace/re-ingest), `DELETE /api/global-admin/curriculum/grades/{grade}/files/{fileKey}` — requires Admin JWT; curriculum is grade-wide, not school-specific
+- Student HTTP endpoints: `POST /api/student/practice-questions`, `GET /api/student/weak-spots?days=N`, `GET /api/student/history?limit=N`, `POST /api/student/exam` — requires Student JWT
 
 ### Not Started
 - Frontend application (Vue/React, separate repository, expected at `localhost:3000` or `:5173`)
