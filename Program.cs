@@ -15,9 +15,15 @@ var jwtSecret      = builder.Configuration["Jwt:Secret"] ?? "";
 var connStr        = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
 var teacherRegCode = builder.Configuration["TeacherRegistrationCode"] ?? "";
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+var smtpHost       = builder.Configuration["Smtp:Host"]     ?? "";
+var smtpUsername   = builder.Configuration["Smtp:Username"] ?? "";
+var smtpPassword   = builder.Configuration["Smtp:Password"] ?? "";
+var smtpFrom       = builder.Configuration["Smtp:From"]     ?? "";
 string[] placeholders = ["REPLACE_WITH_JWT_SECRET", "REPLACE_WITH_DB_PASSWORD",
                          "REPLACE_WITH_CONNECTION_STRING", "REPLACE_WITH_TEACHER_CODE",
-                         "CHANGE_ME_BEFORE_DEPLOY", "REPLACE_WITH_FRONTEND_ORIGIN"];
+                         "CHANGE_ME_BEFORE_DEPLOY", "REPLACE_WITH_FRONTEND_ORIGIN",
+                         "REPLACE_WITH_SMTP_HOST", "REPLACE_WITH_SMTP_USERNAME",
+                         "REPLACE_WITH_SMTP_PASSWORD", "REPLACE_WITH_FROM_EMAIL"];
 
 if (string.IsNullOrEmpty(jwtSecret) || placeholders.Any(p => jwtSecret.Equals(p, StringComparison.Ordinal)))
     throw new InvalidOperationException("Jwt:Secret is not set. Supply it via the Jwt__Secret environment variable.");
@@ -29,6 +35,14 @@ if (string.IsNullOrEmpty(teacherRegCode) || placeholders.Any(p => teacherRegCode
     throw new InvalidOperationException("TeacherRegistrationCode is not set or is still the default placeholder.");
 if (allowedOrigins.Length == 0 || allowedOrigins.Any(o => placeholders.Contains(o)))
     throw new InvalidOperationException("Cors:AllowedOrigins is not configured. Add your frontend origin(s) via Cors__AllowedOrigins__0.");
+if (string.IsNullOrEmpty(smtpHost) || placeholders.Contains(smtpHost))
+    throw new InvalidOperationException("Smtp:Host is not configured. Supply it via the Smtp__Host environment variable.");
+if (string.IsNullOrEmpty(smtpUsername) || placeholders.Contains(smtpUsername))
+    throw new InvalidOperationException("Smtp:Username is not configured. Supply it via the Smtp__Username environment variable.");
+if (string.IsNullOrEmpty(smtpPassword) || placeholders.Contains(smtpPassword))
+    throw new InvalidOperationException("Smtp:Password is not configured. Supply it via the Smtp__Password environment variable.");
+if (string.IsNullOrEmpty(smtpFrom) || placeholders.Contains(smtpFrom))
+    throw new InvalidOperationException("Smtp:From is not configured. Supply it via the Smtp__From environment variable.");
 
 // Trust X-Forwarded-For / X-Forwarded-Proto from the immediate upstream proxy only.
 // In production, restrict KnownProxies to the specific proxy IP(s) in front of this server.
@@ -62,6 +76,7 @@ builder.Services
     .AddDefaultTokenProviders().Services
     .AddDataProtection().Services
     .AddScoped<IUserRepository, UserRepository>()
+    .AddScoped<IEmailService, SmtpEmailService>()
     .AddScoped<AuthService>()
     .AddSingleton<RateLimiter>();
 

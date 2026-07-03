@@ -6,7 +6,8 @@
 |---|---|---|
 | ASP.NET Core | 10.0 | Target platform; .NET 10 for performance improvements and minimal API features |
 | PostgreSQL + EF Core + Npgsql | 10.* | Relational data with migrations; PostgreSQL's `ON CONFLICT DO UPDATE` is required for atomic rate-limit upserts that EF Core cannot express |
-| ASP.NET Identity | 10.* | PBKDF2 password hashing, password validation rules, and reset token generation without reinventing them |
+| ASP.NET Identity | 10.* | PBKDF2 password hashing, password validation rules, and direct password change without reinventing them |
+| MailKit | 4.* | SMTP email delivery for password reset codes |
 | JWT Bearer (HS256) | 10.* / 8.* | Stateless auth with revocable refresh tokens; HS256 is sufficient for a single-server trust boundary |
 | OllamaSharp | 5.4.24 | Local LLM inference — keeps student data on-premises; has native streaming support |
 | ZhipuAI (HTTP) | — | Remote LLM fallback via OpenAI-compatible API (`/v4/chat/completions`) when Ollama is unavailable |
@@ -23,6 +24,8 @@
 Controllers/        HTTP endpoints only — no business logic, no DB access
 Services/           All business logic and external integrations
   AuthService.cs         User/token lifecycle (registration, login, JWT, refresh tokens, password reset)
+  IEmailService.cs       Email abstraction interface (SmtpEmailService implements it via MailKit)
+  SmtpEmailService.cs    SMTP email delivery — sends 6-digit password reset codes
   RateLimiter.cs         Brute-force protection — singleton, database-backed, survives restarts
   IChatService.cs        LLM abstraction interface (OllamaChatService and ZhipuAIChatService implement it)
   RAGService.cs          Retrieval + LLM orchestration (embeds query → searches Qdrant → calls LLM)
@@ -90,10 +93,11 @@ snapshots/          Temporary HTML visualisation files — never commit to git
 ## Security Requirements
 
 - JWT secret must be ≥ 32 characters; enforced at startup before the app accepts connections
-- Sensitive string comparisons (teacher registration code, reset tokens) must use `CryptographicOperations.FixedTimeEquals` — never `string ==`
-- Password reset tokens must be delivered via email, not returned in the HTTP response — the `TODO` in `AuthController.cs` must be resolved before production
+- Sensitive string comparisons (teacher registration code) must use `CryptographicOperations.FixedTimeEquals` — never `string ==`
+- Password reset uses a DB-stored 6-digit code (10-min expiry) sent via email through `IEmailService` / `SmtpEmailService`; the code is never returned in the HTTP response. The `forgot-password` endpoint returns `404` when the email is not registered (enumeration protection is intentionally removed for this endpoint)
+- Reset code verification and password reset share a per-email brute-force counter (max 5 attempts); issuing a new code clears the counter
 - Rate limiting must remain database-backed — do not replace with `IMemoryCache` or `IDistributedCache`
-- Rate limiting covers: login (per-account + per-IP), registration (per-email), password reset (per-email), token refresh and logout (per-IP via `IsGeneralApiThrottled`)
+- Rate limiting covers: login (per-account + per-IP), registration (per-email), password reset request (per-email, 5-min cooldown), reset code attempts (per-email, max 5), token refresh and logout (per-IP via `IsGeneralApiThrottled`)
 - CORS allowed origins come from `Cors:AllowedOrigins` config — never hardcode `*` or specific URLs in code; allowed headers are restricted to `Content-Type` and `Authorization` only
 - Refresh token exchange **and** revocation must both use `IsolationLevel.RepeatableRead` — do not lower this isolation level
 - `appsettings.Local.json` contains real secrets for local dev — never commit it; production uses environment variables

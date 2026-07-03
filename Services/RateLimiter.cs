@@ -19,11 +19,14 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
     private static readonly TimeSpan PasswordResetCooldown = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RegistrationCooldown  = TimeSpan.FromMinutes(2);
 
-    private const string LoginType         = "login";
-    private const string IpLoginType       = "ip_login";
-    private const string PasswordResetType = "password_reset";
-    private const string RegistrationType  = "registration";
-    private const string GeneralApiType    = "general_api";
+    private const string LoginType            = "login";
+    private const string IpLoginType          = "ip_login";
+    private const string PasswordResetType    = "password_reset";
+    private const string ResetCodeAttemptType = "reset_code_attempt";
+    private const string RegistrationType     = "registration";
+    private const string GeneralApiType       = "general_api";
+
+    private const int ResetCodeMaxAttempts = 5;
 
     // 20 requests per minute per IP on token-exchange and logout endpoints.
     private static readonly TimeSpan GeneralApiWindow = TimeSpan.FromMinutes(1);
@@ -161,6 +164,37 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
         if (lastAt is null) return (false, TimeSpan.Zero);
         var remaining = PasswordResetCooldown - (DateTime.UtcNow - lastAt.Value);
         return (true, remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
+    }
+
+    // ── Reset code verification ──────────────────────────────────────────────
+
+    // Atomically increments the attempt counter for reset code verification.
+    // Returns throttled=true after ResetCodeMaxAttempts failures.
+    // Call ClearResetCodeAttempts when a new code is issued to reset the counter.
+    public (bool throttled, int attemptsUsed) TryRecordResetCodeAttempt(string email)
+    {
+        var key = email.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+
+        var count = db.Database.SqlQuery<int>($"""
+            INSERT INTO rate_limit_entries (key, type, failure_count, last_request_at)
+            VALUES ({key}, {ResetCodeAttemptType}, 1, NOW())
+            ON CONFLICT (key, type) DO UPDATE
+              SET failure_count   = rate_limit_entries.failure_count + 1,
+                  last_request_at = NOW()
+            RETURNING failure_count
+            """).First();
+
+        return (count > ResetCodeMaxAttempts, count);
+    }
+
+    public void ClearResetCodeAttempts(string email)
+    {
+        var key = email.ToLowerInvariant();
+        using var db = dbFactory.CreateDbContext();
+        db.RateLimitEntries
+            .Where(e => e.Key == key && e.Type == ResetCodeAttemptType)
+            .ExecuteDelete();
     }
 
     // ── Registration ─────────────────────────────────────────────────────────

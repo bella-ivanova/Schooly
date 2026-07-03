@@ -21,4 +21,5 @@ public interface IUserRepository
     // Password reset
     Task<string> GeneratePasswordResetTokenAsync(ApplicationUser user);
     Task<(bool Success, IReadOnlyList<string> Errors)> ResetPasswordAsync(ApplicationUser user, string token, string newPassword);
+    Task<(bool Success, IReadOnlyList<string> Errors)> ChangePasswordDirectlyAsync(ApplicationUser user, string newPassword);
 }

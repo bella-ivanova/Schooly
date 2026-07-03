@@ -60,4 +60,15 @@ public class UserRepository : IUserRepository
         var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
         return (result.Succeeded, result.Errors.Select(e => e.Description).ToList());
     }
+
+    public async Task<(bool Success, IReadOnlyList<string> Errors)> ChangePasswordDirectlyAsync(
+        ApplicationUser user, string newPassword)
+    {
+        var remove = await _userManager.RemovePasswordAsync(user);
+        if (!remove.Succeeded)
+            return (false, remove.Errors.Select(e => e.Description).ToList());
+
+        var add = await _userManager.AddPasswordAsync(user, newPassword);
+        return (add.Succeeded, add.Errors.Select(e => e.Description).ToList());
+    }
 }

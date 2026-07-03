@@ -76,12 +76,14 @@ The following security controls are in place as of the initial web conversion. F
 
 **Authentication & tokens**
 - Refresh token revocation uses `IsolationLevel.RepeatableRead` (same as token exchange) — prevents concurrent-logout race condition
-- Password reset tokens are never returned in HTTP responses — must be delivered via email (not yet implemented; token is logged to server console in dev mode only)
+- Password reset uses a DB-stored 6-digit code (10-min expiry) delivered via SMTP email; the code is never returned in the HTTP response
+- Reset code consumption (marking `IsUsed = true`) is protected by a `RepeatableRead` transaction to prevent race conditions on simultaneous submissions
 
 **Rate limiting**
 - Login: progressive delay per account (3 s → 10 s → 30 s → 60 s) + separate IP counter
 - Registration: 2-minute cooldown per email
-- Password reset: 5-minute cooldown per email
+- Password reset request: 5-minute cooldown per email
+- Reset code verification and reset-password: shared per-email counter, locked after 5 failed attempts; requesting a new code resets the counter
 - Token refresh and logout: 20 requests per minute per IP (`IsGeneralApiThrottled`)
 - Rate limit error responses are intentionally generic — they do not reveal wait durations
 

@@ -130,26 +130,43 @@ public class AuthController : ControllerBase
     {
         var (throttled, _) = _rateLimiter.TryRecordPasswordResetRequest(req.Email);
         if (throttled)
-            return StatusCode(429, new { error = "A reset link was already requested recently. Please wait before trying again." });
+            return StatusCode(429, new { error = "A reset code was already requested recently. Please wait before trying again." });
 
-        var (token, _) = await _auth.RequestPasswordResetAsync(req.Email);
+        var (found, _) = await _auth.RequestPasswordResetAsync(req.Email);
+        if (!found)
+            return NotFound(new { error = "Email not found." });
 
-        // Always 200 regardless of whether the email exists — avoids account enumeration.
-        // TODO: email the token instead of returning it once email sending is wired up.
-        return Ok(new
-        {
-            message = "If that email is registered, a reset token has been generated.",
-            token   // remove this field and send via email in production
-        });
+        _rateLimiter.ClearResetCodeAttempts(req.Email);
+        return Ok(new { message = "A reset code has been sent to your email address." });
+    }
+
+    // POST /api/auth/verify-reset-code
+    [HttpPost("verify-reset-code")]
+    public async Task<IActionResult> VerifyResetCode([FromBody] VerifyResetCodeRequest req)
+    {
+        var (throttled, _) = _rateLimiter.TryRecordResetCodeAttempt(req.Email);
+        if (throttled)
+            return StatusCode(429, new { error = "Too many incorrect attempts. Please request a new reset code." });
+
+        var valid = await _auth.VerifyResetCodeAsync(req.Email, req.Code);
+        if (!valid)
+            return BadRequest(new { error = "Invalid or expired reset code." });
+
+        return Ok(new { message = "Code verified. You may now reset your password." });
     }
 
     // POST /api/auth/reset-password
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req)
     {
-        var (success, errors) = await _auth.ResetPasswordAsync(req.Email, req.Token, req.NewPassword);
+        var (throttled, _) = _rateLimiter.TryRecordResetCodeAttempt(req.Email);
+        if (throttled)
+            return StatusCode(429, new { error = "Too many incorrect attempts. Please request a new reset code." });
+
+        var (success, errors) = await _auth.ResetPasswordAsync(req.Email, req.Code, req.NewPassword);
         if (!success)
             return BadRequest(new { errors });
+
         return Ok(new { message = "Password reset successfully." });
     }
 
@@ -183,7 +200,11 @@ public record RefreshRequest([Required, MaxLength(256)] string RefreshToken);
 
 public record ForgotPasswordRequest([Required, MaxLength(254)] string Email);
 
+public record VerifyResetCodeRequest(
+    [Required, MaxLength(254)] string Email,
+    [Required, MaxLength(6)]   string Code);
+
 public record ResetPasswordRequest(
-    [Required, MaxLength(254)]  string Email,
-    [Required, MaxLength(2048)] string Token,
-    [Required, MaxLength(128)]  string NewPassword);
+    [Required, MaxLength(254)] string Email,
+    [Required, MaxLength(6)]   string Code,
+    [Required, MaxLength(128)] string NewPassword);

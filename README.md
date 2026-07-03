@@ -6,7 +6,7 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 
 ### Complete
 - User authentication: login, register, logout, JWT access tokens + refresh tokens
-- Password reset flow: token generation and validation (email delivery is a remaining task)
+- Password reset flow: 6-digit email code with 10-minute expiry, brute-force protection (5 attempts), and same-password check
 - Progressive rate limiting: per-account and per-IP for login, per-email for registration and password reset; IP-based limit on token refresh and logout
 - User roles: Student, Teacher, SchoolAdmin, Admin
 - School class and subject management (CLI-only admin commands via `AdminUserService`)
@@ -28,7 +28,6 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - School admin HTTP endpoints — all admin operations are currently CLI-only
 
 ### Not Started
-- Password reset email delivery — reset token must be emailed instead of logged; must complete before production
 - PDF upload endpoint for students — `TempFileManager` and session-store ingestion exist in `RAGService`, no HTTP route yet
 - Practice question HTTP endpoint — `PracticeQuestionService` exists, not wired
 - Frontend application (Vue/React, separate repository, expected at `localhost:3000` or `:5173`)
@@ -39,4 +38,6 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 
 **HSTS:** `UseHsts()` is active. The first response to each browser instructs it to refuse all future HTTP connections to this domain. Ensure TLS is configured before deploying.
 
-**Secrets:** All config keys in `appsettings.json` hold placeholder strings. Supply real values via environment variables (`Jwt__Secret`, `ConnectionStrings__DefaultConnection`, `TeacherRegistrationCode`, `Cors__AllowedOrigins__0`). The app refuses to start if placeholders are detected.
+**SMTP (required):** Password reset codes are delivered via email. Supply `Smtp__Host`, `Smtp__Username`, `Smtp__Password`, and `Smtp__From` via environment variables. The app refuses to start if placeholders are detected.
+
+**Secrets:** All config keys in `appsettings.json` hold placeholder strings. Supply real values via environment variables (`Jwt__Secret`, `ConnectionStrings__DefaultConnection`, `TeacherRegistrationCode`, `Cors__AllowedOrigins__0`, `Smtp__Host`, `Smtp__Username`, `Smtp__Password`, `Smtp__From`). The app refuses to start if placeholders are detected.

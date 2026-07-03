@@ -214,3 +214,6 @@
 /Users/Bella/Documents/StudyAssist/obj/Debug/net10.0/staticwebassets.development.json
 /Users/Bella/Documents/StudyAssist/obj/Debug/net10.0/staticwebassets.build.endpoints.json
 /Users/Bella/Documents/StudyAssist/obj/Debug/net10.0/swae.build.ex.cache
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/BouncyCastle.Cryptography.dll
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/MailKit.dll
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/MimeKit.dll
