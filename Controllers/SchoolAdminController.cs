@@ -20,7 +20,7 @@ public class SchoolAdminController : ControllerBase
         _users = users;
     }
 
-    private async Task<(bool Ok, string? School, IActionResult? Reject)> ResolveSchoolAsync()
+    private async Task<(bool Ok, int? SchoolId, IActionResult? Reject)> ResolveSchoolAsync()
     {
         var role = User.FindFirstValue("role");
         if (role != "SchoolAdmin")
@@ -31,20 +31,20 @@ public class SchoolAdminController : ControllerBase
                     ?? "";
 
         var caller = await _users.GetByIdAsync(callerId);
-        if (caller == null || string.IsNullOrEmpty(caller.School))
+        if (caller == null || caller.SchoolId == null)
             return (false, null, StatusCode(403, new { error = "School administrator is not assigned to a school." }));
 
-        return (true, caller.School, null);
+        return (true, caller.SchoolId, null);
     }
 
     // GET /api/admin/classes
     [HttpGet("classes")]
     public async Task<IActionResult> GetClasses()
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var classes = await _admin.ListClassesAsync(school!);
+        var classes = await _admin.ListClassesAsync(schoolId!.Value);
         return Ok(classes);
     }
 
@@ -52,10 +52,10 @@ public class SchoolAdminController : ControllerBase
     [HttpPost("classes")]
     public async Task<IActionResult> CreateClass([FromBody] CreateClassRequest body)
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.AddClassAsync(school!, body.Name, body.HomeroomTeacherId);
+        var (success, error) = await _admin.AddClassAsync(schoolId!.Value, body.Name, body.HomeroomTeacherId);
         if (!success) return BadRequest(new { error });
 
         return StatusCode(201);
@@ -65,10 +65,10 @@ public class SchoolAdminController : ControllerBase
     [HttpPut("classes/{classId:int}/homeroom")]
     public async Task<IActionResult> SetHomeroomTeacher(int classId, [FromBody] SetHomeroomRequest body)
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.AssignTeacherAsync(school!, classId, body.TeacherId);
+        var (success, error) = await _admin.AssignTeacherAsync(schoolId!.Value, classId, body.TeacherId);
         if (!success) return BadRequest(new { error });
 
         return Ok();
@@ -78,10 +78,10 @@ public class SchoolAdminController : ControllerBase
     [HttpPost("classes/{classId:int}/students")]
     public async Task<IActionResult> AssignStudent(int classId, [FromBody] AssignStudentRequest body)
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.AssignStudentAsync(school!, classId, body.UserId);
+        var (success, error) = await _admin.AssignStudentAsync(schoolId!.Value, classId, body.UserId);
         if (!success) return BadRequest(new { error });
 
         return Ok();
@@ -91,10 +91,10 @@ public class SchoolAdminController : ControllerBase
     [HttpDelete("classes/{classId:int}/students/{userId}")]
     public async Task<IActionResult> RemoveStudent(int classId, string userId)
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.RemoveStudentAsync(school!, userId);
+        var (success, error) = await _admin.RemoveStudentAsync(schoolId!.Value, userId);
         if (!success) return BadRequest(new { error });
 
         return Ok();
@@ -104,10 +104,10 @@ public class SchoolAdminController : ControllerBase
     [HttpPost("classes/{classId:int}/teachers")]
     public async Task<IActionResult> AssignTeacherToClass(int classId, [FromBody] AssignTeacherToClassRequest body)
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.AssignTeacherToClassAsync(school!, classId, body.TeacherId, body.SubjectName);
+        var (success, error) = await _admin.AssignTeacherToClassAsync(schoolId!.Value, classId, body.TeacherId, body.SubjectName);
         if (!success) return BadRequest(new { error });
 
         return Ok();
@@ -117,10 +117,10 @@ public class SchoolAdminController : ControllerBase
     [HttpPost("teachers/{teacherId}/subjects/{subjectId:int}")]
     public async Task<IActionResult> AssignSubjectToTeacher(string teacherId, int subjectId)
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.AssignSubjectToTeacherAsync(school!, teacherId, subjectId);
+        var (success, error) = await _admin.AssignSubjectToTeacherAsync(schoolId!.Value, teacherId, subjectId);
         if (!success) return BadRequest(new { error });
 
         return Ok();
@@ -130,10 +130,10 @@ public class SchoolAdminController : ControllerBase
     [HttpDelete("teachers/{teacherId}/subjects/{subjectId:int}")]
     public async Task<IActionResult> RemoveSubjectFromTeacher(string teacherId, int subjectId)
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.RemoveSubjectFromTeacherAsync(school!, teacherId, subjectId);
+        var (success, error) = await _admin.RemoveSubjectFromTeacherAsync(schoolId!.Value, teacherId, subjectId);
         if (!success) return BadRequest(new { error });
 
         return Ok();
@@ -143,10 +143,10 @@ public class SchoolAdminController : ControllerBase
     [HttpGet("subjects")]
     public async Task<IActionResult> GetSubjects()
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var subjects = await _admin.ListSubjectsAsync(school!);
+        var subjects = await _admin.ListSubjectsAsync(schoolId!.Value);
         return Ok(subjects);
     }
 
@@ -154,10 +154,10 @@ public class SchoolAdminController : ControllerBase
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers()
     {
-        var (ok, school, reject) = await ResolveSchoolAsync();
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var users = await _admin.ListUsersAsync(school!);
+        var users = await _admin.ListUsersAsync(schoolId!.Value);
         return Ok(users);
     }
 }

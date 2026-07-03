@@ -23,8 +23,8 @@ public class ApplicationUser : IdentityUser
 
     // School the user belongs to. Set at registration for Teachers/SchoolAdmins;
     // auto-set when a student is assigned to a class.
-    [MaxLength(200)]
-    public string? School { get; set; }
+    public int? SchoolId { get; set; }
+    public School? School { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

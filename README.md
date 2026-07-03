@@ -9,7 +9,7 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Password reset flow: 6-digit email code with 10-minute expiry, brute-force protection (5 attempts), and same-password check
 - Progressive rate limiting: per-account and per-IP for login, per-email for registration and password reset; IP-based limit on token refresh and logout
 - User roles: Student, Teacher, SchoolAdmin, Admin
-- School class and subject management via CLI (`AdminUserService`) and HTTP (`GlobalAdminController`)
+- School entity management: `School` is a first-class entity (`Id`, `Name`, `CreatedAt`); `ApplicationUser`, `Class`, and `Subject` each reference it via a `SchoolId` int FK (no loose school-name strings); school creation via HTTP (`POST /api/global-admin/schools`); full CLI management via `AdminUserService`
 - PDF ingestion pipeline: triple-OCR fallback (Pix2Text → vision OCR → PdfPig), text chunking, and embedding
 - Qdrant vector DB integration with grade-filtered semantic search
 - Ollama local LLM chat service with streaming
@@ -19,13 +19,13 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Exam generation service: mock exams generated from curriculum material via RAG
 - Chat message persistence with subject and topic tagging
 - Weak-spot detection: aggregates most-asked topics per student
-- Database schema: 9 migrations applied (PostgreSQL)
+- Database schema: 11 migrations defined (PostgreSQL); `AddSchoolEntity` and `SchoolForeignKeys` are pending — run `dotnet ef database update` before starting the server
 - Security hardening pass: TOCTOU-safe refresh token revocation, prompt injection sanitisation, generic rate limit error messages, HSTS, CORS header restriction, ForwardedHeaders middleware
 - Student chat: `POST /api/chat/message` — grade-filtered RAG, SSE token streaming, stereometry scene extraction, chat-log persistence
 - PDF session upload: `POST /api/chat/upload` — ingests a PDF into a per-request temporary vector store that affects subsequent chat queries
 - Teacher dashboard HTTP endpoints: `GET /api/teacher/classes`, `GET /api/teacher/classes/{classId}/struggles?days=N`, `GET /api/teacher/activity?days=N` — requires Teacher or SchoolAdmin JWT
 - School admin HTTP endpoints: `GET /api/admin/classes`, `POST /api/admin/classes`, `PUT /api/admin/classes/{classId}/homeroom`, `POST /api/admin/classes/{classId}/students`, `DELETE /api/admin/classes/{classId}/students/{userId}`, `POST /api/admin/classes/{classId}/teachers`, `POST /api/admin/teachers/{teacherId}/subjects/{subjectId}`, `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}`, `GET /api/admin/subjects`, `GET /api/admin/users` — requires SchoolAdmin JWT
-- Global admin HTTP endpoints: `POST /api/global-admin/schools`, `GET /api/global-admin/users`, `GET /api/global-admin/classes`, `POST /api/global-admin/classes`, `DELETE /api/global-admin/classes/{classId}`, `POST /api/global-admin/subjects`, `DELETE /api/global-admin/subjects/{subjectId}`, `POST /api/global-admin/classes/{classId}/students`, `POST /api/global-admin/classes/{classId}/teachers`, `PUT /api/global-admin/users/{userId}/role` — requires Admin JWT
+- Global admin HTTP endpoints: `POST /api/global-admin/schools`, `GET /api/global-admin/users`, `GET /api/global-admin/classes`, `POST /api/global-admin/classes`, `DELETE /api/global-admin/classes/{classId}`, `POST /api/global-admin/subjects`, `DELETE /api/global-admin/subjects/{subjectId}`, `POST /api/global-admin/classes/{classId}/students`, `POST /api/global-admin/classes/{classId}/teachers`, `PUT /api/global-admin/users/{userId}/role` — requires Admin JWT; endpoints that target a school accept `schoolId: int` (not a school name string)
 
 ### In Progress
 - Practice question HTTP endpoint — `PracticeQuestionService` exists, not wired

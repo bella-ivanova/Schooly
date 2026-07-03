@@ -35,13 +35,13 @@ public class TeacherDashboardController : ControllerBase
             {
                 id     = r.Class.Id,
                 name   = r.Class.Name,
-                school = r.Class.School
+                school = r.Class.School?.Name
             },
             subjects = r.Subjects.Select(s => new
             {
                 id     = s.Id,
                 name   = s.Name,
-                school = s.School
+                school = s.School?.Name
             }).ToList(),
             studentCount = r.StudentCount
         }).ToList();
@@ -69,7 +69,7 @@ public class TeacherDashboardController : ControllerBase
 
         var response = results.Select(r => new
         {
-            @class    = new { id = r.Class.Id, name = r.Class.Name, school = r.Class.School },
+            @class    = new { id = r.Class.Id, name = r.Class.Name, school = r.Class.School?.Name },
             subject   = new { id = r.Subject.Id, name = r.Subject.Name },
             topTopics = r.TopTopics.Select(t => new { topic = t.Topic, count = t.Count }).ToList()
         }).ToList();
@@ -94,7 +94,7 @@ public class TeacherDashboardController : ControllerBase
 
         var response = results.Select(r => new
         {
-            @class      = new { id = r.Class.Id, name = r.Class.Name, school = r.Class.School },
+            @class      = new { id = r.Class.Id, name = r.Class.Name, school = r.Class.School?.Name },
             topStudents = r.TopStudents.Select(s => new
             {
                 student = new

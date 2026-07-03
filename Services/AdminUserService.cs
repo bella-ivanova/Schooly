@@ -17,16 +17,22 @@ public class AdminUserService
 
     // ── School ────────────────────────────────────────────────────────────────
 
+    private async Task<bool> SchoolExistsAsync(int schoolId) =>
+        await _db.Schools.AnyAsync(s => s.Id == schoolId);
+
+    private async Task<School?> FindSchoolByNameAsync(string name) =>
+        await _db.Schools.FirstOrDefaultAsync(s => s.Name == name);
+
     public async Task<(bool Success, string? Error)> CreateSchoolAsync(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
             return (false, "School name is required.");
 
-        var alreadyExists = await _db.Classes.AnyAsync(c => c.School == name)
-                         || await _db.Set<ApplicationUser>().AnyAsync(u => u.School == name);
-        if (alreadyExists)
+        if (await _db.Schools.AnyAsync(s => s.Name == name))
             return (false, $"A school named '{name}' already exists.");
 
+        _db.Schools.Add(new School { Name = name });
+        await _db.SaveChangesAsync();
         return (true, null);
     }
 
@@ -41,12 +47,12 @@ public class AdminUserService
     // ── Classes ───────────────────────────────────────────────────────────────
 
     public async Task<(bool Success, string? Error)> AddClassAsync(
-        string school, string name, string? homeroomTeacherId)
+        int schoolId, string name, string? homeroomTeacherId)
     {
         if (string.IsNullOrWhiteSpace(name))
             return (false, "Class name is required.");
-        if (string.IsNullOrWhiteSpace(school))
-            return (false, "School name is required.");
+        if (!await SchoolExistsAsync(schoolId))
+            return (false, "School not found.");
 
         if (homeroomTeacherId != null)
         {
@@ -55,7 +61,7 @@ public class AdminUserService
                 return (false, "Teacher not found.");
         }
 
-        _db.Classes.Add(new Class { Name = name, School = school, HomeroomTeacherId = homeroomTeacherId });
+        _db.Classes.Add(new Class { Name = name, SchoolId = schoolId, HomeroomTeacherId = homeroomTeacherId });
         await _db.SaveChangesAsync();
         return (true, null);
     }
@@ -65,9 +71,12 @@ public class AdminUserService
         Console.Write("Име на клас (напр. 10А): ");
         var name = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Училище: ");
-        var school = Console.ReadLine()?.Trim() ?? "";
+        var schoolName = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Потребителско име на класния ръководител (Enter за пропускане): ");
         var teacherUsername = Console.ReadLine()?.Trim() ?? "";
+
+        var school = await FindSchoolByNameAsync(schoolName);
+        if (school == null) { Console.WriteLine($"Училище '{schoolName}' не е намерено."); return; }
 
         string? homeroomTeacherId = null;
         if (!string.IsNullOrWhiteSpace(teacherUsername))
@@ -81,19 +90,19 @@ public class AdminUserService
             homeroomTeacherId = teacher.Id;
         }
 
-        var (success, error) = await AddClassAsync(school, name, homeroomTeacherId);
+        var (success, error) = await AddClassAsync(school.Id, name, homeroomTeacherId);
         Console.WriteLine(success ? $"Клас '{name}' е създаден." : error);
     }
 
-    public async Task<IReadOnlyList<ClassSummaryDto>> ListClassesAsync(string? school = null)
+    public async Task<IReadOnlyList<ClassSummaryDto>> ListClassesAsync(int? schoolId = null)
     {
         var query = _db.Classes
             .Include(c => c.HomeroomTeacher)
             .Include(c => c.Students)
             .AsQueryable();
 
-        if (school != null)
-            query = query.Where(c => c.School == school);
+        if (schoolId != null)
+            query = query.Where(c => c.SchoolId == schoolId);
 
         var classes = await query.OrderBy(c => c.Name).ToListAsync();
 
@@ -105,6 +114,7 @@ public class AdminUserService
     public async Task ListClassesAsync()
     {
         var classes = await _db.Classes
+            .Include(c => c.School)
             .Include(c => c.HomeroomTeacher)
             .Include(c => c.Students)
             .OrderBy(c => c.Name)
@@ -117,7 +127,7 @@ public class AdminUserService
         }
 
         foreach (var c in classes)
-            Console.WriteLine($"  {c.Name} — {c.School} | Класен: {c.HomeroomTeacher?.UserName ?? "—"} | Ученици: {c.Students.Count}");
+            Console.WriteLine($"  {c.Name} — {c.School?.Name} | Класен: {c.HomeroomTeacher?.UserName ?? "—"} | Ученици: {c.Students.Count}");
     }
 
     public async Task<(bool Success, string? Error)> DeleteClassAsync(int classId)
@@ -142,9 +152,12 @@ public class AdminUserService
         Console.Write("Клас за изтриване: ");
         var className = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Училище: ");
-        var school = Console.ReadLine()?.Trim() ?? "";
+        var schoolName = Console.ReadLine()?.Trim() ?? "";
 
-        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == school);
+        var school = await FindSchoolByNameAsync(schoolName);
+        if (school == null) { Console.WriteLine($"Училище '{schoolName}' не е намерено."); return; }
+
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.SchoolId == school.Id);
         if (cls == null)
         {
             Console.WriteLine($"Клас '{className}' не е намерен.");
@@ -169,8 +182,8 @@ public class AdminUserService
         if (cls == null)
             return (false, "Class not found.");
 
-        student.ClassId = cls.Id;
-        student.School  = cls.School;
+        student.ClassId  = cls.Id;
+        student.SchoolId = cls.SchoolId;
         await _users.UpdateAsync(student);
         return (true, null);
     }
@@ -182,7 +195,7 @@ public class AdminUserService
         Console.Write("Клас (напр. 10А): ");
         var className = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Училище: ");
-        var school = Console.ReadLine()?.Trim() ?? "";
+        var schoolName = Console.ReadLine()?.Trim() ?? "";
 
         var student = await _users.GetByUsernameAsync(studentUsername);
         if (student == null)
@@ -191,7 +204,10 @@ public class AdminUserService
             return;
         }
 
-        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == school);
+        var school = await FindSchoolByNameAsync(schoolName);
+        if (school == null) { Console.WriteLine($"Училище '{schoolName}' не е намерено."); return; }
+
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.SchoolId == school.Id);
         if (cls == null)
         {
             Console.WriteLine($"Клас '{className}' не е намерен.");
@@ -204,14 +220,14 @@ public class AdminUserService
 
     // ── Users ─────────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(string? school = null)
+    public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(int? schoolId = null)
     {
         var query = _db.Set<ApplicationUser>()
             .Include(u => u.Class)
             .AsQueryable();
 
-        if (school != null)
-            query = query.Where(u => u.School == school);
+        if (schoolId != null)
+            query = query.Where(u => u.SchoolId == schoolId);
 
         var users = await query
             .OrderBy(u => u.Role)
@@ -233,6 +249,7 @@ public class AdminUserService
     {
         var users = await _db.Set<ApplicationUser>()
             .Include(u => u.Class)
+            .Include(u => u.School)
             .OrderBy(u => u.Role)
             .ThenBy(u => u.UserName)
             .ToListAsync();
@@ -247,22 +264,22 @@ public class AdminUserService
         {
             var gradeTag  = u.Grade.HasValue ? $"  Клас {u.Grade}" : "";
             var classTag  = u.Class != null ? $" ({u.Class.Name})" : " (Без клас)";
-            var schoolTag = u.School != null ? $" | {u.School}" : "";
+            var schoolTag = u.SchoolId != null ? $" | {u.School?.Name}" : "";
             Console.WriteLine($"  [{u.Role}] {u.UserName} — {u.FullName}{gradeTag}{classTag}{schoolTag}");
         }
     }
 
-    public async Task<(bool Success, string? Error)> MakeSchoolAdminAsync(string userId, string school)
+    public async Task<(bool Success, string? Error)> MakeSchoolAdminAsync(string userId, int schoolId)
     {
-        if (string.IsNullOrWhiteSpace(school))
-            return (false, "School name is required.");
+        if (!await SchoolExistsAsync(schoolId))
+            return (false, "School not found.");
 
         var user = await _users.GetByIdAsync(userId);
         if (user == null)
             return (false, "User not found.");
 
-        user.Role   = UserRole.SchoolAdmin;
-        user.School = school;
+        user.Role     = UserRole.SchoolAdmin;
+        user.SchoolId = schoolId;
         await _users.UpdateAsync(user);
         return (true, null);
     }
@@ -272,7 +289,7 @@ public class AdminUserService
         Console.Write("Потребителско име: ");
         var username = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Училище: ");
-        var school = Console.ReadLine()?.Trim() ?? "";
+        var schoolName = Console.ReadLine()?.Trim() ?? "";
 
         var user = await _users.GetByUsernameAsync(username);
         if (user == null)
@@ -281,19 +298,24 @@ public class AdminUserService
             return;
         }
 
-        var (success, error) = await MakeSchoolAdminAsync(user.Id, school);
-        Console.WriteLine(success ? $"'{username}' е вече училищен администратор на '{school}'." : error);
+        var school = await FindSchoolByNameAsync(schoolName);
+        if (school == null) { Console.WriteLine($"Училище '{schoolName}' не е намерено."); return; }
+
+        var (success, error) = await MakeSchoolAdminAsync(user.Id, school.Id);
+        Console.WriteLine(success ? $"'{username}' е вече училищен администратор на '{schoolName}'." : error);
     }
 
     // ── Teachers ──────────────────────────────────────────────────────────────
 
     public async Task<(bool Success, string? Error)> AssignTeacherToClassAsync(
-        string school, int classId, string teacherId, string subjectName)
+        int schoolId, int classId, string teacherId, string subjectName)
     {
         if (string.IsNullOrWhiteSpace(subjectName))
             return (false, "Subject name is required.");
+        if (!await SchoolExistsAsync(schoolId))
+            return (false, "School not found.");
 
-        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.School == school);
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.SchoolId == schoolId);
         if (cls == null)
             return (false, "Class not found.");
 
@@ -301,10 +323,10 @@ public class AdminUserService
         if (teacher == null)
             return (false, "Teacher not found.");
 
-        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Name == subjectName && s.School == school);
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Name == subjectName && s.SchoolId == schoolId);
         if (subject == null)
         {
-            subject = new Subject { Name = subjectName, School = school };
+            subject = new Subject { Name = subjectName, SchoolId = schoolId };
             _db.Subjects.Add(subject);
             await _db.SaveChangesAsync();
         }
@@ -324,13 +346,16 @@ public class AdminUserService
         Console.Write("Клас (напр. 10А): ");
         var className = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Училище: ");
-        var school = Console.ReadLine()?.Trim() ?? "";
+        var schoolName = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Потребителско име на учителя: ");
         var teacherUsername = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Предмет: ");
         var subjectName = Console.ReadLine()?.Trim() ?? "";
 
-        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == school);
+        var school = await FindSchoolByNameAsync(schoolName);
+        if (school == null) { Console.WriteLine($"Училище '{schoolName}' не е намерено."); return; }
+
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.SchoolId == school.Id);
         if (cls == null)
         {
             Console.WriteLine($"Клас '{className}' не е намерен.");
@@ -344,7 +369,7 @@ public class AdminUserService
             return;
         }
 
-        var (success, error) = await AssignTeacherToClassAsync(school, cls.Id, teacher.Id, subjectName);
+        var (success, error) = await AssignTeacherToClassAsync(school.Id, cls.Id, teacher.Id, subjectName);
         Console.WriteLine(success
             ? $"Учител '{teacherUsername}' е назначен на '{subjectName}' в клас '{className}'."
             : error);
@@ -352,18 +377,18 @@ public class AdminUserService
 
     // ── Subjects ──────────────────────────────────────────────────────────────
 
-    public async Task<(bool Success, string? Error)> CreateSubjectAsync(string school, string name)
+    public async Task<(bool Success, string? Error)> CreateSubjectAsync(int schoolId, string name)
     {
         if (string.IsNullOrWhiteSpace(name))
             return (false, "Subject name is required.");
-        if (string.IsNullOrWhiteSpace(school))
-            return (false, "School name is required.");
+        if (!await SchoolExistsAsync(schoolId))
+            return (false, "School not found.");
 
-        var exists = await _db.Subjects.AnyAsync(s => s.Name == name && s.School == school);
+        var exists = await _db.Subjects.AnyAsync(s => s.Name == name && s.SchoolId == schoolId);
         if (exists)
-            return (false, $"Subject '{name}' already exists in '{school}'.");
+            return (false, $"Subject '{name}' already exists in this school.");
 
-        _db.Subjects.Add(new Subject { Name = name, School = school });
+        _db.Subjects.Add(new Subject { Name = name, SchoolId = schoolId });
         await _db.SaveChangesAsync();
         return (true, null);
     }
@@ -373,10 +398,13 @@ public class AdminUserService
         Console.Write("Название на предмета: ");
         var name = Console.ReadLine()?.Trim() ?? "";
         Console.Write("Училище: ");
-        var school = Console.ReadLine()?.Trim() ?? "";
+        var schoolName = Console.ReadLine()?.Trim() ?? "";
 
-        var (success, error) = await CreateSubjectAsync(school, name);
-        Console.WriteLine(success ? $"Предмет '{name}' е създаден в '{school}'." : error);
+        var school = await FindSchoolByNameAsync(schoolName);
+        if (school == null) { Console.WriteLine($"Училище '{schoolName}' не е намерено."); return; }
+
+        var (success, error) = await CreateSubjectAsync(school.Id, name);
+        Console.WriteLine(success ? $"Предмет '{name}' е създаден в '{schoolName}'." : error);
     }
 
     public async Task<(bool Success, string? Error)> DeleteSubjectAsync(int subjectId)
@@ -399,12 +427,15 @@ public class AdminUserService
             return;
         }
         Console.Write("Училище: ");
-        var school = Console.ReadLine()?.Trim() ?? "";
+        var schoolName = Console.ReadLine()?.Trim() ?? "";
 
-        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.School == school);
+        var school = await FindSchoolByNameAsync(schoolName);
+        if (school == null) { Console.WriteLine($"Училище '{schoolName}' не е намерено."); return; }
+
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.SchoolId == school.Id);
         if (subject == null)
         {
-            Console.WriteLine($"Предмет с ID {subjectId} не е намерен в '{school}'.");
+            Console.WriteLine($"Предмет с ID {subjectId} не е намерен в '{schoolName}'.");
             return;
         }
 

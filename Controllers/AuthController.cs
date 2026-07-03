@@ -84,7 +84,7 @@ public class AuthController : ControllerBase
 
         var (user, errors) = await _auth.RegisterAsync(
             req.Username, req.Email, req.Password, role,
-            req.FullName, req.Grade, req.ClassLetter, req.School);
+            req.FullName, req.Grade, req.ClassLetter, req.SchoolId);
 
         if (user == null)
             return BadRequest(new { errors });
@@ -193,7 +193,7 @@ public record RegisterRequest(
     [Required, MaxLength(20)]  string  Role,
     int?    Grade,
     [MaxLength(5)]   string? ClassLetter,
-    [MaxLength(200)] string? School,
+    int?    SchoolId,
     [MaxLength(100)] string? TeacherRegistrationCode);
 
 public record RefreshRequest([Required, MaxLength(256)] string RefreshToken);

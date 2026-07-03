@@ -17,13 +17,13 @@ public class ChatLogService
     }
 
     public async Task SaveMessageAsync(string userId, string role, string content,
-        string detectedSubject = "Unknown", string topic = "Unknown", string? school = null)
+        string detectedSubject = "Unknown", string topic = "Unknown", int? schoolId = null)
     {
         int? subjectId = null;
-        if (school != null && detectedSubject != "Unknown")
+        if (schoolId != null && detectedSubject != "Unknown")
         {
             var sub = await _db.Subjects
-                .FirstOrDefaultAsync(s => s.Name == detectedSubject && s.School == school);
+                .FirstOrDefaultAsync(s => s.Name == detectedSubject && s.SchoolId == schoolId);
             subjectId = sub?.Id;
         }
 

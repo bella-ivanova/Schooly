@@ -45,7 +45,7 @@ public class GlobalAdminController : ControllerBase
         var reject = RequireAdminRole();
         if (reject != null) return reject;
 
-        var users = await _admin.ListUsersAsync();
+        var users = await _admin.ListUsersAsync(schoolId: null);
         return Ok(users);
     }
 
@@ -56,7 +56,7 @@ public class GlobalAdminController : ControllerBase
         var reject = RequireAdminRole();
         if (reject != null) return reject;
 
-        var classes = await _admin.ListClassesAsync();
+        var classes = await _admin.ListClassesAsync(schoolId: null);
         return Ok(classes);
     }
 
@@ -67,7 +67,7 @@ public class GlobalAdminController : ControllerBase
         var reject = RequireAdminRole();
         if (reject != null) return reject;
 
-        var (success, error) = await _admin.AddClassAsync(body.School, body.Name, body.HomeroomTeacherId);
+        var (success, error) = await _admin.AddClassAsync(body.SchoolId, body.Name, body.HomeroomTeacherId);
         if (!success) return BadRequest(new { error });
 
         return StatusCode(201);
@@ -93,7 +93,7 @@ public class GlobalAdminController : ControllerBase
         var reject = RequireAdminRole();
         if (reject != null) return reject;
 
-        var (success, error) = await _admin.CreateSubjectAsync(body.School, body.Name);
+        var (success, error) = await _admin.CreateSubjectAsync(body.SchoolId, body.Name);
         if (!success) return BadRequest(new { error });
 
         return StatusCode(201);
@@ -132,7 +132,7 @@ public class GlobalAdminController : ControllerBase
         var reject = RequireAdminRole();
         if (reject != null) return reject;
 
-        var (success, error) = await _admin.AssignTeacherToClassAsync(body.School, classId, body.TeacherId, body.SubjectName);
+        var (success, error) = await _admin.AssignTeacherToClassAsync(body.SchoolId, classId, body.TeacherId, body.SubjectName);
         if (!success) return BadRequest(new { error });
 
         return Ok();
@@ -145,7 +145,7 @@ public class GlobalAdminController : ControllerBase
         var reject = RequireAdminRole();
         if (reject != null) return reject;
 
-        var (success, error) = await _admin.MakeSchoolAdminAsync(userId, body.School);
+        var (success, error) = await _admin.MakeSchoolAdminAsync(userId, body.SchoolId);
         if (!success) return BadRequest(new { error });
 
         return Ok();
@@ -153,8 +153,8 @@ public class GlobalAdminController : ControllerBase
 }
 
 public record GlobalCreateSchoolRequest(string Name);
-public record GlobalCreateClassRequest(string School, string Name, string? HomeroomTeacherId);
-public record GlobalCreateSubjectRequest(string School, string Name);
+public record GlobalCreateClassRequest(int SchoolId, string Name, string? HomeroomTeacherId);
+public record GlobalCreateSubjectRequest(int SchoolId, string Name);
 public record GlobalAssignStudentRequest(string UserId);
-public record GlobalAssignTeacherRequest(string School, string TeacherId, string SubjectName);
-public record GlobalSetRoleRequest(string School);
+public record GlobalAssignTeacherRequest(int SchoolId, string TeacherId, string SubjectName);
+public record GlobalSetRoleRequest(int SchoolId);

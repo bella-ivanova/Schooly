@@ -32,7 +32,7 @@ public class AuthService
     // Registers a new user. Returns the created user on success.
     public async Task<(ApplicationUser? User, IReadOnlyList<string> Errors)> RegisterAsync(
         string username, string email, string password, UserRole role,
-        string fullName = "", int? grade = null, string? classLetter = null, string? school = null)
+        string fullName = "", int? grade = null, string? classLetter = null, int? schoolId = null)
     {
         if (role == UserRole.Student && (grade is null or < 1 or > 12))
             return (null, new[] { "Students must have a grade between 1 and 12." });
@@ -49,7 +49,7 @@ public class AuthService
             Role        = role,
             Grade       = role == UserRole.Student ? grade : null,
             ClassLetter = normLetter,
-            School      = school,
+            SchoolId    = schoolId,
             CreatedAt   = DateTime.UtcNow
         };
 

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using StudyAssistant.Data;
@@ -11,9 +12,11 @@ using StudyAssistant.Data;
 namespace StudyAssist.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260703144337_AddSchoolEntity")]
+    partial class AddSchoolEntity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -220,8 +223,9 @@ namespace StudyAssist.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("SchoolId")
-                        .HasColumnType("integer");
+                    b.Property<string>("School")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
@@ -243,8 +247,6 @@ namespace StudyAssist.Data.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
-
-                    b.HasIndex("SchoolId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -307,14 +309,14 @@ namespace StudyAssist.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<int>("SchoolId")
-                        .HasColumnType("integer");
+                    b.Property<string>("School")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("HomeroomTeacherId");
-
-                    b.HasIndex("SchoolId");
 
                     b.ToTable("Classes");
                 });
@@ -472,12 +474,12 @@ namespace StudyAssist.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<int>("SchoolId")
-                        .HasColumnType("integer");
+                    b.Property<string>("School")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("SchoolId");
 
                     b.ToTable("Subjects");
                 });
@@ -555,14 +557,7 @@ namespace StudyAssist.Data.Migrations
                         .HasForeignKey("ClassId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("StudyAssistant.Models.School", "School")
-                        .WithMany()
-                        .HasForeignKey("SchoolId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.Navigation("Class");
-
-                    b.Navigation("School");
                 });
 
             modelBuilder.Entity("StudyAssistant.Models.ChatMessage", b =>
@@ -590,15 +585,7 @@ namespace StudyAssist.Data.Migrations
                         .HasForeignKey("HomeroomTeacherId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("StudyAssistant.Models.School", "School")
-                        .WithMany()
-                        .HasForeignKey("SchoolId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("HomeroomTeacher");
-
-                    b.Navigation("School");
                 });
 
             modelBuilder.Entity("StudyAssistant.Models.ClassTeacher", b =>
@@ -648,17 +635,6 @@ namespace StudyAssist.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("StudyAssistant.Models.Subject", b =>
-                {
-                    b.HasOne("StudyAssistant.Models.School", "School")
-                        .WithMany()
-                        .HasForeignKey("SchoolId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("School");
                 });
 
             modelBuilder.Entity("StudyAssistant.Models.TeacherSubject", b =>

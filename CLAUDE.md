@@ -40,10 +40,11 @@ Services/           All business logic and external integrations
   ChatLogService.cs      Chat message persistence + subject/topic tagging via LLM classification
   StereometryService.cs  3D geometry JSON schema definition + <STEREO> block extraction from LLM output
   ExamService.cs         Mock exam generation from curriculum material via RAG
-  AdminUserService.cs    Global admin operations (school, class, subject, teacher, user management across all schools); typed methods back `GlobalAdminController`, parameterless wrappers back the CLI menu
-  SchoolAdminService.cs  HTTP-compatible per-school admin operations — typed parameters + (bool, error) return tuples, no console I/O; school is passed per-call by the controller from the caller's JWT identity
+  AdminUserService.cs    Global admin operations (school, class, subject, teacher, user management across all schools); typed methods back `GlobalAdminController`, parameterless wrappers back the CLI menu; console wrappers resolve school names to School entity IDs internally
+  SchoolAdminService.cs  HTTP-compatible per-school admin operations — typed parameters + (bool, error) return tuples, no console I/O; `SchoolId` (int FK) is passed per-call by the controller, resolved from the caller's JWT identity via `ApplicationUser.SchoolId`
   TempFileManager.cs     Tracks temp HTML files for cleanup on process exit (static utility)
 Models/             EF Core entity definitions and enums — no business logic
+  School.cs is the canonical school entity (Id, Name, CreatedAt). ApplicationUser, Class, and Subject each hold a SchoolId FK — never a plain string school name.
 Data/               DbContext, migrations, IUserRepository interface and UserRepository implementation
   Migrations/       EF Core migration files — never hand-edit; use dotnet ef migrations add
 Database/           Curriculum PDFs organised as Database/DataPdf/Grade{N}/{Subject}/
@@ -95,7 +96,8 @@ snapshots/          Temporary HTML visualisation files — never commit to git
 - **Rate limiting checks must come before auth service calls** — check `RateLimiter` before attempting any DB lookup in login/register/reset flows
 - **No chat or LLM calls in controllers** — controllers stream or return results from `RAGService` / `IChatService`
 - **Global admin HTTP endpoints require `Admin` role** — `GlobalAdminController` is backed by `AdminUserService` and restricted to the `Admin` JWT claim; `SchoolAdmin` users receive 403
-- **SchoolAdmin endpoints must verify school membership** — always confirm the target user (student or teacher being operated on) belongs to the caller's school; never trust a userId route parameter without a school-ownership check
+- **SchoolAdmin endpoints must verify school membership** — always confirm the target user (student or teacher being operated on) belongs to the caller's school by comparing `SchoolId` integers; never trust a userId route parameter without a school-ownership check; never accept a school name string from the client — look up `SchoolId` from the authenticated user's record
+- **School identity is always an int FK** — `ApplicationUser.SchoolId`, `Class.SchoolId`, `Subject.SchoolId` are all `int?`/`int` FKs to the `Schools` table; request DTOs that target a school use `int SchoolId`, not `string School`
 
 ## Security Requirements
 

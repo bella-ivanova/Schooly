@@ -40,7 +40,7 @@ Returns the top 5 most active students (by question count in `chat_messages`) pe
 Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middleware.
 
 **When a school admin calls `GET /api/admin/classes`:**
-Returns all classes in the caller's school with the homeroom teacher's username and enrolled student count.
+Returns all classes in the caller's school (derived from `ApplicationUser.SchoolId` on the authenticated user) with the homeroom teacher's username and enrolled student count.
 
 **When a school admin calls `POST /api/admin/classes`:**
 Creates a new class in the caller's school. An optional `homeroomTeacherId` may be supplied; if provided, the teacher must belong to the same school.
@@ -99,16 +99,16 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [ ] `GET /api/admin/subjects` returns all subjects for the caller's school
 - [ ] `GET /api/admin/users` returns all users in the caller's school with role, grade, and class info
 - [ ] Non-SchoolAdmin JWT receives 403 on all `/api/admin` endpoints; unauthenticated requests receive 401
-- [ ] `POST /api/global-admin/schools` registers a new school name; rejects duplicates (school already has classes or users)
+- [ ] `POST /api/global-admin/schools` registers a new School entity (`{ name: string }`); rejects duplicate names
 - [ ] `GET /api/global-admin/users` returns all users across all schools with id, username, fullName, role, grade, and class name
 - [ ] `GET /api/global-admin/classes` returns all classes across all schools with id, name, homeroom teacher username, and student count
-- [ ] `POST /api/global-admin/classes` creates a class for any school; optional homeroom teacher looked up by ID
+- [ ] `POST /api/global-admin/classes` creates a class for any school — body: `{ schoolId: int, name: string, homeroomTeacherId?: string }`
 - [ ] `DELETE /api/global-admin/classes/{classId}` deletes a class and unlinks all its students
-- [ ] `POST /api/global-admin/subjects` creates a subject for a given school; rejects duplicates
+- [ ] `POST /api/global-admin/subjects` creates a subject for a given school — body: `{ schoolId: int, name: string }`; rejects duplicates within the same school
 - [ ] `DELETE /api/global-admin/subjects/{subjectId}` deletes a subject by ID
 - [ ] `POST /api/global-admin/classes/{classId}/students` assigns a student (by userId) to a class; rejects non-students
-- [ ] `POST /api/global-admin/classes/{classId}/teachers` assigns a teacher to a class for a subject; auto-creates the subject if it does not exist
-- [ ] `PUT /api/global-admin/users/{userId}/role` promotes a user to SchoolAdmin and assigns them to a school
+- [ ] `POST /api/global-admin/classes/{classId}/teachers` assigns a teacher to a class for a subject — body: `{ schoolId: int, teacherId: string, subjectName: string }`; auto-creates the subject if it does not exist in that school
+- [ ] `PUT /api/global-admin/users/{userId}/role` promotes a user to SchoolAdmin and assigns them to a school — body: `{ schoolId: int }`
 - [ ] Non-Admin JWT receives 403 on all `/api/global-admin` endpoints; unauthenticated requests receive 401
 
 ---

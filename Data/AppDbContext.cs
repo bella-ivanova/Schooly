@@ -8,6 +8,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
+    public DbSet<School> Schools { get; set; }
     public DbSet<Class> Classes { get; set; }
     public DbSet<ClassTeacher> ClassTeachers { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
@@ -25,10 +26,22 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         {
             b.Property(u => u.Role).HasConversion<string>();
             b.Property(u => u.CreatedAt).HasDefaultValueSql("now()");
+
+            b.HasOne(u => u.School)
+             .WithMany()
+             .HasForeignKey(u => u.SchoolId)
+             .IsRequired(false)
+             .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<Class>(b =>
         {
+            b.HasOne(c => c.School)
+             .WithMany()
+             .HasForeignKey(c => c.SchoolId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Restrict);
+
             b.HasOne(c => c.HomeroomTeacher)
              .WithMany()
              .HasForeignKey(c => c.HomeroomTeacherId)
@@ -65,10 +78,22 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
              .OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<School>(b =>
+        {
+            b.Property(s => s.Name).IsRequired().HasMaxLength(200);
+            b.HasIndex(s => s.Name).IsUnique();
+            b.Property(s => s.CreatedAt).HasDefaultValueSql("now()");
+        });
+
         builder.Entity<Subject>(b =>
         {
             b.Property(s => s.Name).IsRequired();
-            b.Property(s => s.School).IsRequired();
+
+            b.HasOne(s => s.School)
+             .WithMany()
+             .HasForeignKey(s => s.SchoolId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<TeacherSubject>(b =>

@@ -14,8 +14,11 @@ public class TeacherDashboardService
     {
         var rows = await _db.ClassTeachers
             .Include(ct => ct.Class!)
+                .ThenInclude(c => c.School)
+            .Include(ct => ct.Class!)
                 .ThenInclude(c => c.Students)
-            .Include(ct => ct.Subject)
+            .Include(ct => ct.Subject!)
+                .ThenInclude(s => s.School)
             .Where(ct => ct.TeacherId == teacherId)
             .ToListAsync();
 
@@ -35,7 +38,8 @@ public class TeacherDashboardService
         var since = DateTime.UtcNow.AddDays(-days);
 
         var classTeachers = await _db.ClassTeachers
-            .Include(ct => ct.Class)
+            .Include(ct => ct.Class!)
+                .ThenInclude(c => c.School)
             .Include(ct => ct.Subject)
             .Where(ct => ct.TeacherId == teacherId && ct.ClassId == classId)
             .ToListAsync();
@@ -93,6 +97,7 @@ public class TeacherDashboardService
         foreach (var cid in classIds)
         {
             var cls = await _db.Classes
+                .Include(c => c.School)
                 .Include(c => c.Students)
                 .FirstOrDefaultAsync(c => c.Id == cid);
 
