@@ -22,8 +22,10 @@
 
 ```
 Controllers/        HTTP endpoints only — no business logic, no DB access
-  AuthController.cs      /api/auth — login, register, logout, token refresh, password reset
-  ChatController.cs      /api/chat/message (SSE streaming) and /api/chat/upload (session PDF ingest)
+  AuthController.cs             /api/auth — login, register, logout, token refresh, password reset
+  ChatController.cs             /api/chat/message (SSE streaming) and /api/chat/upload (session PDF ingest)
+  TeacherDashboardController.cs /api/teacher — teacher class list, struggle topics, student activity
+  SchoolAdminController.cs      /api/admin — school admin class, subject, and assignment management (SchoolAdmin role only)
 Services/           All business logic and external integrations
   AuthService.cs         User/token lifecycle (registration, login, JWT, refresh tokens, password reset)
   IEmailService.cs       Email abstraction interface (SmtpEmailService implements it via MailKit)
@@ -37,7 +39,8 @@ Services/           All business logic and external integrations
   ChatLogService.cs      Chat message persistence + subject/topic tagging via LLM classification
   StereometryService.cs  3D geometry JSON schema definition + <STEREO> block extraction from LLM output
   ExamService.cs         Mock exam generation from curriculum material via RAG
-  AdminUserService.cs    CLI-only admin operations (class, subject, teacher, user management)
+  AdminUserService.cs    CLI-only global admin operations (class, subject, teacher, user management across all schools)
+  SchoolAdminService.cs  HTTP-compatible per-school admin operations — typed parameters + (bool, error) return tuples, no console I/O; school is passed per-call by the controller from the caller's JWT identity
   TempFileManager.cs     Tracks temp HTML files for cleanup on process exit (static utility)
 Models/             EF Core entity definitions and enums — no business logic
 Data/               DbContext, migrations, IUserRepository interface and UserRepository implementation
@@ -90,7 +93,8 @@ snapshots/          Temporary HTML visualisation files — never commit to git
 - **No auth logic in controllers** — `AuthService.cs` owns login, registration, token lifecycle; `AuthController.cs` only wires requests to the service and returns status codes
 - **Rate limiting checks must come before auth service calls** — check `RateLimiter` before attempting any DB lookup in login/register/reset flows
 - **No chat or LLM calls in controllers** — controllers stream or return results from `RAGService` / `IChatService`
-- **Admin operations are CLI-only** — `AdminUserService` is never registered as an HTTP controller
+- **Global admin operations are CLI-only** — `AdminUserService` is never registered as an HTTP controller
+- **SchoolAdmin endpoints must verify school membership** — always confirm the target user (student or teacher being operated on) belongs to the caller's school; never trust a userId route parameter without a school-ownership check
 
 ## Security Requirements
 

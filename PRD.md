@@ -27,6 +27,51 @@ The client silently exchanges the refresh token for a new JWT and retries the re
 **After every message exchange:**
 Both the user message and the assistant response are persisted to the `chat_messages` table. Each record is tagged with a detected subject (linked to a `Subject` entity) and a topic string produced by a one-shot LLM classification call.
 
+**When a teacher calls `GET /api/teacher/classes`:**
+Returns every class the teacher is assigned to (via `ClassTeachers`), including the subjects they teach in each class and the enrolled student headcount.
+
+**When a teacher calls `GET /api/teacher/classes/{classId}/struggles?days=N`:**
+Returns the top 5 most-asked topics per subject for that class over the last N days (default 30, clamped to 1–365), derived from `chat_messages` rows where `role = "user"` posted by students enrolled in that class. Returns 404 if the teacher is not assigned to the requested class.
+
+**When a teacher calls `GET /api/teacher/activity?days=N`:**
+Returns the top 5 most active students (by question count in `chat_messages`) per class over the last N days (default 30, clamped to 1–365).
+
+**When a non-teacher or non-school-admin calls any teacher endpoint:**
+Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middleware.
+
+**When a school admin calls `GET /api/admin/classes`:**
+Returns all classes in the caller's school with the homeroom teacher's username and enrolled student count.
+
+**When a school admin calls `POST /api/admin/classes`:**
+Creates a new class in the caller's school. An optional `homeroomTeacherId` may be supplied; if provided, the teacher must belong to the same school.
+
+**When a school admin calls `PUT /api/admin/classes/{classId}/homeroom`:**
+Sets the homeroom teacher for the specified class. The teacher must belong to the same school as the caller.
+
+**When a school admin calls `POST /api/admin/classes/{classId}/students`:**
+Assigns the given student (by userId) to the class. Rejected if the student already belongs to a different school.
+
+**When a school admin calls `DELETE /api/admin/classes/{classId}/students/{userId}`:**
+Removes the student from their class by setting `ClassId` to null. The student must belong to the caller's school.
+
+**When a school admin calls `POST /api/admin/classes/{classId}/teachers`:**
+Assigns a teacher to a class for a named subject. If the subject does not yet exist for the school it is created automatically. Duplicate assignments are rejected.
+
+**When a school admin calls `POST /api/admin/teachers/{teacherId}/subjects/{subjectId}`:**
+Adds an existing subject to the teacher's teaching list. Rejected if the subject does not belong to the caller's school or is already assigned.
+
+**When a school admin calls `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}`:**
+Removes a subject from the teacher's teaching list.
+
+**When a school admin calls `GET /api/admin/subjects`:**
+Returns all subjects registered for the caller's school.
+
+**When a school admin calls `GET /api/admin/users`:**
+Returns all users in the caller's school with their role, grade, and class information.
+
+**When a non-SchoolAdmin calls any `/api/admin` endpoint:**
+Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middleware.
+
 ---
 
 ## Acceptance Criteria
@@ -39,6 +84,21 @@ Both the user message and the assistant response are persisted to the `chat_mess
 - [x] Every chat exchange writes two rows to `chat_messages` — one with `role = "user"`, one with `role = "assistant"` — both with a populated `subject_id` and `topic`
 - [x] The streaming response reaches the client in real time (tokens visible as they are generated, not batched at the end)
 - [ ] Token expiry during a session is handled transparently via refresh token exchange on the client side
+- [x] `GET /api/teacher/classes` requires a valid JWT with `role = Teacher` or `SchoolAdmin`; returns class list with subjects and student counts
+- [x] `GET /api/teacher/classes/{classId}/struggles?days=30` returns per-subject topic frequency for the teacher's own classes only; returns 404 for classes not assigned to the caller
+- [x] `GET /api/teacher/activity?days=30` returns top-5 most active students per class; `days` is clamped to 1–365
+- [x] Student role (or any non-teacher role) JWT receives 403 on all three teacher endpoints; unauthenticated requests receive 401
+- [ ] `GET /api/admin/classes` requires a valid JWT with `role = SchoolAdmin`; returns class list with homeroom teacher username and student count
+- [ ] `POST /api/admin/classes` creates a class scoped to the caller's school; optional homeroom teacher must belong to the same school
+- [ ] `PUT /api/admin/classes/{classId}/homeroom` sets the homeroom teacher; rejects teachers from other schools
+- [ ] `POST /api/admin/classes/{classId}/students` assigns a student to a class; rejects students who belong to a different school
+- [ ] `DELETE /api/admin/classes/{classId}/students/{userId}` removes the student from their class
+- [ ] `POST /api/admin/classes/{classId}/teachers` assigns a teacher to a class for a subject; auto-creates the subject if needed
+- [ ] `POST /api/admin/teachers/{teacherId}/subjects/{subjectId}` adds a subject to a teacher's list; rejects duplicates and cross-school subjects
+- [ ] `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}` removes a subject from a teacher's list
+- [ ] `GET /api/admin/subjects` returns all subjects for the caller's school
+- [ ] `GET /api/admin/users` returns all users in the caller's school with role, grade, and class info
+- [ ] Non-SchoolAdmin JWT receives 403 on all `/api/admin` endpoints; unauthenticated requests receive 401
 
 ---
 

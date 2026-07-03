@@ -125,6 +125,8 @@ builder.Services.AddScoped<MathOcrService>(sp =>
 // RAGService must be Scoped — _currentGrade and _temporaryChunks are per-request state.
 builder.Services.AddScoped<RAGService>();
 builder.Services.AddScoped<ChatLogService>();
+builder.Services.AddScoped<TeacherDashboardService>();
+builder.Services.AddScoped<SchoolAdminService>();
 
 // ── App pipeline ──────────────────────────────────────────────────────────
 var app = builder.Build();

@@ -4,173 +4,123 @@ using StudyAssistant.Models;
 
 namespace StudyAssistant.Services;
 
+public record ClassSummaryDto(int Id, string Name, string? HomeroomTeacherUsername, int StudentCount);
+public record UserSummaryDto(string Id, string Username, string FullName, string Role, int? Grade, string? ClassName);
+public record SubjectSummaryDto(int Id, string Name);
+
 public class SchoolAdminService
 {
     private readonly AppDbContext _db;
     private readonly IUserRepository _users;
-    private readonly string _school;
 
-    public SchoolAdminService(AppDbContext db, IUserRepository users, string school)
+    public SchoolAdminService(AppDbContext db, IUserRepository users)
     {
-        _db     = db;
-        _users  = users;
-        _school = school;
+        _db    = db;
+        _users = users;
     }
 
-    public async Task AddClassAsync()
+    public async Task<(bool Success, string? Error)> AddClassAsync(string school, string name, string? homeroomTeacherId)
     {
-        Console.Write("Име на клас (напр. 10А): ");
-        var name = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("Потребителско име на класния ръководител (Enter за пропускане): ");
-        var teacherUsername = Console.ReadLine()?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, "Class name is required.");
 
-        string? homeroomTeacherId = null;
-        if (!string.IsNullOrWhiteSpace(teacherUsername))
+        if (homeroomTeacherId != null)
         {
-            var teacher = await _users.GetByUsernameAsync(teacherUsername);
+            var teacher = await _users.GetByIdAsync(homeroomTeacherId);
             if (teacher == null)
-            {
-                Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
-                return;
-            }
-
-            if (teacher.School != _school)
-            {
-                Console.WriteLine($"Учителят не принадлежи към училище '{_school}'.");
-                return;
-            }
-
-            homeroomTeacherId = teacher.Id;
+                return (false, "Teacher not found.");
+            if (teacher.School != school)
+                return (false, "Teacher does not belong to this school.");
         }
 
-        _db.Classes.Add(new Class { Name = name, School = _school, HomeroomTeacherId = homeroomTeacherId });
+        _db.Classes.Add(new Class { Name = name, School = school, HomeroomTeacherId = homeroomTeacherId });
         await _db.SaveChangesAsync();
-        Console.WriteLine($"Клас '{name}' е създаден в '{_school}'.");
+        return (true, null);
     }
 
-    public async Task ListClassesAsync()
+    public async Task<IReadOnlyList<ClassSummaryDto>> ListClassesAsync(string school)
     {
         var classes = await _db.Classes
             .Include(c => c.HomeroomTeacher)
             .Include(c => c.Students)
-            .Where(c => c.School == _school)
+            .Where(c => c.School == school)
             .OrderBy(c => c.Name)
             .ToListAsync();
 
-        if (classes.Count == 0)
-        {
-            Console.WriteLine($"Няма класове в '{_school}'.");
-            return;
-        }
-
-        foreach (var c in classes)
-            Console.WriteLine($"  {c.Name} | Класен: {c.HomeroomTeacher?.UserName ?? "—"} | Ученици: {c.Students.Count}");
+        return classes
+            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.HomeroomTeacher?.UserName, c.Students.Count))
+            .ToList();
     }
 
-    public async Task AssignTeacherAsync()
+    public async Task<(bool Success, string? Error)> AssignTeacherAsync(string school, int classId, string teacherId)
     {
-        Console.Write("Клас (напр. 10А): ");
-        var className = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("Потребителско име на учителя: ");
-        var teacherUsername = Console.ReadLine()?.Trim() ?? "";
-
-        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == _school);
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.School == school);
         if (cls == null)
-        {
-            Console.WriteLine($"Клас '{className}' не е намерен в '{_school}'.");
-            return;
-        }
+            return (false, "Class not found.");
 
-        var teacher = await _users.GetByUsernameAsync(teacherUsername);
+        var teacher = await _users.GetByIdAsync(teacherId);
         if (teacher == null)
-        {
-            Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
-            return;
-        }
-
-        if (teacher.School != _school)
-        {
-            Console.WriteLine($"Учителят не принадлежи към училище '{_school}'.");
-            return;
-        }
+            return (false, "Teacher not found.");
+        if (teacher.School != school)
+            return (false, "Teacher does not belong to this school.");
 
         cls.HomeroomTeacherId = teacher.Id;
         await _db.SaveChangesAsync();
-        Console.WriteLine($"Учител '{teacherUsername}' е назначен за класен ръководител на '{className}'.");
+        return (true, null);
     }
 
-    public async Task AssignStudentAsync()
+    public async Task<(bool Success, string? Error)> AssignStudentAsync(string school, int classId, string userId)
     {
-        Console.Write("Потребителско име на ученика: ");
-        var studentUsername = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("Клас (напр. 10А): ");
-        var className = Console.ReadLine()?.Trim() ?? "";
-
-        var student = await _users.GetByUsernameAsync(studentUsername);
+        var student = await _users.GetByIdAsync(userId);
         if (student == null)
-        {
-            Console.WriteLine($"Потребителят '{studentUsername}' не е намерен.");
-            return;
-        }
-
+            return (false, "User not found.");
         if (student.Role != UserRole.Student)
-        {
-            Console.WriteLine($"Потребителят '{studentUsername}' не е ученик и не може да бъде добавен в клас.");
-            return;
-        }
+            return (false, "User is not a student.");
+        if (!string.IsNullOrEmpty(student.School) && student.School != school)
+            return (false, "Student belongs to a different school.");
 
-        if (!string.IsNullOrEmpty(student.School) && student.School != _school)
-        {
-            Console.WriteLine($"Ученикът '{studentUsername}' принадлежи към друго училище и не може да бъде преместен.");
-            return;
-        }
-
-        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == _school);
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.School == school);
         if (cls == null)
-        {
-            Console.WriteLine($"Клас '{className}' не е намерен в '{_school}'.");
-            return;
-        }
+            return (false, "Class not found.");
 
         student.ClassId = cls.Id;
-        student.School  = _school;
+        student.School  = school;
         await _users.UpdateAsync(student);
-        Console.WriteLine($"Ученик '{studentUsername}' е добавен в клас '{className}'.");
+        return (true, null);
     }
 
-    public async Task AssignTeacherToClassAsync()
+    public async Task<(bool Success, string? Error)> RemoveStudentAsync(string school, string userId)
     {
-        Console.Write("Клас (напр. 10А): ");
-        var className = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("Потребителско име на учителя: ");
-        var teacherUsername = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("Предмет: ");
-        var subjectName = Console.ReadLine()?.Trim() ?? "";
+        var student = await _users.GetByIdAsync(userId);
+        if (student == null)
+            return (false, "User not found.");
+        if (student.School != school)
+            return (false, "Student does not belong to this school.");
 
-        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Name == className && c.School == _school);
+        student.ClassId = null;
+        await _users.UpdateAsync(student);
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> AssignTeacherToClassAsync(string school, int classId, string teacherId, string subjectName)
+    {
+        if (string.IsNullOrWhiteSpace(subjectName))
+            return (false, "Subject name is required.");
+
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.School == school);
         if (cls == null)
-        {
-            Console.WriteLine($"Клас '{className}' не е намерен в '{_school}'.");
-            return;
-        }
+            return (false, "Class not found.");
 
-        var teacher = await _users.GetByUsernameAsync(teacherUsername);
+        var teacher = await _users.GetByIdAsync(teacherId);
         if (teacher == null)
-        {
-            Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
-            return;
-        }
+            return (false, "Teacher not found.");
+        if (teacher.School != school)
+            return (false, "Teacher does not belong to this school.");
 
-        if (teacher.School != _school)
-        {
-            Console.WriteLine($"Учителят не принадлежи към училище '{_school}'.");
-            return;
-        }
-
-        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Name == subjectName && s.School == _school);
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Name == subjectName && s.School == school);
         if (subject == null)
         {
-            subject = new Subject { Name = subjectName, School = _school };
+            subject = new Subject { Name = subjectName, School = school };
             _db.Subjects.Add(subject);
             await _db.SaveChangesAsync();
         }
@@ -178,158 +128,82 @@ public class SchoolAdminService
         var existing = await _db.ClassTeachers.FirstOrDefaultAsync(
             ct => ct.ClassId == cls.Id && ct.TeacherId == teacher.Id && ct.SubjectId == subject.Id);
         if (existing != null)
-        {
-            Console.WriteLine($"Учителят вече преподава '{subjectName}' в клас '{className}'.");
-            return;
-        }
+            return (false, "Teacher is already assigned to this subject in that class.");
 
         _db.ClassTeachers.Add(new ClassTeacher { ClassId = cls.Id, TeacherId = teacher.Id, SubjectId = subject.Id });
         await _db.SaveChangesAsync();
-        Console.WriteLine($"Учител '{teacherUsername}' е назначен на '{subjectName}' в клас '{className}'.");
+        return (true, null);
     }
 
-    public async Task AssignSubjectToTeacherAsync()
+    public async Task<(bool Success, string? Error)> AssignSubjectToTeacherAsync(string school, string teacherId, int subjectId)
     {
-        Console.Write("Потребителско име на учителя: ");
-        var teacherUsername = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("ID на предмета: ");
-        if (!int.TryParse(Console.ReadLine()?.Trim(), out var subjectId))
-        {
-            Console.WriteLine("Невалидно ID.");
-            return;
-        }
-
-        var teacher = await _users.GetByUsernameAsync(teacherUsername);
+        var teacher = await _users.GetByIdAsync(teacherId);
         if (teacher == null)
-        {
-            Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
-            return;
-        }
+            return (false, "Teacher not found.");
+        if (teacher.School != school)
+            return (false, "Teacher does not belong to this school.");
 
-        if (teacher.School != _school)
-        {
-            Console.WriteLine($"Учителят не принадлежи към училище '{_school}'.");
-            return;
-        }
-
-        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.School == _school);
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.School == school);
         if (subject == null)
-        {
-            Console.WriteLine($"Предмет с ID {subjectId} не е намерен в '{_school}'.");
-            return;
-        }
+            return (false, "Subject not found.");
 
         var alreadyAssigned = await _db.TeacherSubjects
             .AnyAsync(ts => ts.TeacherId == teacher.Id && ts.SubjectId == subjectId);
         if (alreadyAssigned)
-        {
-            Console.WriteLine($"Предметът вече е назначен на '{teacherUsername}'.");
-            return;
-        }
+            return (false, "Subject is already assigned to this teacher.");
 
         _db.TeacherSubjects.Add(new TeacherSubject { TeacherId = teacher.Id, SubjectId = subjectId });
         await _db.SaveChangesAsync();
-        Console.WriteLine($"Предмет '{subject.Name}' е назначен на '{teacherUsername}'.");
+        return (true, null);
     }
 
-    public async Task RemoveSubjectFromTeacherAsync()
+    public async Task<(bool Success, string? Error)> RemoveSubjectFromTeacherAsync(string school, string teacherId, int subjectId)
     {
-        Console.Write("Потребителско име на учителя: ");
-        var teacherUsername = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("ID на предмета: ");
-        if (!int.TryParse(Console.ReadLine()?.Trim(), out var subjectId))
-        {
-            Console.WriteLine("Невалидно ID.");
-            return;
-        }
-
-        var teacher = await _users.GetByUsernameAsync(teacherUsername);
+        var teacher = await _users.GetByIdAsync(teacherId);
         if (teacher == null)
-        {
-            Console.WriteLine($"Потребителят '{teacherUsername}' не е намерен.");
-            return;
-        }
-
-        if (teacher.School != _school)
-        {
-            Console.WriteLine($"Учителят не принадлежи към училище '{_school}'.");
-            return;
-        }
+            return (false, "Teacher not found.");
+        if (teacher.School != school)
+            return (false, "Teacher does not belong to this school.");
 
         var row = await _db.TeacherSubjects
             .FirstOrDefaultAsync(ts => ts.TeacherId == teacher.Id && ts.SubjectId == subjectId);
         if (row == null)
-        {
-            Console.WriteLine("Връзката не е намерена.");
-            return;
-        }
+            return (false, "Assignment not found.");
 
         _db.TeacherSubjects.Remove(row);
         await _db.SaveChangesAsync();
-        Console.WriteLine($"Предметът е премахнат от '{teacherUsername}'.");
+        return (true, null);
     }
 
-    public async Task RemoveStudentAsync()
-    {
-        Console.Write("Потребителско име на ученика: ");
-        var studentUsername = Console.ReadLine()?.Trim() ?? "";
-
-        var student = await _users.GetByUsernameAsync(studentUsername);
-        if (student == null)
-        {
-            Console.WriteLine($"Потребителят '{studentUsername}' не е намерен.");
-            return;
-        }
-
-        if (student.School != _school)
-        {
-            Console.WriteLine("Ученикът не принадлежи към твоето училище.");
-            return;
-        }
-
-        student.ClassId = null;
-        await _users.UpdateAsync(student);
-        Console.WriteLine($"Ученик '{studentUsername}' е премахнат от класа си.");
-    }
-
-    public async Task ListUsersAsync()
+    public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(string school)
     {
         var users = await _db.Set<ApplicationUser>()
             .Include(u => u.Class)
-            .Where(u => u.School == _school)
+            .Where(u => u.School == school)
             .OrderBy(u => u.Role)
             .ThenBy(u => u.UserName)
             .ToListAsync();
 
-        if (users.Count == 0)
-        {
-            Console.WriteLine($"Няма потребители в '{_school}'.");
-            return;
-        }
-
-        foreach (var u in users)
-        {
-            var gradeTag = u.Grade.HasValue ? $"  Клас {u.Grade}" : "";
-            var classTag = u.Class != null ? $" ({u.Class.Name})" : " (Без клас)";
-            Console.WriteLine($"  [{u.Role}] {u.UserName} — {u.FullName}{gradeTag}{classTag}");
-        }
+        return users
+            .Select(u => new UserSummaryDto(
+                u.Id,
+                u.UserName ?? "",
+                u.FullName,
+                u.Role.ToString(),
+                u.Grade,
+                u.Class?.Name))
+            .ToList();
     }
 
-    public async Task ListSubjectsAsync()
+    public async Task<IReadOnlyList<SubjectSummaryDto>> ListSubjectsAsync(string school)
     {
         var subjects = await _db.Subjects
-            .Where(s => s.School == _school)
+            .Where(s => s.School == school)
             .OrderBy(s => s.Name)
             .ToListAsync();
 
-        if (subjects.Count == 0)
-        {
-            Console.WriteLine($"Няма предмети в '{_school}'.");
-            return;
-        }
-
-        Console.WriteLine($"Предмети в '{_school}':");
-        foreach (var s in subjects)
-            Console.WriteLine($"  [{s.Id}] {s.Name}");
+        return subjects
+            .Select(s => new SubjectSummaryDto(s.Id, s.Name))
+            .ToList();
     }
 }

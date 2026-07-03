@@ -23,10 +23,10 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Security hardening pass: TOCTOU-safe refresh token revocation, prompt injection sanitisation, generic rate limit error messages, HSTS, CORS header restriction, ForwardedHeaders middleware
 - Student chat: `POST /api/chat/message` — grade-filtered RAG, SSE token streaming, stereometry scene extraction, chat-log persistence
 - PDF session upload: `POST /api/chat/upload` — ingests a PDF into a per-request temporary vector store that affects subsequent chat queries
+- Teacher dashboard HTTP endpoints: `GET /api/teacher/classes`, `GET /api/teacher/classes/{classId}/struggles?days=N`, `GET /api/teacher/activity?days=N` — requires Teacher or SchoolAdmin JWT
+- School admin HTTP endpoints: `GET /api/admin/classes`, `POST /api/admin/classes`, `PUT /api/admin/classes/{classId}/homeroom`, `POST /api/admin/classes/{classId}/students`, `DELETE /api/admin/classes/{classId}/students/{userId}`, `POST /api/admin/classes/{classId}/teachers`, `POST /api/admin/teachers/{teacherId}/subjects/{subjectId}`, `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}`, `GET /api/admin/subjects`, `GET /api/admin/users` — requires SchoolAdmin JWT
 
 ### In Progress
-- Teacher dashboard HTTP endpoint — `TeacherDashboardService` exists, not exposed via controller
-- School admin HTTP endpoints — all admin operations are currently CLI-only
 - Practice question HTTP endpoint — `PracticeQuestionService` exists, not wired
 
 ### Not Started
