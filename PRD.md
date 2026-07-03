@@ -67,3 +67,34 @@ Long messages are truncated or chunked before submission. The system must not cr
 
 **Bulgarian diacritics and Cyrillic text**
 Embedding and LLM services handle UTF-8 natively. The only preprocessing required is the existing `CleanText()` sanitisation in `PDFLoader.cs` (null bytes, control characters). No transliteration or encoding conversion is needed.
+
+---
+
+## Security Baseline (established pre-web-conversion)
+
+The following security controls are in place as of the initial web conversion. Future features must not regress them.
+
+**Authentication & tokens**
+- Refresh token revocation uses `IsolationLevel.RepeatableRead` (same as token exchange) — prevents concurrent-logout race condition
+- Password reset tokens are never returned in HTTP responses — must be delivered via email (not yet implemented; token is logged to server console in dev mode only)
+
+**Rate limiting**
+- Login: progressive delay per account (3 s → 10 s → 30 s → 60 s) + separate IP counter
+- Registration: 2-minute cooldown per email
+- Password reset: 5-minute cooldown per email
+- Token refresh and logout: 20 requests per minute per IP (`IsGeneralApiThrottled`)
+- Rate limit error responses are intentionally generic — they do not reveal wait durations
+
+**Prompt injection**
+- All user-supplied strings entering LLM prompts are sanitised through `InputSanitizer.SanitizeUserInput()`: max 2000 chars for questions, 300 chars for exam topics; null bytes and C0 control characters stripped
+
+**CORS**
+- Allowed headers restricted to `Content-Type` and `Authorization` only — no wildcard headers
+- Allowed origins loaded from `Cors:AllowedOrigins` config — never hardcoded
+
+**Reverse proxy**
+- `UseForwardedHeaders()` is wired first in the pipeline so that `RemoteIpAddress` reflects the real client IP behind a proxy. Production deployments must populate `KnownProxies` with the actual proxy IP(s).
+
+**Service registration**
+- `RAGService` must be Scoped — its instance fields are per-user state
+- `VisualisationService` is CLI-only and must never be exposed via HTTP

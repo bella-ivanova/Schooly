@@ -32,8 +32,8 @@ public class AuthController : ControllerBase
     {
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
 
-        if (_rateLimiter.IsLoginLocked(req.UsernameOrEmail, ip, out var wait))
-            return StatusCode(429, new { error = $"Too many failed attempts. Try again in {RateLimiter.FormatRemaining(wait)}." });
+        if (_rateLimiter.IsLoginLocked(req.UsernameOrEmail, ip, out _))
+            return StatusCode(429, new { error = "Too many failed login attempts. Please wait before trying again." });
 
         var error = await _auth.LoginAsync(req.UsernameOrEmail, req.Password);
         if (error != null)
@@ -63,8 +63,8 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
-        if (_rateLimiter.IsRegistrationThrottled(req.Email, out var wait))
-            return StatusCode(429, new { error = $"Registration attempted recently. Try again in {RateLimiter.FormatRemaining(wait)}." });
+        if (_rateLimiter.IsRegistrationThrottled(req.Email, out _))
+            return StatusCode(429, new { error = "Registration attempted too recently. Please wait before trying again." });
 
         UserRole role;
         if (string.Equals(req.Role, "teacher", StringComparison.OrdinalIgnoreCase))
@@ -101,6 +101,10 @@ public class AuthController : ControllerBase
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest req)
     {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        if (_rateLimiter.IsGeneralApiThrottled(ip, out _))
+            return StatusCode(429, new { error = "Too many requests. Please wait before trying again." });
+
         var (jwt, newRefreshToken, error) = await _auth.ExchangeRefreshTokenAsync(req.RefreshToken);
         if (error != null)
             return Unauthorized(new { error });
@@ -112,6 +116,10 @@ public class AuthController : ControllerBase
     [HttpPost("logout")]
     public async Task<IActionResult> Logout([FromBody] RefreshRequest req)
     {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        if (_rateLimiter.IsGeneralApiThrottled(ip, out _))
+            return StatusCode(429, new { error = "Too many requests. Please wait before trying again." });
+
         await _auth.RevokeRefreshTokenAsync(req.RefreshToken);
         return Ok(new { message = "Logged out successfully." });
     }
@@ -120,9 +128,9 @@ public class AuthController : ControllerBase
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest req)
     {
-        var (throttled, wait) = _rateLimiter.TryRecordPasswordResetRequest(req.Email);
+        var (throttled, _) = _rateLimiter.TryRecordPasswordResetRequest(req.Email);
         if (throttled)
-            return StatusCode(429, new { error = $"Reset already requested. Try again in {RateLimiter.FormatRemaining(wait)}." });
+            return StatusCode(429, new { error = "A reset link was already requested recently. Please wait before trying again." });
 
         var (token, _) = await _auth.RequestPasswordResetAsync(req.Email);
 

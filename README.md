@@ -7,7 +7,7 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 ### Complete
 - User authentication: login, register, logout, JWT access tokens + refresh tokens
 - Password reset flow: token generation and validation (email delivery is a remaining task)
-- Progressive rate limiting: per-account and per-IP for login, per-email for registration and password reset
+- Progressive rate limiting: per-account and per-IP for login, per-email for registration and password reset; IP-based limit on token refresh and logout
 - User roles: Student, Teacher, SchoolAdmin, Admin
 - School class and subject management (CLI-only admin commands via `AdminUserService`)
 - PDF ingestion pipeline: triple-OCR fallback (Pix2Text → vision OCR → PdfPig), text chunking, and embedding
@@ -20,6 +20,7 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Chat message persistence with subject and topic tagging
 - Weak-spot detection: aggregates most-asked topics per student
 - Database schema: 9 migrations applied (PostgreSQL)
+- Security hardening pass: TOCTOU-safe refresh token revocation, prompt injection sanitisation, generic rate limit error messages, HSTS, CORS header restriction, ForwardedHeaders middleware
 
 ### In Progress
 - Student chat HTTP endpoint (`POST /api/chat/message`) — service layer complete, controller not yet wired
@@ -27,8 +28,15 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - School admin HTTP endpoints — all admin operations are currently CLI-only
 
 ### Not Started
-- Password reset email delivery — currently the reset token is returned in the HTTP response; must switch to email before production
+- Password reset email delivery — reset token must be emailed instead of logged; must complete before production
 - PDF upload endpoint for students — `TempFileManager` and session-store ingestion exist in `RAGService`, no HTTP route yet
 - Practice question HTTP endpoint — `PracticeQuestionService` exists, not wired
-- Rate limiting on `POST /api/auth/refresh`
 - Frontend application (Vue/React, separate repository, expected at `localhost:3000` or `:5173`)
+
+## Production Deployment Notes
+
+**Reverse proxy (required):** `UseForwardedHeaders()` is active. You must restrict which proxies are trusted — edit the `ForwardedHeadersOptions` block in `Program.cs` and add your specific proxy IP(s) to `KnownProxies`. Without this, any client can spoof `X-Forwarded-For` to bypass IP-based rate limiting.
+
+**HSTS:** `UseHsts()` is active. The first response to each browser instructs it to refuse all future HTTP connections to this domain. Ensure TLS is configured before deploying.
+
+**Secrets:** All config keys in `appsettings.json` hold placeholder strings. Supply real values via environment variables (`Jwt__Secret`, `ConnectionStrings__DefaultConnection`, `TeacherRegistrationCode`, `Cors__AllowedOrigins__0`). The app refuses to start if placeholders are detected.

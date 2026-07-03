@@ -174,12 +174,18 @@ public class AuthService
 
     public async Task<bool> RevokeRefreshTokenAsync(string token)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+
         var stored = await _db.RefreshTokens.SingleOrDefaultAsync(r => r.Token == token);
         if (stored == null || stored.IsRevoked)
+        {
+            await tx.RollbackAsync();
             return false;
+        }
 
         stored.IsRevoked = true;
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return true;
     }
 }

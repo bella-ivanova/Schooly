@@ -93,9 +93,14 @@ snapshots/          Temporary HTML visualisation files — never commit to git
 - Sensitive string comparisons (teacher registration code, reset tokens) must use `CryptographicOperations.FixedTimeEquals` — never `string ==`
 - Password reset tokens must be delivered via email, not returned in the HTTP response — the `TODO` in `AuthController.cs` must be resolved before production
 - Rate limiting must remain database-backed — do not replace with `IMemoryCache` or `IDistributedCache`
-- CORS allowed origins come from `Cors:AllowedOrigins` config — never hardcode `*` or specific URLs in code
-- Refresh token exchange must use `IsolationLevel.RepeatableRead` — do not lower this isolation level
+- Rate limiting covers: login (per-account + per-IP), registration (per-email), password reset (per-email), token refresh and logout (per-IP via `IsGeneralApiThrottled`)
+- CORS allowed origins come from `Cors:AllowedOrigins` config — never hardcode `*` or specific URLs in code; allowed headers are restricted to `Content-Type` and `Authorization` only
+- Refresh token exchange **and** revocation must both use `IsolationLevel.RepeatableRead` — do not lower this isolation level
 - `appsettings.Local.json` contains real secrets for local dev — never commit it; production uses environment variables
+- All user-supplied strings that reach LLM prompts must be passed through `InputSanitizer.SanitizeUserInput()` before interpolation — enforced in `RAGService.Ask()` and `ExamService.GenerateExamAsync()`
+- `RAGService` must be registered as **Scoped**, never Singleton — `_currentGrade` and `_temporaryChunks` are per-user instance state; in web endpoints, grade must come from the authenticated user's JWT claims, never from request parameters
+- `VisualisationService` is CLI-only — it calls `Process.Start()` and holds static state; it must not be wired to any HTTP endpoint
+- In production, `app.UseForwardedHeaders()` must run first in the pipeline and `KnownProxies` must list your specific proxy IPs — the current config trusts all proxies (safe for local dev, not for production)
 
 ## Definition of Done
 

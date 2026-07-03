@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -29,11 +30,20 @@ if (string.IsNullOrEmpty(teacherRegCode) || placeholders.Any(p => teacherRegCode
 if (allowedOrigins.Length == 0 || allowedOrigins.Any(o => placeholders.Contains(o)))
     throw new InvalidOperationException("Cors:AllowedOrigins is not configured. Add your frontend origin(s) via Cors__AllowedOrigins__0.");
 
+// Trust X-Forwarded-For / X-Forwarded-Proto from the immediate upstream proxy only.
+// In production, restrict KnownProxies to the specific proxy IP(s) in front of this server.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownIPNetworks.Clear();
+    o.KnownProxies.Clear();
+});
+
 // ── Services ──────────────────────────────────────────────────────────────
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
         policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
+              .WithHeaders("Content-Type", "Authorization")
               .WithMethods("GET", "POST", "PUT", "DELETE")));
 
 builder.Services.AddControllers();
@@ -84,6 +94,8 @@ builder.Services.AddHttpClient("zhipuai", c => c.Timeout = Timeout.InfiniteTimeS
 // ── App pipeline ──────────────────────────────────────────────────────────
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+app.UseHsts();
 app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();

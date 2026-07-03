@@ -1,5 +1,8 @@
 namespace StudyAssistant.Services;
 
+// IMPORTANT: Register as Scoped, never Singleton.
+// _currentGrade and _temporaryChunks are per-user state; a Singleton would share them across all users.
+// When wiring HTTP endpoints, always set _currentGrade from the authenticated user's JWT claims.
 public class RAGService
 {
     private readonly EmbeddingService _embeddingService;
@@ -238,6 +241,8 @@ public class RAGService
     //                     without polluting the conversation history shown to students.
     public async Task<string?> Ask(string question, bool capture = false, string? instructionSuffix = null)
     {
+        question = InputSanitizer.SanitizeUserInput(question, maxLength: 2000);
+
         Task<string?> Send(string userMsg, string? apiMsg, string? sysOverride = null)
         {
             var finalApi = instructionSuffix != null

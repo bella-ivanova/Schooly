@@ -23,6 +23,11 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
     private const string IpLoginType       = "ip_login";
     private const string PasswordResetType = "password_reset";
     private const string RegistrationType  = "registration";
+    private const string GeneralApiType    = "general_api";
+
+    // 20 requests per minute per IP on token-exchange and logout endpoints.
+    private static readonly TimeSpan GeneralApiWindow = TimeSpan.FromMinutes(1);
+    private const int GeneralApiMaxRequests = 20;
 
     // ── Login ────────────────────────────────────────────────────────────────
 
@@ -187,6 +192,37 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
             ON CONFLICT (key, type) DO UPDATE
               SET last_request_at = EXCLUDED.last_request_at
             """);
+    }
+
+    // ── General API (refresh / logout) ──────────────────────────────────────
+
+    // Returns true when the IP has exceeded GeneralApiMaxRequests within GeneralApiWindow.
+    // Uses a sliding-window count stored in the rate_limit_entries table.
+    public bool IsGeneralApiThrottled(string? ip, out TimeSpan remaining)
+    {
+        remaining = TimeSpan.Zero;
+        if (ip is null) return false;
+
+        var key = "ip:" + ip;
+        using var db = dbFactory.CreateDbContext();
+
+        var claimed = db.Database.SqlQuery<int>($"""
+            INSERT INTO rate_limit_entries (key, type, failure_count, last_request_at)
+            VALUES ({key}, {GeneralApiType}, 1, NOW())
+            ON CONFLICT (key, type) DO UPDATE
+              SET failure_count    = CASE
+                                       WHEN rate_limit_entries.last_request_at < NOW() - {GeneralApiWindow}
+                                       THEN 1
+                                       ELSE rate_limit_entries.failure_count + 1
+                                     END,
+                  last_request_at  = NOW()
+            RETURNING failure_count
+            """).First();
+
+        if (claimed <= GeneralApiMaxRequests) return false;
+
+        remaining = GeneralApiWindow;
+        return true;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

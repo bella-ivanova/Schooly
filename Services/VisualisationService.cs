@@ -9,10 +9,7 @@ public static class VisualisationService
     // Writes an HTML string to a temp file and opens it in the default browser.
     public static void ShowHtml(string html)
     {
-        var path = Path.Combine(
-            Path.GetTempPath(),
-            $"schooly_vis_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.html"
-        );
+        var path = Path.Combine(Path.GetTempPath(), $"sa_{Guid.NewGuid():N}.html");
 
         File.WriteAllText(path, html);
         TempFileManager.RegisterTempFile(path);
