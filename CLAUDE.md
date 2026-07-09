@@ -9,7 +9,7 @@
 | ASP.NET Identity | 10.* | PBKDF2 password hashing, password validation rules, and direct password change without reinventing them |
 | MailKit | 4.* | SMTP email delivery for password reset codes |
 | JWT Bearer (HS256) | 10.* / 8.* | Stateless auth with revocable refresh tokens; HS256 is sufficient for a single-server trust boundary |
-| OllamaSharp | 5.4.24 | Local LLM inference — keeps student data on-premises; has native streaming support |
+| OllamaSharp | 5.4.24 | Local LLM inference — keeps student data on-premises; has native streaming support. `Llm:OllamaModel` and `Llm:OllamaVisionModel` are pinned to `minicpm-v` (not `llama3.2`/`llava`) because that's the multimodal model actually kept pulled locally — check `ollama list` before repointing config at an unpulled model name |
 | ZhipuAI (HTTP) | — | Remote LLM fallback via OpenAI-compatible API (`/v4/chat/completions`) when Ollama is unavailable |
 | Qdrant | 1.17.0 | Vector DB for RAG; supports payload-based metadata filtering so grade-N students only receive grade ≤ N curriculum material |
 | nomic-embed-text (Ollama) | — | 768-dim embeddings; dimension is hardcoded in `EmbeddingService.cs` and must match the Qdrant collection |

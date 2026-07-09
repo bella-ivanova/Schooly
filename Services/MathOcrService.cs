@@ -22,9 +22,12 @@ public class MathOcrService
         imageContent.Headers.ContentType =
             new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
 
-        // "image" and "file_type" match the field names in pix2text's serve.py
+        // "image" and "file_type" match the field names in pix2text's serve.py.
+        // resized_shape must be sent explicitly: the server's default (768, an int)
+        // fails its own "str" Form() type validation when the field is omitted.
         form.Add(imageContent, "image", "page.png");
         form.Add(new StringContent("text_formula"), "file_type");
+        form.Add(new StringContent("768"), "resized_shape");
 
         var response = await _httpClient.PostAsync(ServerUrl, form);
 

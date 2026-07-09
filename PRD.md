@@ -187,6 +187,12 @@ Embedding and LLM services handle UTF-8 natively. The only preprocessing require
 
 ---
 
+## Environment Prerequisites
+
+The behavioral specification below assumes a working local LLM/OCR pipeline. Before testing: pull the Ollama models referenced by `Llm:OllamaModel`/`Llm:OllamaVisionModel`/`Llm:OllamaEmbedModel` (currently `minicpm-v` and `nomic-embed-text` — see `ollama list`), and start the `pix2text` container (`docker compose up -d pix2text`). See `README.md`'s "Local Environment Prerequisites" section.
+
+---
+
 ## Security Baseline (established pre-web-conversion)
 
 The following security controls are in place as of the initial web conversion. Future features must not regress them.

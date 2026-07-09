@@ -33,6 +33,13 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 ### Not Started
 - Frontend application (Vue/React, separate repository, expected at `localhost:3000` or `:5173`)
 
+## Local Environment Prerequisites
+
+Before chat, RAG, or math-OCR endpoints will work, the following must be running/pulled locally:
+
+- **Ollama models:** `ollama pull minicpm-v` (chat + vision, matches `Llm:OllamaModel` / `Llm:OllamaVisionModel`) and `ollama pull nomic-embed-text` (embeddings, matches `Llm:OllamaEmbedModel`). Verify with `ollama list`.
+- **pix2text (math OCR) container:** `docker compose up -d pix2text`. Verify with `docker logs studyassist-pix2text` — it should log `Uvicorn running` / `Application startup complete`, not an import traceback.
+
 ## Production Deployment Notes
 
 **Reverse proxy (required):** `UseForwardedHeaders()` is active. You must restrict which proxies are trusted — edit the `ForwardedHeadersOptions` block in `Program.cs` and add your specific proxy IP(s) to `KnownProxies`. Without this, any client can spoof `X-Forwarded-For` to bypass IP-based rate limiting.
