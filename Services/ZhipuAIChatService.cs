@@ -33,6 +33,13 @@ public class ZhipuAIChatService : IChatService
         _messages.Add(new ChatMsg("system", prompt));
     }
 
+    public void SeedHistory(IEnumerable<(string Role, string Content)> turns)
+    {
+        _messages.Clear();
+        foreach (var (role, content) in turns)
+            _messages.Add(new ChatMsg(role == "assistant" ? "assistant" : "user", content));
+    }
+
     public async Task<string> OneShotAsync(string systemPrompt, string userMessage)
     {
         var body = JsonSerializer.Serialize(new

@@ -26,6 +26,17 @@ public class OllamaChatService : IChatService
         _messages.Add(new Message { Role = ChatRole.System, Content = prompt });
     }
 
+    public void SeedHistory(IEnumerable<(string Role, string Content)> turns)
+    {
+        _messages.Clear();
+        foreach (var (role, content) in turns)
+            _messages.Add(new Message
+            {
+                Role    = role == "assistant" ? ChatRole.Assistant : ChatRole.User,
+                Content = content
+            });
+    }
+
     // Sends a single message with a completely fresh history so the call never
     // bleeds into (or is contaminated by) the ongoing conversation state.
     public async Task<string> OneShotAsync(string systemPrompt, string userMessage)

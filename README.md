@@ -18,10 +18,11 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Stereometry 3D scene JSON schema and `<STEREO>` block extraction from LLM responses
 - Exam generation service: mock exams generated from curriculum material via RAG
 - Chat message persistence with subject and topic tagging
+- Chat sessions: messages are grouped into `ChatSession`s with true multi-turn context (prior turns are replayed into the LLM call, not just displayed), an AI-generated title after the first exchange, and a subject-folder assignment locked from that same first exchange
 - Weak-spot detection: aggregates most-asked topics per student, exposed to the student themselves via `GET /api/student/weak-spots?days=N` (distinct from the teacher-facing per-class `GET /api/teacher/classes/{classId}/struggles`)
-- Database schema: 11 migrations defined (PostgreSQL); `AddSchoolEntity` and `SchoolForeignKeys` are pending — run `dotnet ef database update` before starting the server
+- Database schema: 14 migrations defined (PostgreSQL); run `dotnet ef database update` before starting the server
 - Security hardening pass: TOCTOU-safe refresh token revocation, prompt injection sanitisation, generic rate limit error messages, HSTS, CORS header restriction, ForwardedHeaders middleware
-- Student chat: `POST /api/chat/message` — grade-filtered RAG, SSE token streaming, stereometry scene extraction, chat-log persistence
+- Student chat: `POST /api/chat/message` — grade-filtered RAG, SSE token streaming, stereometry scene extraction, session-scoped chat-log persistence with multi-turn context and AI-generated titles; `GET /api/chat/sessions?subject=` (folder-filterable session list), `GET /api/chat/sessions/{id}/messages` (session transcript) — all require auth, no role restriction
 - PDF session upload: `POST /api/chat/upload` — ingests a PDF into a per-request temporary vector store that affects subsequent chat queries
 - Teacher dashboard HTTP endpoints: `GET /api/teacher/classes`, `GET /api/teacher/classes/{classId}/struggles?days=N`, `GET /api/teacher/activity?days=N` — requires Teacher or SchoolAdmin JWT
 - School admin HTTP endpoints: `GET /api/admin/classes`, `POST /api/admin/classes`, `PUT /api/admin/classes/{classId}/homeroom`, `POST /api/admin/classes/{classId}/students`, `DELETE /api/admin/classes/{classId}/students/{userId}`, `POST /api/admin/classes/{classId}/teachers`, `POST /api/admin/teachers/{teacherId}/subjects/{subjectId}`, `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}`, `GET /api/admin/subjects`, `GET /api/admin/users` — requires SchoolAdmin JWT

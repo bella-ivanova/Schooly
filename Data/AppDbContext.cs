@@ -12,6 +12,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Class> Classes { get; set; }
     public DbSet<ClassTeacher> ClassTeachers { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
+    public DbSet<ChatSession> ChatSessions { get; set; }
     public DbSet<Subject> Subjects { get; set; }
     public DbSet<TeacherSubject> TeacherSubjects { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
@@ -113,6 +114,23 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
              .OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<ChatSession>(b =>
+        {
+            b.HasOne(s => s.User)
+             .WithMany()
+             .HasForeignKey(s => s.UserId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(s => s.Subject)
+             .WithMany()
+             .HasForeignKey(s => s.SubjectId)
+             .IsRequired(false)
+             .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(s => new { s.UserId, s.LastMessageAt });
+        });
+
         builder.Entity<ChatMessage>(b =>
         {
             b.HasOne(m => m.User)
@@ -126,6 +144,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
              .HasForeignKey(m => m.SubjectId)
              .IsRequired(false)
              .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(m => m.Session)
+             .WithMany(s => s.Messages)
+             .HasForeignKey(m => m.SessionId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<RefreshToken>(b =>

@@ -16,7 +16,7 @@ public class ChatLogService
         _chat = chat;
     }
 
-    public async Task SaveMessageAsync(string userId, string role, string content,
+    public async Task SaveMessageAsync(string userId, int sessionId, string role, string content,
         string detectedSubject = "Unknown", string topic = "Unknown", int? schoolId = null)
     {
         int? subjectId = null;
@@ -30,6 +30,7 @@ public class ChatLogService
         _db.ChatMessages.Add(new ChatMessage
         {
             UserId    = userId,
+            SessionId = sessionId,
             Role      = role,
             Content   = content,
             SubjectId = subjectId,
@@ -37,12 +38,16 @@ public class ChatLogService
             Timestamp = DateTime.UtcNow,
         });
         await _db.SaveChangesAsync();
+
+        await _db.ChatSessions.Where(s => s.Id == sessionId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastMessageAt, DateTime.UtcNow));
     }
 
     public async Task<(string subject, string topic)> DetectSubjectTopicAsync(string question)
     {
         try
         {
+            question = InputSanitizer.SanitizeUserInput(question, maxLength: 2000);
             var response = await _chat.OneShotAsync(
                 "You are a concise classifier. The user message is a student question. " +
                 "Reply ONLY with a JSON object and nothing else: " +

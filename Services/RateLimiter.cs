@@ -85,34 +85,34 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
         using var db = dbFactory.CreateDbContext();
 
         var count = db.Database.SqlQuery<int>($"""
-            INSERT INTO rate_limit_entries (key, type, failure_count, next_attempt_after)
+            INSERT INTO "RateLimitEntries" ("Key", "Type", "FailureCount", "NextAttemptAfter")
             VALUES ({key}, {LoginType}, 1, NOW() + INTERVAL '3 seconds')
-            ON CONFLICT (key, type) DO UPDATE
-              SET failure_count      = rate_limit_entries.failure_count + 1,
-                  next_attempt_after = NOW() + (
-                    CASE LEAST(rate_limit_entries.failure_count + 1, 4)
+            ON CONFLICT ("Key", "Type") DO UPDATE
+              SET "FailureCount"      = "RateLimitEntries"."FailureCount" + 1,
+                  "NextAttemptAfter" = NOW() + (
+                    CASE LEAST("RateLimitEntries"."FailureCount" + 1, 4)
                       WHEN 1 THEN INTERVAL '3 seconds'
                       WHEN 2 THEN INTERVAL '10 seconds'
                       WHEN 3 THEN INTERVAL '30 seconds'
                       ELSE         INTERVAL '60 seconds'
                     END
                   )
-            RETURNING failure_count
-            """).First();
+            RETURNING "FailureCount"
+            """).AsEnumerable().First();
 
         // Secondary IP-based counter: 3 free attempts, then 3 s / 10 s / 30 s (capped).
         if (ip is not null)
         {
             var ipKey = "ip:" + ip;
             db.Database.ExecuteSql($"""
-                INSERT INTO rate_limit_entries (key, type, failure_count, next_attempt_after)
+                INSERT INTO "RateLimitEntries" ("Key", "Type", "FailureCount", "NextAttemptAfter")
                 VALUES ({ipKey}, {IpLoginType}, 1, NULL)
-                ON CONFLICT (key, type) DO UPDATE
-                  SET failure_count      = rate_limit_entries.failure_count + 1,
-                      next_attempt_after = CASE
-                        WHEN rate_limit_entries.failure_count + 1 < 3  THEN NULL
-                        WHEN rate_limit_entries.failure_count + 1 = 3  THEN NOW() + INTERVAL '3 seconds'
-                        WHEN rate_limit_entries.failure_count + 1 = 4  THEN NOW() + INTERVAL '10 seconds'
+                ON CONFLICT ("Key", "Type") DO UPDATE
+                  SET "FailureCount"     = "RateLimitEntries"."FailureCount" + 1,
+                      "NextAttemptAfter" = CASE
+                        WHEN "RateLimitEntries"."FailureCount" + 1 < 3  THEN NULL
+                        WHEN "RateLimitEntries"."FailureCount" + 1 = 3  THEN NOW() + INTERVAL '3 seconds'
+                        WHEN "RateLimitEntries"."FailureCount" + 1 = 4  THEN NOW() + INTERVAL '10 seconds'
                         ELSE                                                 NOW() + INTERVAL '30 seconds'
                       END
                 """);
@@ -144,14 +144,14 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
 
         // ON CONFLICT DO UPDATE WHERE only fires when the cooldown has passed; returns 0 rows when throttled.
         var claimed = db.Database.SqlQuery<int>($"""
-            INSERT INTO rate_limit_entries (key, type, last_request_at, failure_count)
+            INSERT INTO "RateLimitEntries" ("Key", "Type", "LastRequestAt", "FailureCount")
             VALUES ({key}, {PasswordResetType}, NOW(), 0)
-            ON CONFLICT (key, type) DO UPDATE
-              SET last_request_at = EXCLUDED.last_request_at
-              WHERE rate_limit_entries.last_request_at IS NULL
-                 OR rate_limit_entries.last_request_at < NOW() - {PasswordResetCooldown}
+            ON CONFLICT ("Key", "Type") DO UPDATE
+              SET "LastRequestAt" = EXCLUDED."LastRequestAt"
+              WHERE "RateLimitEntries"."LastRequestAt" IS NULL
+                 OR "RateLimitEntries"."LastRequestAt" < NOW() - {PasswordResetCooldown}
             RETURNING 1
-            """).FirstOrDefault();
+            """).AsEnumerable().FirstOrDefault();
 
         if (claimed != 0) return (false, TimeSpan.Zero);
 
@@ -177,13 +177,13 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
         using var db = dbFactory.CreateDbContext();
 
         var count = db.Database.SqlQuery<int>($"""
-            INSERT INTO rate_limit_entries (key, type, failure_count, last_request_at)
+            INSERT INTO "RateLimitEntries" ("Key", "Type", "FailureCount", "LastRequestAt")
             VALUES ({key}, {ResetCodeAttemptType}, 1, NOW())
-            ON CONFLICT (key, type) DO UPDATE
-              SET failure_count   = rate_limit_entries.failure_count + 1,
-                  last_request_at = NOW()
-            RETURNING failure_count
-            """).First();
+            ON CONFLICT ("Key", "Type") DO UPDATE
+              SET "FailureCount"   = "RateLimitEntries"."FailureCount" + 1,
+                  "LastRequestAt" = NOW()
+            RETURNING "FailureCount"
+            """).AsEnumerable().First();
 
         return (count > ResetCodeMaxAttempts, count);
     }
@@ -221,10 +221,10 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
         var key = email.ToLowerInvariant();
         using var db = dbFactory.CreateDbContext();
         db.Database.ExecuteSql($"""
-            INSERT INTO rate_limit_entries (key, type, last_request_at, failure_count)
+            INSERT INTO "RateLimitEntries" ("Key", "Type", "LastRequestAt", "FailureCount")
             VALUES ({key}, {RegistrationType}, NOW(), 0)
-            ON CONFLICT (key, type) DO UPDATE
-              SET last_request_at = EXCLUDED.last_request_at
+            ON CONFLICT ("Key", "Type") DO UPDATE
+              SET "LastRequestAt" = EXCLUDED."LastRequestAt"
             """);
     }
 
@@ -241,17 +241,17 @@ public class RateLimiter(IDbContextFactory<AppDbContext> dbFactory)
         using var db = dbFactory.CreateDbContext();
 
         var claimed = db.Database.SqlQuery<int>($"""
-            INSERT INTO rate_limit_entries (key, type, failure_count, last_request_at)
+            INSERT INTO "RateLimitEntries" ("Key", "Type", "FailureCount", "LastRequestAt")
             VALUES ({key}, {GeneralApiType}, 1, NOW())
-            ON CONFLICT (key, type) DO UPDATE
-              SET failure_count    = CASE
-                                       WHEN rate_limit_entries.last_request_at < NOW() - {GeneralApiWindow}
+            ON CONFLICT ("Key", "Type") DO UPDATE
+              SET "FailureCount"    = CASE
+                                       WHEN "RateLimitEntries"."LastRequestAt" < NOW() - {GeneralApiWindow}
                                        THEN 1
-                                       ELSE rate_limit_entries.failure_count + 1
+                                       ELSE "RateLimitEntries"."FailureCount" + 1
                                      END,
-                  last_request_at  = NOW()
-            RETURNING failure_count
-            """).First();
+                  "LastRequestAt"  = NOW()
+            RETURNING "FailureCount"
+            """).AsEnumerable().First();
 
         if (claimed <= GeneralApiMaxRequests) return false;
 

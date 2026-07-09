@@ -86,6 +86,10 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
+        // Without this, the default JwtSecurityTokenHandler remaps short claim names
+        // ("sub", "role") to long ClaimTypes URIs on the inbound principal, so every
+        // User.FindFirstValue("sub")/("role") call across the app silently returns null.
+        o.MapInboundClaims = false;
         o.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
@@ -125,6 +129,7 @@ builder.Services.AddScoped<MathOcrService>(sp =>
 // RAGService must be Scoped — _currentGrade and _temporaryChunks are per-request state.
 builder.Services.AddScoped<RAGService>();
 builder.Services.AddScoped<ChatLogService>();
+builder.Services.AddScoped<ChatSessionService>();
 builder.Services.AddScoped<TeacherDashboardService>();
 builder.Services.AddScoped<SchoolAdminService>();
 builder.Services.AddScoped<AdminUserService>();

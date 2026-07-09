@@ -7,6 +7,8 @@ public class ChatMessage
     public int Id { get; set; }
     public string UserId { get; set; } = "";
     public ApplicationUser? User { get; set; }
+    public int SessionId { get; set; }
+    public ChatSession? Session { get; set; }
     [MaxLength(20)]
     public string Role { get; set; } = "";        // "user" or "assistant"
     [MaxLength(20000)]

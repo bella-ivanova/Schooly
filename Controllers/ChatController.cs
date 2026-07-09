@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using StudyAssistant.Data;
+using StudyAssistant.Models;
 using StudyAssistant.Services;
 
 namespace StudyAssistant.Controllers;
@@ -12,21 +14,29 @@ namespace StudyAssistant.Controllers;
 [Route("api/chat")]
 public class ChatController : ControllerBase
 {
-    private readonly RAGService     _rag;
-    private readonly RateLimiter    _rateLimiter;
-    private readonly ChatLogService _chatLog;
+    private readonly RAGService         _rag;
+    private readonly RateLimiter        _rateLimiter;
+    private readonly ChatLogService     _chatLog;
+    private readonly ChatSessionService _chatSessions;
+    private readonly IUserRepository    _users;
 
-    public ChatController(RAGService rag, RateLimiter rateLimiter, ChatLogService chatLog)
+    public ChatController(RAGService rag, RateLimiter rateLimiter, ChatLogService chatLog,
+        ChatSessionService chatSessions, IUserRepository users)
     {
-        _rag         = rag;
-        _rateLimiter = rateLimiter;
-        _chatLog     = chatLog;
+        _rag          = rag;
+        _rateLimiter  = rateLimiter;
+        _chatLog      = chatLog;
+        _chatSessions = chatSessions;
+        _users        = users;
     }
 
     // POST /api/chat/message
     // Streams the LLM response token-by-token via Server-Sent Events.
-    // Each event: data: {"token":"..."}\n\n
-    // Final event: data: {"done":true,"scene":<json or null>}\n\n
+    // Frames, in order:
+    //   data: {"sessionId":N}\n\n                          — always first
+    //   data: {"token":"..."}\n\n                           — zero or more
+    //   data: {"done":true,"scene":<json or null>}\n\n
+    //   data: {"title":"...","subject":"..."}\n\n           — only on the session's first exchange
     [HttpPost("message")]
     [Authorize]
     public async Task SendMessage([FromBody] ChatMessageRequest req)
@@ -44,12 +54,37 @@ public class ChatController : ControllerBase
         var gradeStr = User.FindFirstValue("grade") ?? "0";
         var grade    = int.TryParse(gradeStr, out var g) ? g : 0;
 
+        ChatSession? session;
+        if (req.SessionId is int sid)
+        {
+            session = await _chatSessions.GetOwnedAsync(sid, userId);
+            if (session == null)
+            {
+                HttpContext.Response.StatusCode = 404;
+                HttpContext.Response.ContentType = "application/json";
+                await HttpContext.Response.WriteAsync("{\"error\":\"Session not found\"}");
+                return;
+            }
+        }
+        else
+        {
+            session = await _chatSessions.CreateAsync(userId);
+        }
+
+        var isFirstExchange = session.Title == null;
+
         _rag.SetGrade(grade);
+        var priorTurns = await _chatSessions.GetRecentTurnsAsync(session.Id);
+        _rag.SeedHistory(priorTurns);
 
         HttpContext.Response.StatusCode  = 200;
         HttpContext.Response.ContentType = "text/event-stream";
         HttpContext.Response.Headers.CacheControl = "no-cache";
         HttpContext.Response.Headers["X-Accel-Buffering"] = "no";
+
+        var sessionPayload = JsonSerializer.Serialize(new { sessionId = session.Id });
+        await HttpContext.Response.WriteAsync($"data: {sessionPayload}\n\n");
+        await HttpContext.Response.Body.FlushAsync();
 
         var fullResponse = new StringBuilder();
 
@@ -68,8 +103,64 @@ public class ChatController : ControllerBase
 
         var answer = fullResponse.ToString();
         var (subject, topic) = await _chatLog.DetectSubjectTopicAsync(req.Message);
-        await _chatLog.SaveMessageAsync(userId, "user",      req.Message, subject, topic);
-        await _chatLog.SaveMessageAsync(userId, "assistant", answer,      subject, topic);
+
+        var schoolId = await _chatSessions.ResolveSchoolIdAsync(userId);
+
+        await _chatLog.SaveMessageAsync(userId, session.Id, "user",      req.Message, subject, topic, schoolId);
+        await _chatLog.SaveMessageAsync(userId, session.Id, "assistant", answer,      subject, topic, schoolId);
+
+        if (isFirstExchange)
+        {
+            var title = await _chatSessions.GenerateTitleAsync(req.Message, answer);
+            await _chatSessions.SetFolderAndTitleOnceAsync(session.Id, subject, schoolId, title ?? "New chat");
+
+            var metaPayload = JsonSerializer.Serialize(new { title = title ?? "New chat", subject });
+            await HttpContext.Response.WriteAsync($"data: {metaPayload}\n\n");
+            await HttpContext.Response.Body.FlushAsync();
+        }
+    }
+
+    // GET /api/chat/sessions?subject=Math
+    // Lists the caller's chat sessions, most recent first. Omit "subject" (or "All")
+    // to list every session regardless of folder.
+    [HttpGet("sessions")]
+    [Authorize]
+    public async Task<IActionResult> ListSessions([FromQuery] string? subject = null)
+    {
+        var userId = User.FindFirstValue("sub") ?? "";
+        var sessions = await _chatSessions.ListAsync(userId, subject);
+
+        var response = sessions.Select(s => new
+        {
+            id            = s.Id,
+            title         = s.Title,
+            subject       = s.Subject?.Name,
+            createdAt     = s.CreatedAt,
+            lastMessageAt = s.LastMessageAt
+        });
+        return Ok(response);
+    }
+
+    // GET /api/chat/sessions/{id}/messages
+    [HttpGet("sessions/{id:int}/messages")]
+    [Authorize]
+    public async Task<IActionResult> GetSessionMessages(int id)
+    {
+        var userId = User.FindFirstValue("sub") ?? "";
+        var session = await _chatSessions.GetOwnedAsync(id, userId);
+        if (session == null)
+            return NotFound(new { error = "Session not found" });
+
+        var messages = await _chatSessions.GetTranscriptAsync(id);
+        var response = messages.Select(m => new
+        {
+            role      = m.Role,
+            content   = m.Content,
+            subject   = m.Subject?.Name,
+            topic     = m.Topic,
+            timestamp = m.Timestamp
+        });
+        return Ok(response);
     }
 
     // POST /api/chat/upload
@@ -111,4 +202,4 @@ public class ChatController : ControllerBase
     }
 }
 
-public record ChatMessageRequest([Required] string Message);
+public record ChatMessageRequest([Required] string Message, int? SessionId = null);

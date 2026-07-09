@@ -23,7 +23,7 @@
 ```
 Controllers/        HTTP endpoints only — no business logic, no DB access
   AuthController.cs             /api/auth — login, register, logout, token refresh, password reset
-  ChatController.cs             /api/chat/message (SSE streaming) and /api/chat/upload (session PDF ingest)
+  ChatController.cs             /api/chat/message (SSE streaming, session-scoped multi-turn chat), /api/chat/upload (session PDF ingest), /api/chat/sessions (list/filter by subject folder), /api/chat/sessions/{id}/messages (transcript)
   TeacherDashboardController.cs /api/teacher — teacher class list, struggle topics, student activity
   SchoolAdminController.cs      /api/admin — school admin class, subject, and assignment management (SchoolAdmin role only)
   GlobalAdminController.cs      /api/global-admin — global admin school, class, subject, user, and role management across all schools (Admin role only), plus curriculum file list/upload/replace/delete per grade
@@ -33,12 +33,13 @@ Services/           All business logic and external integrations
   IEmailService.cs       Email abstraction interface (SmtpEmailService implements it via MailKit)
   SmtpEmailService.cs    SMTP email delivery — sends 6-digit password reset codes
   RateLimiter.cs         Brute-force protection — singleton, database-backed, survives restarts
-  IChatService.cs        LLM abstraction interface (OllamaChatService and ZhipuAIChatService implement it)
-  RAGService.cs          Retrieval + LLM orchestration (embeds query → searches Qdrant → calls LLM); `AskStreamAsync` is the HTTP-facing entry point that yields tokens, `Ask` is the CLI entry point
+  IChatService.cs        LLM abstraction interface (OllamaChatService and ZhipuAIChatService implement it); `SeedHistory` replays prior session turns into per-request in-memory state before the next call
+  RAGService.cs          Retrieval + LLM orchestration (embeds query → searches Qdrant → calls LLM); `AskStreamAsync` is the HTTP-facing entry point that yields tokens, `Ask` is the CLI entry point; `SeedHistory` passes through to `IChatService` for multi-turn session context
   EmbeddingService.cs    Text → 768-dim vector via Ollama nomic-embed-text
   QdrantService.cs       Vector DB CRUD (upsert, search with grade filter, delete by file)
   PDFLoader.cs           PDF → text via triple-method fallback (static utility)
-  ChatLogService.cs      Chat message persistence + subject/topic tagging via LLM classification
+  ChatLogService.cs      Chat message persistence (session-scoped via `sessionId`) + subject/topic tagging via LLM classification; sanitises input before prompt interpolation
+  ChatSessionService.cs  Chat session lifecycle: creation, ownership checks, multi-turn history replay (`GetRecentTurnsAsync`), AI-generated titles (`GenerateTitleAsync`, one-shot LLM call), and subject-folder assignment locked from the session's first exchange
   StereometryService.cs  3D geometry JSON schema definition + <STEREO> block extraction from LLM output
   ExamService.cs         Mock exam generation from curriculum material via RAG
   AdminUserService.cs    Global admin operations (school, class, subject, teacher, user management across all schools); typed methods back `GlobalAdminController`, parameterless wrappers back the CLI menu; console wrappers resolve school names to School entity IDs internally; also wraps `RAGService`'s curriculum file list/upload/delete methods so `GlobalAdminController` never depends on `RAGService` directly
@@ -47,6 +48,7 @@ Services/           All business logic and external integrations
   TempFileManager.cs     Tracks temp HTML files for cleanup on process exit (static utility)
 Models/             EF Core entity definitions and enums — no business logic
   School.cs is the canonical school entity (Id, Name, CreatedAt). ApplicationUser, Class, and Subject each hold a SchoolId FK — never a plain string school name.
+  ChatSession.cs groups ChatMessage rows into a conversation (Title, SubjectId "folder", LastMessageAt). ChatMessage.SessionId is a required FK to ChatSession — every chat message belongs to exactly one session.
 Data/               DbContext, migrations, IUserRepository interface and UserRepository implementation
   Migrations/       EF Core migration files — never hand-edit; use dotnet ef migrations add
 Database/           Curriculum PDFs organised as Database/DataPdf/Grade{N}/{Subject}/

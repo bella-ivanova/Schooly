@@ -34,6 +34,12 @@ public class RAGService
         Console.WriteLine($"Grade set to {grade}.");
     }
 
+    // Seeds prior conversation turns into the underlying chat service before the next
+    // AskStreamAsync call, so a resumed session has real multi-turn context. Must be
+    // called before AskStreamAsync in the same request — IChatService's history is
+    // Scoped and empty at the start of every HTTP request.
+    public void SeedHistory(IEnumerable<(string Role, string Content)> turns) => _chat.SeedHistory(turns);
+
     // Reads PDFs from Database/DataPdf/Grade{grade}/{Subject}/ subfolders.
     // Each subfolder name becomes the subject tag for its chunks.
     // Falls back to scanning the grade root for PDFs with no subject tag.
