@@ -115,7 +115,7 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [x] `POST /api/chat/upload` accepts a PDF, ingests it into a session-scoped temporary store, and affects all subsequent `/api/chat/message` calls in that session
 - [x] Every chat exchange writes two rows to `chat_messages` — one with `role = "user"`, one with `role = "assistant"` — both with a populated `subject_id` and `topic`
 - [x] The streaming response reaches the client in real time (tokens visible as they are generated, not batched at the end)
-- [ ] Token expiry during a session is handled transparently via refresh token exchange on the client side
+- [x] Token expiry during a session is handled transparently via refresh token exchange on the client side — implemented in `frontend/src/api/client.ts`; the 401→refresh→retry-once flow and its concurrent-request dedup were verified against the real endpoints (login/refresh response shapes match exactly), but not yet observed inside a live browser session with an actually-expired token
 - [x] `GET /api/teacher/classes` requires a valid JWT with `role = Teacher` or `SchoolAdmin`; returns class list with subjects and student counts
 - [x] `GET /api/teacher/classes/{classId}/struggles?days=30` returns per-subject topic frequency for the teacher's own classes only; returns 404 for classes not assigned to the caller
 - [x] `GET /api/teacher/activity?days=30` returns top-5 most active students per class; `days` is clamped to 1–365
@@ -197,9 +197,9 @@ The behavioral specification below assumes a working local LLM/OCR pipeline. Bef
 
 ## Frontend Integration Readiness
 
-The backend behavioral spec above is implemented; the frontend itself has not been started (see `README.md`). Before/during frontend work, the following need attention:
+The backend behavioral spec above is implemented. A frontend scaffold now exists at `frontend/` (Vue 3 + Vite + TypeScript, see `README.md`'s "Frontend Integration To-Do") covering the API client plus login and registration screens (`POST /api/auth/login` and `POST /api/auth/register` are both exercised end-to-end from the UI); chat UI, dashboards, and most other screens are not yet built. Remaining items to attend to:
 
-**Token refresh is a frontend requirement, not yet built anywhere.** The Acceptance Criteria above has one open item: "Token expiry during a session is handled transparently via refresh token exchange on the client side." The backend contract already exists — `POST /api/auth/refresh` takes `{ refreshToken }` and returns `{ token, refreshToken }` — but no client implements the silent 401 → refresh → retry flow yet, because no client exists. This is the first thing the frontend's API layer needs.
+**Token refresh is implemented.** `POST /api/auth/refresh` (`{ refreshToken }` → `{ token, refreshToken }`) is now consumed by `frontend/src/api/client.ts`, which triggers it automatically on any `401`, retries the original request once, and dedups concurrent 401s behind a single in-flight refresh call so a burst of requests doesn't fire multiple simultaneous `/refresh` calls. Force-logout on a failed refresh is also implemented.
 
 **Chat SSE frame contract** (`POST /api/chat/message`, `Content-Type: text/event-stream`), documented in code at `Controllers/ChatController.cs` above `SendMessage`, reproduced here so it doesn't require reading the controller:
 - `data: {"sessionId":N}` — always first

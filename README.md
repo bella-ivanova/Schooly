@@ -29,9 +29,10 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Global admin HTTP endpoints: `POST /api/global-admin/schools`, `GET /api/global-admin/users`, `GET /api/global-admin/classes`, `POST /api/global-admin/classes`, `DELETE /api/global-admin/classes/{classId}`, `POST /api/global-admin/subjects`, `DELETE /api/global-admin/subjects/{subjectId}`, `POST /api/global-admin/classes/{classId}/students`, `POST /api/global-admin/classes/{classId}/teachers`, `PUT /api/global-admin/users/{userId}/role` — requires Admin JWT; endpoints that target a school accept `schoolId: int` (not a school name string)
 - Curriculum file management HTTP endpoints: `GET /api/global-admin/curriculum/grades/{grade}/files`, `POST /api/global-admin/curriculum/grades/{grade}/files` (multipart upload, 409 on duplicate), `PUT /api/global-admin/curriculum/grades/{grade}/files/{fileKey}` (replace/re-ingest), `DELETE /api/global-admin/curriculum/grades/{grade}/files/{fileKey}` — requires Admin JWT; curriculum is grade-wide, not school-specific
 - Student HTTP endpoints: `POST /api/student/practice-questions`, `GET /api/student/weak-spots?days=N`, `GET /api/student/history?limit=N`, `POST /api/student/exam` — requires Student JWT
+- Frontend scaffold: Vue 3 + Vite + TypeScript app at `frontend/` (in this repo, not a separate one). Typed API client (`frontend/src/api/`) covering login/register/refresh/logout, a silent refresh-on-401 flow with concurrent-request dedup (`client.ts`), and a typed SSE frame parser + consumer for `POST /api/chat/message` (`sse.ts`/`chat.ts`, not yet wired to any chat UI). Pinia auth store (`frontend/src/stores/auth.ts`) persists the JWT/refresh token/user to `localStorage`. Two real screens exist: login (`frontend/src/views/LoginView.vue`) and registration (`RegisterView.vue`). Login has no role selector — the backend has no role field on `POST /api/auth/login` and derives role from the authenticated user's JWT; role selection lives on the register screen instead (a Student/Teacher toggle, `frontend/src/components/register/RoleTabs.vue`), which is where `POST /api/auth/register`'s required `role` field is actually collected, along with grade (student) or a teacher registration code (teacher). The two screens link to each other. Styled from design tokens (colors/fonts/radii/shadows) extracted from a hand-made mockup at `~/Downloads/Schooly UI Mockups (standalone).html` — see `CLAUDE.md`'s Frontend Integration Notes for the token values and mockup screen inventory.
 
 ### Not Started
-- Frontend application (Vue/React, separate repository, expected at `localhost:3000` or `:5173`)
+- Frontend: chat UI, per-role dashboards (Student/Teacher/SchoolAdmin/Admin), password-reset screens, the `<STEREO>` 3D viewer, RAG source-citation UI, and full per-role router guards
 
 ## Local Environment Prerequisites
 
@@ -52,15 +53,15 @@ Before chat, RAG, or math-OCR endpoints will work, the following must be running
 
 ## Frontend Integration To-Do
 
-The backend is ready to connect to; the frontend project itself doesn't exist yet. Before/while building it:
+The frontend now exists at `frontend/` (Vue 3 + Vite + TypeScript, in this repo). Status of each step:
 
 1. ~~Pin down the local API port.~~ Done — `Properties/launchSettings.json` fixes it: `dotnet run` serves the API at `http://localhost:5080`. HTTP-only is intentional: `Program.cs` calls `app.UseHttpsRedirection()` unconditionally, but that middleware silently no-ops when no HTTPS URL is bound, so local dev stays plain HTTP with no redirect and no dev-cert trust step required. (An HTTPS profile can be added later for whoever sets up production hosting.)
-2. **Scaffold the frontend project** (React or Vue), with its dev server running on `localhost:3000` or `:5173` — both are already allowed in `appsettings.Local.json`'s `Cors:AllowedOrigins`.
-3. **Build the API client**, covering:
-   - JWT storage and `Authorization: Bearer` attachment
-   - Silent refresh-token exchange on 401 (`POST /api/auth/refresh`) — the one still-open item in `PRD.md`'s Acceptance Criteria
-   - A POST-capable SSE consumer for `POST /api/chat/message` (it streams a response body over POST, so the browser's native `EventSource` — GET-only — doesn't apply; use `fetch` + `ReadableStream`). Frame contract is documented in `PRD.md`'s "Frontend Integration Readiness" section and inline in `Controllers/ChatController.cs`.
-   - Role-aware routing for the four `UserRole`s (Student, Teacher, SchoolAdmin, Admin) against their respective endpoint namespaces (`/api/student`, `/api/teacher`, `/api/admin`, `/api/global-admin`)
+2. ~~Scaffold the frontend project.~~ Done — `npm create vite@latest frontend -- --template vue-ts`, dev server on `:5173` (`npm run dev` from `frontend/`), already covered by `appsettings.Local.json`'s `Cors:AllowedOrigins`.
+3. **API client** — mostly done:
+   - ~~JWT storage and `Authorization: Bearer` attachment~~ — `frontend/src/api/tokenStorage.ts` + `client.ts`
+   - ~~Silent refresh-token exchange on 401~~ — `frontend/src/api/client.ts`, with a module-level promise dedup so concurrent 401s trigger exactly one `POST /api/auth/refresh` call, not one per request
+   - ~~POST-capable SSE consumer for `POST /api/chat/message`~~ — `frontend/src/api/sse.ts` (generic frame parser) + `chat.ts` (typed `streamChatMessage()`), matching the frame contract in `PRD.md`'s "Frontend Integration Readiness" section; not yet wired to any chat UI
+   - **Still open**: role-aware routing for the four `UserRole`s against their respective endpoint namespaces (`/api/student`, `/api/teacher`, `/api/admin`, `/api/global-admin`) — the router currently only guards authenticated-vs-not, not per-role
 4. **Set the production CORS origin** via `Cors__AllowedOrigins__0` before deploying the frontend anywhere other than localhost — `appsettings.json` still holds a placeholder.
 5. **Decide how the frontend team gets the API contract** — Swagger/OpenAPI is intentionally out of scope for this project, so there's no generated spec. Either hand off `PRD.md`'s Behavioral Specification directly or produce a separate collection/doc.
 6. Use the "Local Environment Prerequisites" section above as the shared checklist for getting a fully working local stack (backend + Ollama + Qdrant + Pix2Text) before testing the frontend end-to-end.

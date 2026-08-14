@@ -17,6 +17,10 @@
 | PDFtoImage + Tesseract | 5.2.0 | Fallback OCR for image-heavy or scanned PDFs |
 | Pix2Text (Docker, :8503) | — | Math OCR producing LaTeX output — required because Bulgarian math textbooks contain dense formula notation |
 | SkiaSharp | 3.119.2 | Image manipulation in the OCR pipeline; macOS native assets are included because dev happens on Mac |
+| Vue 3 + Vite + TypeScript | 3.* / 8.* / 6.* | Frontend framework (`frontend/`), scaffolded via `npm create vite@latest frontend -- --template vue-ts`; chosen over React per project decision |
+| Pinia | 4.* | Frontend state management — auth state (JWT, refresh token, user, role) needs to be read from many unrelated places (router guards, every API call, future stores) |
+| vue-router | 4.* | Frontend routing; `beforeEach` guard redirects unauthenticated requests to `/login` |
+| @fontsource/fredoka, @fontsource/nunito | 5.* | Self-hosted fonts matching the hand-designed mockup (`Fredoka` for headings, `Nunito` for body) — no external Google Fonts network call at runtime |
 
 ## Directory Structure
 
@@ -69,6 +73,21 @@ tessdata-main/      Vendored Tesseract `.traineddata` language files used by the
 docker-compose.yml, Dockerfile.pix2text, pix2text_server.py  Local Qdrant/Postgres/Pix2Text container setup — `docker compose up -d pix2text` starts the math-OCR server
 storage/            Qdrant local vector store data — never commit to git
 snapshots/          Temporary HTML visualisation files — never commit to git
+frontend/           Vue 3 + Vite + TypeScript SPA — dev server on :5173 (npm run dev), not a separate repo
+  src/api/            Typed API client — no UI framework imports here
+    client.ts             apiFetch<T>(): auth header attach, 401→refresh→retry-once with concurrent-request dedup, {error}/{errors} → ApiError normalisation
+    tokenStorage.ts        localStorage wrapper for JWT/refresh token/user (XSS trade-off vs httpOnly cookies accepted for now — see Frontend Integration Notes)
+    auth.ts                login/register/refresh/logout/forgot-password/verify-reset-code/reset-password — typed wrappers over apiFetch
+    sse.ts                 parseSseStream(): generic data:-frame reader over a fetch ReadableStream, no knowledge of payload shape
+    chat.ts                streamChatMessage(): SSE consumer for POST /api/chat/message; not yet wired to any UI
+    types.ts                shared request/response/error types, including the ChatSseFrame discriminated union
+  src/stores/auth.ts   Pinia store: {user, token, isAuthenticated, role}; login()/logout(); hydrates from tokenStorage on creation
+  src/router/index.ts  routes (/login, /register, /app) + beforeEach guard; /login and /register are the only public routes, no per-role guards yet
+  src/styles/          tokens.css (design tokens, see Frontend Integration Notes) + base.css (resets, font wiring)
+  src/components/shared/Field.vue  labeled input wrapper, reused by both login and register forms
+  src/components/login/SignInForm.vue    no role selector (see Frontend Integration Notes); links to /register
+  src/components/register/RoleTabs.vue, RegisterForm.vue   role toggle is functional here (unlike the deleted login-screen version) since RegisterRequest.role is required; links back to /login
+  src/views/  LoginView.vue, RegisterView.vue, PlaceholderHomeView.vue — the only real screens so far
 ```
 
 ## Coding Conventions
@@ -138,6 +157,9 @@ snapshots/          Temporary HTML visualisation files — never commit to git
 
 - `Properties/launchSettings.json` pins local dev to `http://localhost:5080` (`dotnet run` reads this). It's HTTP-only on purpose: `Program.cs` calls `app.UseHttpsRedirection()` unconditionally, but that middleware silently no-ops (logs a warning, passes the request through) when Kestrel has no bound HTTPS URL — so local dev stays plain HTTP with no redirect and no dev-cert trust step needed. Don't add an HTTPS `applicationUrl` to the local profile without also updating frontend/CORS expectations, since doing so activates the redirect.
 - Swagger/OpenAPI is intentionally absent (see Explicitly Prohibited above) — there is no generated API contract. The frontend contract lives in `PRD.md`'s Behavioral Specification (endpoint-by-endpoint request/response behavior) and, for the chat SSE stream specifically, in the frame-format comment above `ChatController.SendMessage`. Point frontend developers there instead of expecting generated docs.
+- **Login has no role selector; registration does.** `LoginRequest` has no role field — the backend derives role from the authenticated user's JWT (`role` claim, PascalCase: `Student`/`Teacher`/`SchoolAdmin`/`Admin`) after credentials are verified, not from anything the client sends. Don't reintroduce a role toggle on the login form. `RegisterView.vue`/`RegisterForm.vue` collect `POST /api/auth/register`'s required `role: "student"|"teacher"` field via `components/register/RoleTabs.vue`, plus grade (shown for students) or a teacher registration code (shown for teachers, matched server-side against `TeacherRegistrationCode` config via `CryptographicOperations.FixedTimeEquals`). Both auth screens share `components/shared/Field.vue`.
+- **Design tokens** for `frontend/src/styles/tokens.css` were extracted (by regex, since the source is a minified/bundled single-file React export) from a hand-made mockup at `~/Downloads/Schooly UI Mockups (standalone).html`. Palette: cream/paper base (`--paper: #FBF6EC`, `--cream: #F3E7CF`), green accents (`--green: #5E8A63`, `--green-br: #6FA873`), ink text (`--ink: #2B2D2B`); fonts `Fredoka` (headings) + `Nunito` (body) via `@fontsource`. The mockup's component names (`DashboardA/B`, `ChatA/B`, `Viewer3D`, `RetrievedChunk`/`SourceCard`, `LeafBuddy` mascot, mobile variants) indicate the intended screen inventory for later frontend steps — open the mockup file directly in a browser to reference exact layouts, since it couldn't be statically parsed with full fidelity. Note: the mockup contains the string `"student / parent / teacher"`, suggesting a parent role that does **not** exist in the backend's `UserRole` enum — don't build UI that assumes one exists without a corresponding backend change.
+- **Token storage is `localStorage`** (`frontend/src/api/tokenStorage.ts`), a known accepted trade-off: it's XSS-exposed, but httpOnly cookies would require backend changes (cookie issuance, CSRF handling) out of scope for the current frontend step.
 
 ## Definition of Done
 

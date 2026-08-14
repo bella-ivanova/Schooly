@@ -217,3 +217,8 @@
 /Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/BouncyCastle.Cryptography.dll
 /Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/MailKit.dll
 /Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/MimeKit.dll
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/frontend/package-lock.json
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/frontend/package.json
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/frontend/tsconfig.app.json
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/frontend/tsconfig.json
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/frontend/tsconfig.node.json
