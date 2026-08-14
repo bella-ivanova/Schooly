@@ -26,7 +26,8 @@ public class PracticeQuestionService
         try
         {
             var response = await _chat.OneShotAsync(
-                "You are a school tutor generating practice questions.",
+                "You are a school tutor generating practice questions. " +
+                "Generate the questions in the same language as the student's original question.",
                 userPrompt);
 
             var json = response.Trim();

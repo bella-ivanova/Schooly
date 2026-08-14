@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import type { ApiError } from '../../api/types'
 import Field from '../shared/Field.vue'
+import AuthShell from '../shared/AuthShell.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -21,7 +22,7 @@ async function handleSubmit() {
     await router.push('/app')
   } catch (err) {
     const apiError = err as ApiError
-    errorMessage.value = apiError.message ?? 'Възникна грешка. Опитайте отново.'
+    errorMessage.value = apiError.message ?? 'Something went wrong. Please try again.'
   } finally {
     isSubmitting.value = false
   }
@@ -29,54 +30,56 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <form class="sign-in-card" @submit.prevent="handleSubmit">
-    <h1 class="title">Здравей отново</h1>
-    <p class="subtitle">Влез в своя акаунт в Schooly</p>
+  <AuthShell
+    eyebrow="Welcome back"
+    heading="Sign in to Schooly"
+    brand-heading="Learn from your own textbooks."
+    brand-body="A tutor that only teaches what's in your curriculum — grounded answers, practice, and mock exams for grades 1–12."
+    brand-caption="Bulgarian curriculum · Grades 1–12"
+  >
+    <form class="sign-in-form" @submit.prevent="handleSubmit">
+      <Field
+        v-model="usernameOrEmail"
+        label="Email or username"
+        placeholder="maria.k"
+      />
+      <Field
+        v-model="password"
+        label="Password"
+        type="password"
+        placeholder="••••••••"
+        revealable
+      >
+        <template #label-end>
+          <RouterLink to="/forgot-password" class="forgot-link">Forgot?</RouterLink>
+        </template>
+      </Field>
 
-    <Field
-      v-model="usernameOrEmail"
-      label="Потребител или имейл"
-      placeholder="ivan.ivanov"
-    />
-    <Field
-      v-model="password"
-      label="Парола"
-      type="password"
-      placeholder="••••••••"
-    />
+      <p v-if="errorMessage" class="error-banner">{{ errorMessage }}</p>
 
-    <p v-if="errorMessage" class="error-banner">{{ errorMessage }}</p>
+      <button type="submit" class="submit-btn" :disabled="isSubmitting">
+        {{ isSubmitting ? 'Signing in…' : 'Sign in →' }}
+      </button>
 
-    <button type="submit" class="submit-btn" :disabled="isSubmitting">
-      {{ isSubmitting ? 'Влизане…' : 'Влез' }}
-    </button>
-
-    <RouterLink to="/register" class="register-link">Нямаш акаунт? Регистрирай се</RouterLink>
-  </form>
+      <RouterLink to="/register" class="register-link">New to Schooly? Create account</RouterLink>
+    </form>
+  </AuthShell>
 </template>
 
 <style scoped>
-.sign-in-card {
+.sign-in-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: var(--card);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow-lg);
-  padding: 36px;
-  width: 100%;
-  max-width: 380px;
 }
 
-.title {
-  font-size: 26px;
-  color: var(--ink);
+.forgot-link {
+  color: var(--green-deep);
+  text-decoration: none;
 }
 
-.subtitle {
-  margin: -8px 0 4px;
-  color: var(--muted);
-  font-size: 14px;
+.forgot-link:hover {
+  text-decoration: underline;
 }
 
 .error-banner {

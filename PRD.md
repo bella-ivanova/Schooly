@@ -9,6 +9,8 @@
 **When a student sends a message:**
 The system embeds the query, searches Qdrant filtered to grades 1 through N (where N is the student's enrolled grade), and injects the top-k matching curriculum chunks as context before calling the LLM. The LLM is instructed to answer only from the provided context.
 
+**Response language:** The LLM is instructed to answer in the same language the student used in their question, not a fixed language — this applies to chat answers, mock exams (`POST /api/student/exam`), and practice questions (`POST /api/student/practice-questions`). The app UI itself is in English regardless; response language is independent of UI language.
+
 **When the LLM response contains a `<STEREO>…</STEREO>` block:**
 The system extracts the JSON scene description and returns it as a structured `scene` field alongside the text response so the frontend can render an interactive 3D geometry visualisation.
 
@@ -197,7 +199,7 @@ The behavioral specification below assumes a working local LLM/OCR pipeline. Bef
 
 ## Frontend Integration Readiness
 
-The backend behavioral spec above is implemented. A frontend scaffold now exists at `frontend/` (Vue 3 + Vite + TypeScript, see `README.md`'s "Frontend Integration To-Do") covering the API client plus login and registration screens (`POST /api/auth/login` and `POST /api/auth/register` are both exercised end-to-end from the UI); chat UI, dashboards, and most other screens are not yet built. Remaining items to attend to:
+The backend behavioral spec above is implemented. A frontend scaffold now exists at `frontend/` (Vue 3 + Vite + TypeScript, see `README.md`'s "Frontend Integration To-Do") covering the API client plus login, registration, and forgot-password screens — `POST /api/auth/login`, `POST /api/auth/register`, and the full `forgot-password`/`verify-reset-code`/`reset-password` sequence (including its 404/429/400 error responses) are all exercised end-to-end from the UI; chat UI, dashboards, and most other screens are not yet built. Remaining items to attend to:
 
 **Token refresh is implemented.** `POST /api/auth/refresh` (`{ refreshToken }` → `{ token, refreshToken }`) is now consumed by `frontend/src/api/client.ts`, which triggers it automatically on any `401`, retries the original request once, and dedups concurrent 401s behind a single in-flight refresh call so a burst of requests doesn't fire multiple simultaneous `/refresh` calls. Force-logout on a failed refresh is also implemented.
 

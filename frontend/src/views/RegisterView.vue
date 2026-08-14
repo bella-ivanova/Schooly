@@ -3,17 +3,7 @@ import RegisterForm from '../components/register/RegisterForm.vue'
 </script>
 
 <template>
-  <main class="register-page">
+  <main>
     <RegisterForm />
   </main>
 </template>
-
-<style scoped>
-.register-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-</style>

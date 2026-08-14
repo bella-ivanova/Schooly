@@ -17,7 +17,7 @@ defineEmits<{
       :class="{ active: modelValue === 'student' }"
       @click="$emit('update:modelValue', 'student')"
     >
-      Ученик
+      Student
     </button>
     <button
       type="button"
@@ -25,7 +25,7 @@ defineEmits<{
       :class="{ active: modelValue === 'teacher' }"
       @click="$emit('update:modelValue', 'teacher')"
     >
-      Учител
+      Teacher
     </button>
   </div>
 </template>

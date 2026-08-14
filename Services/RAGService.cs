@@ -315,7 +315,8 @@ public class RAGService
             "The student's problem may be a new example — use the textbook method with the student's numbers.\n" +
             "Students know all prerequisites for concepts present in their grade material.\n" +
             "Keep simple answers short; provide detailed explanations for complex topics.\n" +
-            "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.";
+            "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.\n" +
+            "Respond in the same language the student used in their question.";
 
         // User-role: textbook context as reference data, then the student's question clearly delimited.
         var ragUserContent =
@@ -350,7 +351,8 @@ public class RAGService
                 "The student's problem may be a new example — use the textbook method with the student's numbers.\n" +
                 "Students know all prerequisites for concepts present in their grade material.\n" +
                 "Keep simple answers short; provide detailed explanations for complex topics.\n" +
-                "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.";
+                "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.\n" +
+                "Respond in the same language the student used in their question.";
 
             apiMsg =
                 "--- Textbook Material ---\n" +

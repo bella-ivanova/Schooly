@@ -26,7 +26,7 @@ public class ExamService
             "- 3 multiple choice questions (with 4 options each, mark the correct one with *)\n" +
             "- 2 short answer questions\n" +
             "- 1 problem-solving question with full working space\n" +
-            "Format clearly with numbered sections. Write in Bulgarian.";
+            "Format clearly with numbered sections. Respond in the same language as the topic given below.";
 
         var userPrompt =
             $"Grade: {grade}\n" +
