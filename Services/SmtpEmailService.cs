@@ -41,6 +41,11 @@ public class SmtpEmailService : IEmailService
         message.Body = body.ToMessageBody();
 
         using var client = new SmtpClient();
+        // Some local networks/VPNs block outbound OCSP/CRL lookups, which makes .NET's
+        // TLS stack reject an otherwise-valid certificate with an "incomplete certificate
+        // revocation check" SslHandshakeException. Skip the revocation check rather than
+        // the chain/trust validation itself.
+        client.CheckCertificateRevocation = false;
         await client.ConnectAsync(_host, _port, SecureSocketOptions.StartTls);
         await client.AuthenticateAsync(_username, _password);
         await client.SendAsync(message);
