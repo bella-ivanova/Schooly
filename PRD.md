@@ -106,6 +106,8 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 
 ## Acceptance Criteria
 
+*Checked items reflect that the route, role guard, and described behavior exist in the code as written (controller + service inspection). They are not a record of a fresh manual end-to-end run against a live server — see Definition of Done in `CLAUDE.md` for what a full sign-off requires.*
+
 - [x] `POST /api/chat/message` exists, requires a valid JWT, and streams the LLM response
 - [x] RAG context is grade-filtered: a grade-8 student never receives chunks from grade-9 or higher material
 - [x] When the LLM output contains a `<STEREO>` block, the response includes a structured `scene` field with the extracted JSON; the text field contains the response with the block removed
@@ -118,28 +120,28 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [x] `GET /api/teacher/classes/{classId}/struggles?days=30` returns per-subject topic frequency for the teacher's own classes only; returns 404 for classes not assigned to the caller
 - [x] `GET /api/teacher/activity?days=30` returns top-5 most active students per class; `days` is clamped to 1–365
 - [x] Student role (or any non-teacher role) JWT receives 403 on all three teacher endpoints; unauthenticated requests receive 401
-- [ ] `GET /api/admin/classes` requires a valid JWT with `role = SchoolAdmin`; returns class list with homeroom teacher username and student count
-- [ ] `POST /api/admin/classes` creates a class scoped to the caller's school; optional homeroom teacher must belong to the same school
-- [ ] `PUT /api/admin/classes/{classId}/homeroom` sets the homeroom teacher; rejects teachers from other schools
-- [ ] `POST /api/admin/classes/{classId}/students` assigns a student to a class; rejects students who belong to a different school
-- [ ] `DELETE /api/admin/classes/{classId}/students/{userId}` removes the student from their class
-- [ ] `POST /api/admin/classes/{classId}/teachers` assigns a teacher to a class for a subject; auto-creates the subject if needed
-- [ ] `POST /api/admin/teachers/{teacherId}/subjects/{subjectId}` adds a subject to a teacher's list; rejects duplicates and cross-school subjects
-- [ ] `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}` removes a subject from a teacher's list
-- [ ] `GET /api/admin/subjects` returns all subjects for the caller's school
-- [ ] `GET /api/admin/users` returns all users in the caller's school with role, grade, and class info
-- [ ] Non-SchoolAdmin JWT receives 403 on all `/api/admin` endpoints; unauthenticated requests receive 401
-- [ ] `POST /api/global-admin/schools` registers a new School entity (`{ name: string }`); rejects duplicate names
-- [ ] `GET /api/global-admin/users` returns all users across all schools with id, username, fullName, role, grade, and class name
-- [ ] `GET /api/global-admin/classes` returns all classes across all schools with id, name, homeroom teacher username, and student count
-- [ ] `POST /api/global-admin/classes` creates a class for any school — body: `{ schoolId: int, name: string, homeroomTeacherId?: string }`
-- [ ] `DELETE /api/global-admin/classes/{classId}` deletes a class and unlinks all its students
-- [ ] `POST /api/global-admin/subjects` creates a subject for a given school — body: `{ schoolId: int, name: string }`; rejects duplicates within the same school
-- [ ] `DELETE /api/global-admin/subjects/{subjectId}` deletes a subject by ID
-- [ ] `POST /api/global-admin/classes/{classId}/students` assigns a student (by userId) to a class; rejects non-students
-- [ ] `POST /api/global-admin/classes/{classId}/teachers` assigns a teacher to a class for a subject — body: `{ schoolId: int, teacherId: string, subjectName: string }`; auto-creates the subject if it does not exist in that school
-- [ ] `PUT /api/global-admin/users/{userId}/role` promotes a user to SchoolAdmin and assigns them to a school — body: `{ schoolId: int }`
-- [ ] Non-Admin JWT receives 403 on all `/api/global-admin` endpoints; unauthenticated requests receive 401
+- [x] `GET /api/admin/classes` requires a valid JWT with `role = SchoolAdmin`; returns class list with homeroom teacher username and student count
+- [x] `POST /api/admin/classes` creates a class scoped to the caller's school; optional homeroom teacher must belong to the same school
+- [x] `PUT /api/admin/classes/{classId}/homeroom` sets the homeroom teacher; rejects teachers from other schools
+- [x] `POST /api/admin/classes/{classId}/students` assigns a student to a class; rejects students who belong to a different school
+- [x] `DELETE /api/admin/classes/{classId}/students/{userId}` removes the student from their class
+- [x] `POST /api/admin/classes/{classId}/teachers` assigns a teacher to a class for a subject; auto-creates the subject if needed
+- [x] `POST /api/admin/teachers/{teacherId}/subjects/{subjectId}` adds a subject to a teacher's list; rejects duplicates and cross-school subjects
+- [x] `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}` removes a subject from a teacher's list
+- [x] `GET /api/admin/subjects` returns all subjects for the caller's school
+- [x] `GET /api/admin/users` returns all users in the caller's school with role, grade, and class info
+- [x] Non-SchoolAdmin JWT receives 403 on all `/api/admin` endpoints; unauthenticated requests receive 401
+- [x] `POST /api/global-admin/schools` registers a new School entity (`{ name: string }`); rejects duplicate names
+- [x] `GET /api/global-admin/users` returns all users across all schools with id, username, fullName, role, grade, and class name
+- [x] `GET /api/global-admin/classes` returns all classes across all schools with id, name, homeroom teacher username, and student count
+- [x] `POST /api/global-admin/classes` creates a class for any school — body: `{ schoolId: int, name: string, homeroomTeacherId?: string }`
+- [x] `DELETE /api/global-admin/classes/{classId}` deletes a class and unlinks all its students
+- [x] `POST /api/global-admin/subjects` creates a subject for a given school — body: `{ schoolId: int, name: string }`; rejects duplicates within the same school
+- [x] `DELETE /api/global-admin/subjects/{subjectId}` deletes a subject by ID
+- [x] `POST /api/global-admin/classes/{classId}/students` assigns a student (by userId) to a class; rejects non-students
+- [x] `POST /api/global-admin/classes/{classId}/teachers` assigns a teacher to a class for a subject — body: `{ schoolId: int, teacherId: string, subjectName: string }`; auto-creates the subject if it does not exist in that school
+- [x] `PUT /api/global-admin/users/{userId}/role` promotes a user to SchoolAdmin and assigns them to a school — body: `{ schoolId: int }`
+- [x] Non-Admin JWT receives 403 on all `/api/global-admin` endpoints; unauthenticated requests receive 401
 - [x] `POST /api/student/practice-questions` returns exactly 3 practice questions; inputs are sanitised before reaching the LLM prompt; returns an empty list on failure rather than an error
 - [x] `GET /api/student/weak-spots?days=N` returns the calling student's own most-asked topics only; `days` is clamped to 1–365
 - [x] `GET /api/student/history?limit=N` returns the calling student's own chat messages only, oldest to newest; `limit` is clamped to 1–200
@@ -171,7 +173,7 @@ If the regex extraction in `StereometryService.ExtractSceneJson()` finds no vali
 The LLM is still called, but with an empty context block and the curriculum-restriction system prompt. The expected output is a refusal, not an attempt to answer from training data.
 
 **ZhipuAI unavailable**
-The system falls back to the local Ollama service. The fallback is transparent — no error is surfaced to the student.
+Not applicable currently: `ZhipuAIChatService` is an implemented but unregistered `IChatService` backend — `Program.cs` wires `OllamaChatService` as the only `IChatService`, and there is no automatic runtime failover between the two. Switching backends today requires editing that DI registration and redeploying; if automatic failover is wanted, it needs to be built.
 
 **Message exceeding LLM context window**
 Long messages are truncated or chunked before submission. The system must not crash or return a 500; it should truncate with a warning log.
@@ -190,6 +192,26 @@ Embedding and LLM services handle UTF-8 natively. The only preprocessing require
 ## Environment Prerequisites
 
 The behavioral specification below assumes a working local LLM/OCR pipeline. Before testing: pull the Ollama models referenced by `Llm:OllamaModel`/`Llm:OllamaVisionModel`/`Llm:OllamaEmbedModel` (currently `minicpm-v` and `nomic-embed-text` — see `ollama list`), and start the `pix2text` container (`docker compose up -d pix2text`). See `README.md`'s "Local Environment Prerequisites" section.
+
+---
+
+## Frontend Integration Readiness
+
+The backend behavioral spec above is implemented; the frontend itself has not been started (see `README.md`). Before/during frontend work, the following need attention:
+
+**Token refresh is a frontend requirement, not yet built anywhere.** The Acceptance Criteria above has one open item: "Token expiry during a session is handled transparently via refresh token exchange on the client side." The backend contract already exists — `POST /api/auth/refresh` takes `{ refreshToken }` and returns `{ token, refreshToken }` — but no client implements the silent 401 → refresh → retry flow yet, because no client exists. This is the first thing the frontend's API layer needs.
+
+**Chat SSE frame contract** (`POST /api/chat/message`, `Content-Type: text/event-stream`), documented in code at `Controllers/ChatController.cs` above `SendMessage`, reproduced here so it doesn't require reading the controller:
+- `data: {"sessionId":N}` — always first
+- `data: {"token":"..."}` — zero or more, one per streamed token
+- `data: {"done":true,"scene":<json|null>}` — end of stream; `scene` is the extracted `<STEREO>` JSON or `null`
+- `data: {"title":"...","subject":"..."}` — only sent on the session's first exchange
+
+Note this is a `POST` with a streaming response body, not a plain `GET`-based `EventSource` — the frontend needs a `fetch` + `ReadableStream` consumer (or an SSE library that supports POST), not the browser's native `EventSource`.
+
+**Production CORS origin is still a placeholder.** `appsettings.json`'s `Cors:AllowedOrigins` is `REPLACE_WITH_FRONTEND_ORIGIN`; local dev already works (`appsettings.Local.json` allows `localhost:3000`/`:5173`), but the real frontend origin must be set via `Cors__AllowedOrigins__0` before any non-local deploy.
+
+**No machine-readable API contract exists.** Swagger/OpenAPI is intentionally out of scope for this project (see `CLAUDE.md`). This document's Behavioral Specification and Acceptance Criteria are the contract; if the frontend team needs something more structured (Postman/Insomnia collection, hand-written `API.md`), that needs to be produced separately — it does not exist today.
 
 ---
 

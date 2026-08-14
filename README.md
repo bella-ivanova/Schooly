@@ -13,14 +13,14 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - PDF ingestion pipeline: triple-OCR fallback (Pix2Text → vision OCR → PdfPig), text chunking, and embedding
 - Qdrant vector DB integration with grade-filtered semantic search
 - Ollama local LLM chat service with streaming
-- ZhipuAI remote LLM chat service with streaming (fallback backend)
+- ZhipuAI remote LLM chat service with streaming (`ZhipuAIChatService`, implements the same `IChatService` interface as Ollama) — implemented but not currently registered in `Program.cs`; switching backends means editing that DI registration, there is no automatic runtime failover
 - RAG orchestration: grade-filtered retrieval + LLM call with context injection
 - Stereometry 3D scene JSON schema and `<STEREO>` block extraction from LLM responses
 - Exam generation service: mock exams generated from curriculum material via RAG
 - Chat message persistence with subject and topic tagging
 - Chat sessions: messages are grouped into `ChatSession`s with true multi-turn context (prior turns are replayed into the LLM call, not just displayed), an AI-generated title after the first exchange, and a subject-folder assignment locked from that same first exchange
 - Weak-spot detection: aggregates most-asked topics per student, exposed to the student themselves via `GET /api/student/weak-spots?days=N` (distinct from the teacher-facing per-class `GET /api/teacher/classes/{classId}/struggles`)
-- Database schema: 14 migrations defined (PostgreSQL); run `dotnet ef database update` before starting the server
+- Database schema: 13 migrations defined (PostgreSQL), most recent is `AddChatSessions`; run `dotnet ef database update` before starting the server
 - Security hardening pass: TOCTOU-safe refresh token revocation, prompt injection sanitisation, generic rate limit error messages, HSTS, CORS header restriction, ForwardedHeaders middleware
 - Student chat: `POST /api/chat/message` — grade-filtered RAG, SSE token streaming, stereometry scene extraction, session-scoped chat-log persistence with multi-turn context and AI-generated titles; `GET /api/chat/sessions?subject=` (folder-filterable session list), `GET /api/chat/sessions/{id}/messages` (session transcript) — all require auth, no role restriction
 - PDF session upload: `POST /api/chat/upload` — ingests a PDF into a per-request temporary vector store that affects subsequent chat queries
@@ -49,3 +49,18 @@ Before chat, RAG, or math-OCR endpoints will work, the following must be running
 **SMTP (required):** Password reset codes are delivered via email. Supply `Smtp__Host`, `Smtp__Username`, `Smtp__Password`, and `Smtp__From` via environment variables. The app refuses to start if placeholders are detected.
 
 **Secrets:** All config keys in `appsettings.json` hold placeholder strings. Supply real values via environment variables (`Jwt__Secret`, `ConnectionStrings__DefaultConnection`, `TeacherRegistrationCode`, `Cors__AllowedOrigins__0`, `Smtp__Host`, `Smtp__Username`, `Smtp__Password`, `Smtp__From`). The app refuses to start if placeholders are detected.
+
+## Frontend Integration To-Do
+
+The backend is ready to connect to; the frontend project itself doesn't exist yet. Before/while building it:
+
+1. ~~Pin down the local API port.~~ Done — `Properties/launchSettings.json` fixes it: `dotnet run` serves the API at `http://localhost:5080`. HTTP-only is intentional: `Program.cs` calls `app.UseHttpsRedirection()` unconditionally, but that middleware silently no-ops when no HTTPS URL is bound, so local dev stays plain HTTP with no redirect and no dev-cert trust step required. (An HTTPS profile can be added later for whoever sets up production hosting.)
+2. **Scaffold the frontend project** (React or Vue), with its dev server running on `localhost:3000` or `:5173` — both are already allowed in `appsettings.Local.json`'s `Cors:AllowedOrigins`.
+3. **Build the API client**, covering:
+   - JWT storage and `Authorization: Bearer` attachment
+   - Silent refresh-token exchange on 401 (`POST /api/auth/refresh`) — the one still-open item in `PRD.md`'s Acceptance Criteria
+   - A POST-capable SSE consumer for `POST /api/chat/message` (it streams a response body over POST, so the browser's native `EventSource` — GET-only — doesn't apply; use `fetch` + `ReadableStream`). Frame contract is documented in `PRD.md`'s "Frontend Integration Readiness" section and inline in `Controllers/ChatController.cs`.
+   - Role-aware routing for the four `UserRole`s (Student, Teacher, SchoolAdmin, Admin) against their respective endpoint namespaces (`/api/student`, `/api/teacher`, `/api/admin`, `/api/global-admin`)
+4. **Set the production CORS origin** via `Cors__AllowedOrigins__0` before deploying the frontend anywhere other than localhost — `appsettings.json` still holds a placeholder.
+5. **Decide how the frontend team gets the API contract** — Swagger/OpenAPI is intentionally out of scope for this project, so there's no generated spec. Either hand off `PRD.md`'s Behavioral Specification directly or produce a separate collection/doc.
+6. Use the "Local Environment Prerequisites" section above as the shared checklist for getting a fully working local stack (backend + Ollama + Qdrant + Pix2Text) before testing the frontend end-to-end.

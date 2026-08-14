@@ -10,8 +10,8 @@
 | MailKit | 4.* | SMTP email delivery for password reset codes |
 | JWT Bearer (HS256) | 10.* / 8.* | Stateless auth with revocable refresh tokens; HS256 is sufficient for a single-server trust boundary |
 | OllamaSharp | 5.4.24 | Local LLM inference — keeps student data on-premises; has native streaming support. `Llm:OllamaModel` and `Llm:OllamaVisionModel` are pinned to `minicpm-v` (not `llama3.2`/`llava`) because that's the multimodal model actually kept pulled locally — check `ollama list` before repointing config at an unpulled model name |
-| ZhipuAI (HTTP) | — | Remote LLM fallback via OpenAI-compatible API (`/v4/chat/completions`) when Ollama is unavailable |
-| Qdrant | 1.17.0 | Vector DB for RAG; supports payload-based metadata filtering so grade-N students only receive grade ≤ N curriculum material |
+| ZhipuAI (HTTP) | — | Alternate `IChatService` implementation (`ZhipuAIChatService`) calling ZhipuAI's OpenAI-compatible API (`/v4/chat/completions`); **not currently wired** — `Program.cs` registers `OllamaChatService` as `IChatService` and there is no automatic runtime failover, so switching backends means editing that DI registration |
+| Qdrant | 1.17.0 (client) | Vector DB for RAG; supports payload-based metadata filtering so grade-N students only receive grade ≤ N curriculum material. `1.17.0` pins the `Qdrant.Client` NuGet package — the server image in `docker-compose.yml` (`qdrant/qdrant`) has no version tag and pulls `:latest`, so the server itself isn't pinned |
 | nomic-embed-text (Ollama) | — | 768-dim embeddings; dimension is hardcoded in `EmbeddingService.cs` and must match the Qdrant collection |
 | UglyToad.PdfPig | 1.7.0-custom-5 | Fast plain-text extraction from machine-readable PDFs (primary OCR path) |
 | PDFtoImage + Tesseract | 5.2.0 | Fallback OCR for image-heavy or scanned PDFs |
@@ -34,24 +34,39 @@ Services/           All business logic and external integrations
   SmtpEmailService.cs    SMTP email delivery — sends 6-digit password reset codes
   RateLimiter.cs         Brute-force protection — singleton, database-backed, survives restarts
   IChatService.cs        LLM abstraction interface (OllamaChatService and ZhipuAIChatService implement it); `SeedHistory` replays prior session turns into per-request in-memory state before the next call
+  OllamaChatService.cs   `IChatService` implementation backed by local Ollama (OllamaSharp) — one-shot, streaming, GEOM/STEREO-filtered streaming, token streaming; this is the implementation currently registered for `IChatService` in `Program.cs`
+  ZhipuAIChatService.cs  `IChatService` implementation calling ZhipuAI's HTTP API directly (streaming SSE + GEOM/STEREO filtering); implemented but not registered anywhere — not currently reachable at runtime
   RAGService.cs          Retrieval + LLM orchestration (embeds query → searches Qdrant → calls LLM); `AskStreamAsync` is the HTTP-facing entry point that yields tokens, `Ask` is the CLI entry point; `SeedHistory` passes through to `IChatService` for multi-turn session context
   EmbeddingService.cs    Text → 768-dim vector via Ollama nomic-embed-text
   QdrantService.cs       Vector DB CRUD (upsert, search with grade filter, delete by file)
   PDFLoader.cs           PDF → text via triple-method fallback (static utility)
+  OCRService.cs          Calls the local Ollama vision model to OCR page images into plain text (fallback OCR path)
+  MathOcrService.cs      Calls the local Pix2Text HTTP server (:8503) to OCR page images into text + LaTeX (primary math OCR path)
+  PersistentVectorStore.cs JSON-file-backed in-memory vector store with cosine-similarity search — legacy/local alternative to Qdrant
+  InputSanitizer.cs      Static helper stripping control chars/null bytes and enforcing max length on user-supplied strings before LLM prompt interpolation
   ChatLogService.cs      Chat message persistence (session-scoped via `sessionId`) + subject/topic tagging via LLM classification; sanitises input before prompt interpolation
   ChatSessionService.cs  Chat session lifecycle: creation, ownership checks, multi-turn history replay (`GetRecentTurnsAsync`), AI-generated titles (`GenerateTitleAsync`, one-shot LLM call), and subject-folder assignment locked from the session's first exchange
   StereometryService.cs  3D geometry JSON schema definition + <STEREO> block extraction from LLM output
+  StereometryDetector.cs Static keyword-based heuristic (Bulgarian + English) to detect whether a question is about 3D solid geometry
+  StereometryHtmlBuilder.cs Static builder that injects a JSON scene into an embedded Three.js HTML template to render interactive 3D stereometry visualisations
   ExamService.cs         Mock exam generation from curriculum material via RAG
   AdminUserService.cs    Global admin operations (school, class, subject, teacher, user management across all schools); typed methods back `GlobalAdminController`, parameterless wrappers back the CLI menu; console wrappers resolve school names to School entity IDs internally; also wraps `RAGService`'s curriculum file list/upload/delete methods so `GlobalAdminController` never depends on `RAGService` directly
   PracticeQuestionService.cs Generates 3 follow-up practice questions from a prior chat exchange via one-shot LLM call; sanitises both inputs before prompt interpolation
   SchoolAdminService.cs  HTTP-compatible per-school admin operations — typed parameters + (bool, error) return tuples, no console I/O; `SchoolId` (int FK) is passed per-call by the controller, resolved from the caller's JWT identity via `ApplicationUser.SchoolId`
+  TeacherDashboardService.cs Teacher-facing analytics backing `TeacherDashboardController` — class/subject/student-count listing, per-class topic "struggles" over N days, most-active students per class
   TempFileManager.cs     Tracks temp HTML files for cleanup on process exit (static utility)
+  VisualisationService.cs CLI-only — writes an HTML string to a temp file and opens it in the OS default browser; must not be wired to any HTTP endpoint (see Security Requirements)
 Models/             EF Core entity definitions and enums — no business logic
   School.cs is the canonical school entity (Id, Name, CreatedAt). ApplicationUser, Class, and Subject each hold a SchoolId FK — never a plain string school name.
   ChatSession.cs groups ChatMessage rows into a conversation (Title, SubjectId "folder", LastMessageAt). ChatMessage.SessionId is a required FK to ChatSession — every chat message belongs to exactly one session.
+  ClassTeacher.cs / TeacherSubject.cs are join entities: ClassTeacher links a Class + Teacher + Subject (a teacher's subject assignment within a class); TeacherSubject links a teacher to a Subject they're qualified to teach.
+  RefreshToken.cs, PasswordResetCode.cs, RateLimitEntry.cs back the auth/security flows described under Security Requirements below.
+  UserRole.cs is the role enum: Student, Teacher, SchoolAdmin, Admin.
 Data/               DbContext, migrations, IUserRepository interface and UserRepository implementation
   Migrations/       EF Core migration files — never hand-edit; use dotnet ef migrations add
 Database/           Curriculum PDFs organised as Database/DataPdf/Grade{N}/{Subject}/
+tessdata-main/      Vendored Tesseract `.traineddata` language files used by the PDFtoImage + Tesseract fallback OCR path
+docker-compose.yml, Dockerfile.pix2text, pix2text_server.py  Local Qdrant/Postgres/Pix2Text container setup — `docker compose up -d pix2text` starts the math-OCR server
 storage/            Qdrant local vector store data — never commit to git
 snapshots/          Temporary HTML visualisation files — never commit to git
 ```
@@ -114,10 +129,15 @@ snapshots/          Temporary HTML visualisation files — never commit to git
 - CORS allowed origins come from `Cors:AllowedOrigins` config — never hardcode `*` or specific URLs in code; allowed headers are restricted to `Content-Type` and `Authorization` only
 - Refresh token exchange **and** revocation must both use `IsolationLevel.RepeatableRead` — do not lower this isolation level
 - `appsettings.Local.json` contains real secrets for local dev — never commit it; production uses environment variables
-- All user-supplied strings that reach LLM prompts must be passed through `InputSanitizer.SanitizeUserInput()` before interpolation — enforced in `RAGService.Ask()` and `ExamService.GenerateExamAsync()`
+- All user-supplied strings that reach LLM prompts must be passed through `InputSanitizer.SanitizeUserInput()` before interpolation — enforced in `RAGService.Ask()`, `ExamService.GenerateExamAsync()`, `ChatLogService.cs`, `ChatSessionService.cs`, and `PracticeQuestionService.cs`
 - `RAGService` must be registered as **Scoped**, never Singleton — `_currentGrade` and `_temporaryChunks` are per-user instance state; in web endpoints, grade must come from the authenticated user's JWT claims, never from request parameters
 - `VisualisationService` is CLI-only — it calls `Process.Start()` and holds static state; it must not be wired to any HTTP endpoint
 - In production, `app.UseForwardedHeaders()` must run first in the pipeline and `KnownProxies` must list your specific proxy IPs — the current config trusts all proxies (safe for local dev, not for production)
+
+## Frontend Integration Notes
+
+- `Properties/launchSettings.json` pins local dev to `http://localhost:5080` (`dotnet run` reads this). It's HTTP-only on purpose: `Program.cs` calls `app.UseHttpsRedirection()` unconditionally, but that middleware silently no-ops (logs a warning, passes the request through) when Kestrel has no bound HTTPS URL — so local dev stays plain HTTP with no redirect and no dev-cert trust step needed. Don't add an HTTPS `applicationUrl` to the local profile without also updating frontend/CORS expectations, since doing so activates the redirect.
+- Swagger/OpenAPI is intentionally absent (see Explicitly Prohibited above) — there is no generated API contract. The frontend contract lives in `PRD.md`'s Behavioral Specification (endpoint-by-endpoint request/response behavior) and, for the chat SSE stream specifically, in the frame-format comment above `ChatController.SendMessage`. Point frontend developers there instead of expecting generated docs.
 
 ## Definition of Done
 
