@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using StudyAssistant.Data;
 using StudyAssistant.Models;
@@ -8,6 +9,7 @@ public record ClassSummaryDto(int Id, string Name, string? HomeroomTeacherUserna
 public record UserSummaryDto(string Id, string Username, string FullName, string Role, int? Grade, string? ClassName);
 public record SubjectSummaryDto(int Id, string Name);
 public record SchoolSummaryDto(int Id, string Name, DateTime CreatedAt, int StudentCount, int TeacherCount);
+public record SchoolTeacherCodeDto(string Code, DateTime CreatedAt);
 
 public class SchoolAdminService
 {
@@ -41,6 +43,36 @@ public class SchoolAdminService
 
     public async Task<string?> GetSchoolNameAsync(int schoolId) =>
         await _db.Schools.Where(s => s.Id == schoolId).Select(s => s.Name).FirstOrDefaultAsync();
+
+    public async Task<SchoolTeacherCodeDto?> GetTeacherCodeAsync(int schoolId)
+    {
+        return await _db.SchoolTeacherCodes
+            .Where(c => c.SchoolId == schoolId && c.IsActive)
+            .Select(c => new SchoolTeacherCodeDto(c.Code, c.CreatedAt))
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<(bool Success, string? Error, SchoolTeacherCodeDto? Code)> RegenerateTeacherCodeAsync(int schoolId)
+    {
+        await _db.SchoolTeacherCodes
+            .Where(c => c.SchoolId == schoolId && c.IsActive)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.IsActive, false)
+                .SetProperty(c => c.RevokedAt, DateTime.UtcNow));
+
+        var code = Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant();
+        var entity = new SchoolTeacherCode
+        {
+            SchoolId  = schoolId,
+            Code      = code,
+            IsActive  = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.SchoolTeacherCodes.Add(entity);
+        await _db.SaveChangesAsync();
+
+        return (true, null, new SchoolTeacherCodeDto(entity.Code, entity.CreatedAt));
+    }
 
     public async Task<IReadOnlyList<ClassSummaryDto>> ListClassesAsync(int schoolId)
     {

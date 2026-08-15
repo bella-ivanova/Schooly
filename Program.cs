@@ -14,14 +14,13 @@ builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, relo
 // Fail fast if secrets are missing or still hold placeholder values.
 var jwtSecret      = builder.Configuration["Jwt:Secret"] ?? "";
 var connStr        = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
-var teacherRegCode = builder.Configuration["TeacherRegistrationCode"] ?? "";
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 var smtpHost       = builder.Configuration["Smtp:Host"]     ?? "";
 var smtpUsername   = builder.Configuration["Smtp:Username"] ?? "";
 var smtpPassword   = builder.Configuration["Smtp:Password"] ?? "";
 var smtpFrom       = builder.Configuration["Smtp:From"]     ?? "";
 string[] placeholders = ["REPLACE_WITH_JWT_SECRET", "REPLACE_WITH_DB_PASSWORD",
-                         "REPLACE_WITH_CONNECTION_STRING", "REPLACE_WITH_TEACHER_CODE",
+                         "REPLACE_WITH_CONNECTION_STRING",
                          "CHANGE_ME_BEFORE_DEPLOY", "REPLACE_WITH_FRONTEND_ORIGIN",
                          "REPLACE_WITH_SMTP_HOST", "REPLACE_WITH_SMTP_USERNAME",
                          "REPLACE_WITH_SMTP_PASSWORD", "REPLACE_WITH_FROM_EMAIL"];
@@ -32,8 +31,6 @@ if (jwtSecret.Length < 32)
     throw new InvalidOperationException("Jwt:Secret must be at least 32 characters.");
 if (string.IsNullOrEmpty(connStr) || placeholders.Any(connStr.Contains))
     throw new InvalidOperationException("Connection string is not configured. Supply it via ConnectionStrings__DefaultConnection.");
-if (string.IsNullOrEmpty(teacherRegCode) || placeholders.Any(p => teacherRegCode.Equals(p, StringComparison.Ordinal)))
-    throw new InvalidOperationException("TeacherRegistrationCode is not set or is still the default placeholder.");
 if (allowedOrigins.Length == 0 || allowedOrigins.Any(o => placeholders.Contains(o)))
     throw new InvalidOperationException("Cors:AllowedOrigins is not configured. Add your frontend origin(s) via Cors__AllowedOrigins__0.");
 if (string.IsNullOrEmpty(smtpHost) || placeholders.Contains(smtpHost))

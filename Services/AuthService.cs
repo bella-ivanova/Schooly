@@ -57,6 +57,30 @@ public class AuthService
         return success ? (user, Array.Empty<string>()) : (null, errors);
     }
 
+    // Resolves a teacher registration attempt against the target school's active registration code.
+    // Returns (true, SchoolId) on a match, or (false, null) if the code is empty/invalid.
+    public async Task<(bool Ok, int? ResolvedSchoolId)> ResolveTeacherRegistrationAsync(string suppliedCode)
+    {
+        if (string.IsNullOrEmpty(suppliedCode))
+            return (false, null);
+
+        var activeCodes = await _db.SchoolTeacherCodes
+            .Where(c => c.IsActive)
+            .Select(c => new { c.SchoolId, c.Code })
+            .ToListAsync();
+
+        var suppliedBytes = Encoding.UTF8.GetBytes(suppliedCode);
+        foreach (var candidate in activeCodes)
+        {
+            var candidateBytes = Encoding.UTF8.GetBytes(candidate.Code);
+            if (candidateBytes.Length == suppliedBytes.Length &&
+                CryptographicOperations.FixedTimeEquals(suppliedBytes, candidateBytes))
+                return (true, candidate.SchoolId);
+        }
+
+        return (false, null);
+    }
+
     // Validates credentials. Returns null on success, or an error message on failure.
     public async Task<string?> LoginAsync(string usernameOrEmail, string password)
     {

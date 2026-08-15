@@ -1,6 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using StudyAssistant.Data;
 using StudyAssistant.Models;
@@ -67,15 +65,15 @@ public class AuthController : ControllerBase
             return StatusCode(429, new { error = "Registration attempted too recently. Please wait before trying again." });
 
         UserRole role;
+        var resolvedSchoolId = req.SchoolId;
         if (string.Equals(req.Role, "teacher", StringComparison.OrdinalIgnoreCase))
         {
-            var expectedCode = _config["TeacherRegistrationCode"] ?? "";
-            if (string.IsNullOrEmpty(req.TeacherRegistrationCode) ||
-                !CryptographicOperations.FixedTimeEquals(
-                    Encoding.UTF8.GetBytes(req.TeacherRegistrationCode),
-                    Encoding.UTF8.GetBytes(expectedCode)))
-                return Unauthorized(new { error = "Invalid teacher registration code." });
+            var (matched, schoolIdFromCode) = await _auth.ResolveTeacherRegistrationAsync(req.TeacherRegistrationCode ?? "");
+            if (!matched)
+                return Unauthorized(new { error = "Invalid school registration code." });
+
             role = UserRole.Teacher;
+            resolvedSchoolId = schoolIdFromCode;
         }
         else
         {
@@ -84,7 +82,7 @@ public class AuthController : ControllerBase
 
         var (user, errors) = await _auth.RegisterAsync(
             req.Username, req.Email, req.Password, role,
-            req.FullName, req.Grade, req.ClassLetter, req.SchoolId);
+            req.FullName, req.Grade, req.ClassLetter, resolvedSchoolId);
 
         if (user == null)
             return BadRequest(new { errors });

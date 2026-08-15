@@ -78,7 +78,7 @@ async function handleSubmit() {
       <Field
         v-if="role === 'teacher'"
         v-model="teacherRegistrationCode"
-        label="Teacher registration code"
+        label="School registration code"
         type="password"
         placeholder="Provided by your school"
       />

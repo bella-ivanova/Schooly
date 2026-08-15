@@ -48,6 +48,30 @@ public class SchoolAdminController : ControllerBase
         return Ok(new { id = schoolId.Value, name });
     }
 
+    // GET /api/admin/teacher-code
+    [HttpGet("teacher-code")]
+    public async Task<IActionResult> GetTeacherCode()
+    {
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
+        if (!ok) return reject!;
+
+        var code = await _admin.GetTeacherCodeAsync(schoolId!.Value);
+        return Ok(code);
+    }
+
+    // POST /api/admin/teacher-code/regenerate
+    [HttpPost("teacher-code/regenerate")]
+    public async Task<IActionResult> RegenerateTeacherCode()
+    {
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
+        if (!ok) return reject!;
+
+        var (success, error, code) = await _admin.RegenerateTeacherCodeAsync(schoolId!.Value);
+        if (!success) return BadRequest(new { error });
+
+        return Ok(code);
+    }
+
     // GET /api/admin/classes
     [HttpGet("classes")]
     public async Task<IActionResult> GetClasses()

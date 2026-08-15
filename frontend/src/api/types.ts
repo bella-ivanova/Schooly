@@ -141,6 +141,11 @@ export interface SchoolInfo {
   name: string | null
 }
 
+export interface SchoolTeacherCode {
+  code: string
+  createdAt: string
+}
+
 // ── GlobalAdmin dashboard ────────────────────────────────────────────────
 
 export interface SchoolSummary {

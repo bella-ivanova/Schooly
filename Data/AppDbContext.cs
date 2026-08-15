@@ -17,6 +17,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TeacherSubject> TeacherSubjects { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<PasswordResetCode> PasswordResetCodes { get; set; }
+    public DbSet<SchoolTeacherCode> SchoolTeacherCodes { get; set; }
     public DbSet<RateLimitEntry> RateLimitEntries { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -171,6 +172,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             b.HasOne(c => c.User)
              .WithMany()
              .HasForeignKey(c => c.UserId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SchoolTeacherCode>(b =>
+        {
+            b.Property(c => c.Code).IsRequired().HasMaxLength(24);
+            b.HasIndex(c => c.Code).IsUnique();
+            b.HasIndex(c => new { c.SchoolId, c.IsActive });
+
+            b.HasOne(c => c.School)
+             .WithMany()
+             .HasForeignKey(c => c.SchoolId)
              .IsRequired()
              .OnDelete(DeleteBehavior.Cascade);
         });
