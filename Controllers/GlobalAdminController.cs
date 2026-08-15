@@ -38,6 +38,17 @@ public class GlobalAdminController : ControllerBase
         return StatusCode(201);
     }
 
+    // GET /api/global-admin/schools
+    [HttpGet("schools")]
+    public async Task<IActionResult> GetSchools()
+    {
+        var reject = RequireAdminRole();
+        if (reject != null) return reject;
+
+        var schools = await _admin.ListSchoolsAsync();
+        return Ok(schools);
+    }
+
     // GET /api/global-admin/users
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers()

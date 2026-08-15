@@ -37,6 +37,24 @@ public class AdminUserService
     private async Task<School?> FindSchoolByNameAsync(string name) =>
         await _db.Schools.FirstOrDefaultAsync(s => s.Name == name);
 
+    public async Task<IReadOnlyList<SchoolSummaryDto>> ListSchoolsAsync()
+    {
+        var schools = await _db.Schools.OrderBy(s => s.Name).ToListAsync();
+
+        var result = new List<SchoolSummaryDto>();
+        foreach (var school in schools)
+        {
+            var studentCount = await _db.Set<ApplicationUser>()
+                .CountAsync(u => u.SchoolId == school.Id && u.Role == UserRole.Student);
+            var teacherCount = await _db.Set<ApplicationUser>()
+                .CountAsync(u => u.SchoolId == school.Id && u.Role == UserRole.Teacher);
+
+            result.Add(new SchoolSummaryDto(school.Id, school.Name, school.CreatedAt, studentCount, teacherCount));
+        }
+
+        return result;
+    }
+
     public async Task<(bool Success, string? Error)> CreateSchoolAsync(string name)
     {
         if (string.IsNullOrWhiteSpace(name))

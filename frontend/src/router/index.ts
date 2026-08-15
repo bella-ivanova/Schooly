@@ -14,7 +14,7 @@ const router = createRouter({
       name: 'forgot-password',
       component: () => import('../views/ForgotPasswordView.vue'),
     },
-    { path: '/app', name: 'home', component: () => import('../views/PlaceholderHomeView.vue') },
+    { path: '/app', name: 'home', component: () => import('../views/HomeView.vue') },
   ],
 })
 

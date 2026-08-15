@@ -37,6 +37,17 @@ public class SchoolAdminController : ControllerBase
         return (true, caller.SchoolId, null);
     }
 
+    // GET /api/admin/school
+    [HttpGet("school")]
+    public async Task<IActionResult> GetSchool()
+    {
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
+        if (!ok) return reject!;
+
+        var name = await _admin.GetSchoolNameAsync(schoolId!.Value);
+        return Ok(new { id = schoolId.Value, name });
+    }
+
     // GET /api/admin/classes
     [HttpGet("classes")]
     public async Task<IActionResult> GetClasses()

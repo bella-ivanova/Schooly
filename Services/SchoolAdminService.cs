@@ -7,6 +7,7 @@ namespace StudyAssistant.Services;
 public record ClassSummaryDto(int Id, string Name, string? HomeroomTeacherUsername, int StudentCount);
 public record UserSummaryDto(string Id, string Username, string FullName, string Role, int? Grade, string? ClassName);
 public record SubjectSummaryDto(int Id, string Name);
+public record SchoolSummaryDto(int Id, string Name, DateTime CreatedAt, int StudentCount, int TeacherCount);
 
 public class SchoolAdminService
 {
@@ -37,6 +38,9 @@ public class SchoolAdminService
         await _db.SaveChangesAsync();
         return (true, null);
     }
+
+    public async Task<string?> GetSchoolNameAsync(int schoolId) =>
+        await _db.Schools.Where(s => s.Id == schoolId).Select(s => s.Name).FirstOrDefaultAsync();
 
     public async Task<IReadOnlyList<ClassSummaryDto>> ListClassesAsync(int schoolId)
     {
