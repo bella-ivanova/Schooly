@@ -178,6 +178,29 @@ export interface AdminUserSummary {
   classNames: string[]
 }
 
+export interface ClassTeacherAssignment {
+  teacherId: string
+  teacherUsername: string
+  subjectId: number
+  subjectName: string
+}
+
+export interface ClassRosterStudent {
+  id: string
+  username: string
+  fullName: string
+}
+
+export interface AdminClassDetail {
+  id: number
+  name: string
+  subjectId: number | null
+  subjectName: string | null
+  homeroomTeacherUsername: string | null
+  students: ClassRosterStudent[]
+  teacherAssignments: ClassTeacherAssignment[]
+}
+
 // ── GlobalAdmin dashboard ────────────────────────────────────────────────
 
 export interface SchoolSummary {

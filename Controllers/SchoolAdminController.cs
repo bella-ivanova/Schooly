@@ -161,6 +161,45 @@ public class SchoolAdminController : ControllerBase
         return Ok();
     }
 
+    // GET /api/admin/classes/{classId}
+    [HttpGet("classes/{classId:int}")]
+    public async Task<IActionResult> GetClassDetail(int classId)
+    {
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
+        if (!ok) return reject!;
+
+        var detail = await _admin.GetClassDetailAsync(schoolId!.Value, classId);
+        if (detail == null) return NotFound(new { error = "Class not found." });
+
+        return Ok(detail);
+    }
+
+    // PUT /api/admin/classes/{classId}
+    [HttpPut("classes/{classId:int}")]
+    public async Task<IActionResult> UpdateClass(int classId, [FromBody] UpdateClassRequest body)
+    {
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
+        if (!ok) return reject!;
+
+        var (success, error) = await _admin.UpdateClassAsync(schoolId!.Value, classId, body.Name, body.SubjectId);
+        if (!success) return BadRequest(new { error });
+
+        return Ok();
+    }
+
+    // DELETE /api/admin/classes/{classId}/teachers/{teacherId}/subjects/{subjectId}
+    [HttpDelete("classes/{classId:int}/teachers/{teacherId}/subjects/{subjectId:int}")]
+    public async Task<IActionResult> RemoveTeacherFromClass(int classId, string teacherId, int subjectId)
+    {
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
+        if (!ok) return reject!;
+
+        var (success, error) = await _admin.RemoveTeacherFromClassAsync(schoolId!.Value, classId, teacherId, subjectId);
+        if (!success) return BadRequest(new { error });
+
+        return Ok();
+    }
+
     // POST /api/admin/teachers/{teacherId}/subjects/{subjectId}
     [HttpPost("teachers/{teacherId}/subjects/{subjectId:int}")]
     public async Task<IActionResult> AssignSubjectToTeacher(string teacherId, int subjectId)
@@ -215,3 +254,4 @@ public record CreateSubjectRequest(string Name);
 public record SetHomeroomRequest(string TeacherId);
 public record AssignStudentRequest(string UserId);
 public record AssignTeacherToClassRequest(string TeacherId, string SubjectName);
+public record UpdateClassRequest(string Name, int SubjectId);

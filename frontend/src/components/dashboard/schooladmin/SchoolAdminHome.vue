@@ -4,6 +4,7 @@ import * as schoolAdminApi from '../../../api/schoolAdmin'
 import type { AdminClassSummary, AdminSubjectSummary, AdminUserSummary, SchoolTeacherCode } from '../../../api/types'
 import Field from '../../shared/Field.vue'
 import SelectField from '../../shared/SelectField.vue'
+import EditClassModal from './EditClassModal.vue'
 
 const schoolName = ref<string | null>(null)
 const classes = ref<AdminClassSummary[]>([])
@@ -12,6 +13,7 @@ const subjects = ref<AdminSubjectSummary[]>([])
 const teacherCode = ref<SchoolTeacherCode | null>(null)
 const loading = ref(true)
 const regenerating = ref(false)
+const editingClassId = ref<number | null>(null)
 
 const newClassName = ref('')
 const newClassSubjectId = ref('')
@@ -48,6 +50,10 @@ onMounted(async () => {
   teacherCode.value = codeRes
   loading.value = false
 })
+
+async function handleClassUpdated() {
+  classes.value = await schoolAdminApi.getClasses()
+}
 
 async function handleRegenerateCode() {
   regenerating.value = true
@@ -120,7 +126,9 @@ async function handleCreateClass() {
             <td>{{ cls.subjectName ?? '—' }}</td>
             <td>{{ cls.homeroomTeacherUsername ?? '—' }}</td>
             <td>{{ cls.studentCount }}</td>
-            <td class="actions">Set homeroom · Add/remove student</td>
+            <td class="actions">
+              <button class="edit-link-btn" @click="editingClassId = cls.id">Edit</button>
+            </td>
           </tr>
           <tr v-if="classes.length === 0">
             <td colspan="5" class="empty">No classes yet.</td>
@@ -186,6 +194,16 @@ async function handleCreateClass() {
         </button>
       </div>
     </div>
+
+    <EditClassModal
+      v-if="editingClassId !== null"
+      :class-id="editingClassId"
+      :all-users="users"
+      :teacher-options="teacherOptions"
+      :subject-options="subjectOptions"
+      @close="editingClassId = null"
+      @updated="handleClassUpdated"
+    />
   </div>
 </template>
 
@@ -259,6 +277,16 @@ async function handleCreateClass() {
 .actions {
   color: var(--green-deep);
   font-size: 13px;
+}
+
+.edit-link-btn {
+  background: none;
+  border: none;
+  color: var(--green-deep);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
 }
 
 .empty {

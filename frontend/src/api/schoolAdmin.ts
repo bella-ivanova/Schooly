@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { AdminClassSummary, AdminSubjectSummary, AdminUserSummary, SchoolInfo, SchoolTeacherCode } from './types'
+import type { AdminClassDetail, AdminClassSummary, AdminSubjectSummary, AdminUserSummary, SchoolInfo, SchoolTeacherCode } from './types'
 
 export function getSchool(): Promise<SchoolInfo> {
   return apiFetch<SchoolInfo>('/api/admin/school')
@@ -37,4 +37,39 @@ export function getTeacherCode(): Promise<SchoolTeacherCode | null> {
 
 export function regenerateTeacherCode(): Promise<SchoolTeacherCode> {
   return apiFetch<SchoolTeacherCode>('/api/admin/teacher-code/regenerate', { method: 'POST' })
+}
+
+export function getClassDetail(classId: number): Promise<AdminClassDetail> {
+  return apiFetch<AdminClassDetail>(`/api/admin/classes/${classId}`)
+}
+
+export function updateClass(classId: number, name: string, subjectId: number): Promise<void> {
+  return apiFetch<void>(`/api/admin/classes/${classId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name, subjectId }),
+  })
+}
+
+export function assignStudent(classId: number, userId: string): Promise<void> {
+  return apiFetch<void>(`/api/admin/classes/${classId}/students`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+export function removeStudent(classId: number, userId: string): Promise<void> {
+  return apiFetch<void>(`/api/admin/classes/${classId}/students/${userId}`, { method: 'DELETE' })
+}
+
+export function assignTeacherToClass(classId: number, teacherId: string, subjectName: string): Promise<void> {
+  return apiFetch<void>(`/api/admin/classes/${classId}/teachers`, {
+    method: 'POST',
+    body: JSON.stringify({ teacherId, subjectName }),
+  })
+}
+
+export function removeTeacherFromClass(classId: number, teacherId: string, subjectId: number): Promise<void> {
+  return apiFetch<void>(`/api/admin/classes/${classId}/teachers/${teacherId}/subjects/${subjectId}`, {
+    method: 'DELETE',
+  })
 }

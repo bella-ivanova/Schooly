@@ -10,16 +10,24 @@ public record UserSummaryDto(string Id, string Username, string FullName, string
 public record SubjectSummaryDto(int Id, string Name);
 public record SchoolSummaryDto(int Id, string Name, DateTime CreatedAt, int StudentCount, int TeacherCount);
 public record SchoolTeacherCodeDto(string Code, DateTime CreatedAt);
+public record ClassTeacherAssignmentDto(string TeacherId, string TeacherUsername, int SubjectId, string SubjectName);
+public record ClassRosterStudentDto(string Id, string Username, string FullName);
+public record ClassDetailDto(
+    int Id, string Name, int? SubjectId, string? SubjectName, string? HomeroomTeacherUsername,
+    IReadOnlyList<ClassRosterStudentDto> Students,
+    IReadOnlyList<ClassTeacherAssignmentDto> TeacherAssignments);
 
 public class SchoolAdminService
 {
     private readonly AppDbContext _db;
     private readonly IUserRepository _users;
+    private readonly ChatSessionService _chatSessions;
 
-    public SchoolAdminService(AppDbContext db, IUserRepository users)
+    public SchoolAdminService(AppDbContext db, IUserRepository users, ChatSessionService chatSessions)
     {
-        _db    = db;
-        _users = users;
+        _db           = db;
+        _users        = users;
+        _chatSessions = chatSessions;
     }
 
     public async Task<(bool Success, string? Error)> AddClassAsync(int schoolId, string name, int subjectId, string? homeroomTeacherId)
@@ -124,6 +132,49 @@ public class SchoolAdminService
         return (true, null);
     }
 
+    public async Task<(bool Success, string? Error)> UpdateClassAsync(int schoolId, int classId, string name, int subjectId)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, "Class name is required.");
+
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.SchoolId == schoolId);
+        if (cls == null)
+            return (false, "Class not found.");
+
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.SchoolId == schoolId);
+        if (subject == null)
+            return (false, "Subject not found in this school.");
+
+        cls.Name = name;
+        cls.SubjectId = subjectId;
+        await _db.SaveChangesAsync();
+        return (true, null);
+    }
+
+    public async Task<ClassDetailDto?> GetClassDetailAsync(int schoolId, int classId)
+    {
+        var cls = await _db.Classes
+            .Include(c => c.HomeroomTeacher)
+            .Include(c => c.Subject)
+            .Include(c => c.ClassStudents).ThenInclude(cs => cs.Student)
+            .Include(c => c.ClassTeachers).ThenInclude(ct => ct.Teacher)
+            .Include(c => c.ClassTeachers).ThenInclude(ct => ct.Subject)
+            .FirstOrDefaultAsync(c => c.Id == classId && c.SchoolId == schoolId);
+
+        if (cls == null)
+            return null;
+
+        var students = cls.ClassStudents
+            .Select(cs => new ClassRosterStudentDto(cs.Student!.Id, cs.Student.UserName ?? "", cs.Student.FullName))
+            .ToList();
+
+        var teacherAssignments = cls.ClassTeachers
+            .Select(ct => new ClassTeacherAssignmentDto(ct.TeacherId, ct.Teacher!.UserName ?? "", ct.SubjectId, ct.Subject!.Name))
+            .ToList();
+
+        return new ClassDetailDto(cls.Id, cls.Name, cls.SubjectId, cls.Subject?.Name, cls.HomeroomTeacher?.UserName, students, teacherAssignments);
+    }
+
     public async Task<(bool Success, string? Error)> AssignStudentAsync(int schoolId, int classId, string userId)
     {
         var student = await _users.GetByIdAsync(userId);
@@ -166,6 +217,10 @@ public class SchoolAdminService
 
         _db.ClassStudents.Remove(membership);
         await _db.SaveChangesAsync();
+
+        var classSubjectId = await _db.Classes.Where(c => c.Id == classId).Select(c => (int?)c.SubjectId).FirstOrDefaultAsync();
+        await _chatSessions.DetachClassAsync(userId, classId, classSubjectId);
+
         return (true, null);
     }
 
@@ -198,6 +253,28 @@ public class SchoolAdminService
             return (false, "Teacher is already assigned to this subject in that class.");
 
         _db.ClassTeachers.Add(new ClassTeacher { ClassId = cls.Id, TeacherId = teacher.Id, SubjectId = subject.Id });
+        await _db.SaveChangesAsync();
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> RemoveTeacherFromClassAsync(int schoolId, int classId, string teacherId, int subjectId)
+    {
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.SchoolId == schoolId);
+        if (cls == null)
+            return (false, "Class not found.");
+
+        var row = await _db.ClassTeachers
+            .FirstOrDefaultAsync(ct => ct.ClassId == classId && ct.TeacherId == teacherId && ct.SubjectId == subjectId);
+        if (row == null)
+            return (false, "Assignment not found.");
+
+        _db.ClassTeachers.Remove(row);
+
+        var hasOtherAssignments = await _db.ClassTeachers
+            .AnyAsync(ct => ct.ClassId == classId && ct.TeacherId == teacherId && ct.SubjectId != subjectId);
+        if (!hasOtherAssignments && cls.HomeroomTeacherId == teacherId)
+            cls.HomeroomTeacherId = null;
+
         await _db.SaveChangesAsync();
         return (true, null);
     }

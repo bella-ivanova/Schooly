@@ -107,6 +107,18 @@ public class ChatSessionService
         return (subjectId, subjectName, classId, className);
     }
 
+    // Detaches a removed class member's sessions from that class, re-filing them
+    // under the class's current subject folder so history stays organized without
+    // being attributed to a class they're no longer part of.
+    public async Task DetachClassAsync(string userId, int classId, int? subjectId)
+    {
+        await _db.ChatSessions
+            .Where(s => s.UserId == userId && s.ClassId == classId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.ClassId, (int?)null)
+                .SetProperty(x => x.SubjectId, subjectId));
+    }
+
     // Looks up the caller's SchoolId, since it isn't present in the JWT and this
     // feature spans every role (not just students, who have it via ApplicationUser).
     public async Task<int?> ResolveSchoolIdAsync(string userId)
