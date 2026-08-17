@@ -129,7 +129,7 @@ public class SchoolAdminController : ControllerBase
         var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.RemoveStudentAsync(schoolId!.Value, userId);
+        var (success, error) = await _admin.RemoveStudentAsync(schoolId!.Value, classId, userId);
         if (!success) return BadRequest(new { error });
 
         return Ok();

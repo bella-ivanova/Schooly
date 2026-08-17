@@ -17,10 +17,6 @@ public class ApplicationUser : IdentityUser
     [MaxLength(5)]
     public string? ClassLetter { get; set; }
 
-    // FK to the structured Class entity (set by a teacher/admin via AssignStudent).
-    public int? ClassId { get; set; }
-    public Class? Class { get; set; }
-
     // School the user belongs to. Set at registration for Teachers/SchoolAdmins;
     // auto-set when a student is assigned to a class.
     public int? SchoolId { get; set; }

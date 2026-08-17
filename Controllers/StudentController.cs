@@ -14,12 +14,18 @@ public class StudentController : ControllerBase
     private readonly PracticeQuestionService _practiceQuestions;
     private readonly ChatLogService _chatLog;
     private readonly ExamService _examService;
+    private readonly AuthService _auth;
+    private readonly RateLimiter _rateLimiter;
 
-    public StudentController(PracticeQuestionService practiceQuestions, ChatLogService chatLog, ExamService examService)
+    public StudentController(
+        PracticeQuestionService practiceQuestions, ChatLogService chatLog, ExamService examService,
+        AuthService auth, RateLimiter rateLimiter)
     {
         _practiceQuestions = practiceQuestions;
         _chatLog           = chatLog;
         _examService       = examService;
+        _auth              = auth;
+        _rateLimiter       = rateLimiter;
     }
 
     private IActionResult? RequireStudentRole()
@@ -96,7 +102,50 @@ public class StudentController : ControllerBase
         var exam = await _examService.GenerateExamAsync(body.Topic, grade);
         return Ok(new { exam });
     }
+
+    // GET /api/student/classes
+    [HttpGet("classes")]
+    public async Task<IActionResult> GetClasses()
+    {
+        var reject = RequireStudentRole();
+        if (reject != null) return reject;
+
+        var userId = User.FindFirstValue("sub") ?? "";
+        var (schoolId, schoolName, classes) = await _auth.GetStudentClassesAsync(userId);
+
+        return Ok(new
+        {
+            schoolId,
+            schoolName,
+            classes = classes.Select(c => new { classId = c.ClassId, className = c.ClassName })
+        });
+    }
+
+    // POST /api/student/classes
+    [HttpPost("classes")]
+    public async Task<IActionResult> JoinClass([FromBody] JoinClassRequest body)
+    {
+        var reject = RequireStudentRole();
+        if (reject != null) return reject;
+
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        if (_rateLimiter.IsGeneralApiThrottled(ip, out _))
+            return StatusCode(429, new { error = "Too many requests. Please wait before trying again." });
+
+        var userId = User.FindFirstValue("sub") ?? "";
+        var (success, error, classId, schoolId) = await _auth.JoinClassAsync(userId, body.Code);
+        if (!success) return BadRequest(new { error });
+
+        var (resolvedSchoolId, schoolName, classes) = await _auth.GetStudentClassesAsync(userId);
+        return Ok(new
+        {
+            schoolId = resolvedSchoolId,
+            schoolName,
+            classes = classes.Select(c => new { classId = c.ClassId, className = c.ClassName })
+        });
+    }
 }
 
 public record PracticeQuestionsRequest([Required] string OriginalQuestion, [Required] string AiResponse);
 public record GenerateExamRequest([Required] string Topic);
+public record JoinClassRequest([Required, MaxLength(100)] string Code);

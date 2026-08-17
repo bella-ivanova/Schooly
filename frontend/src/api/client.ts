@@ -65,8 +65,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   })
 
   if (response.ok) {
-    if (response.status === 204) return undefined as T
-    return (await response.json()) as T
+    const text = await response.text()
+    return (text ? JSON.parse(text) : undefined) as T
   }
 
   if (response.status === 401 && !NO_REFRESH_PATHS.includes(path)) {
@@ -83,8 +83,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     })
 
     if (retryResponse.ok) {
-      if (retryResponse.status === 204) return undefined as T
-      return (await retryResponse.json()) as T
+      const text = await retryResponse.text()
+      return (text ? JSON.parse(text) : undefined) as T
     }
 
     tokenStorage.clear()

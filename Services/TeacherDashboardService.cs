@@ -1,8 +1,11 @@
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using StudyAssistant.Data;
 using StudyAssistant.Models;
 
 namespace StudyAssistant.Services;
+
+public record ClassJoinCodeDto(string Code, DateTime CreatedAt);
 
 public class TeacherDashboardService
 {
@@ -12,24 +15,86 @@ public class TeacherDashboardService
 
     public async Task<List<(Class Class, List<Subject> Subjects, int StudentCount)>> GetMyClassesAsync(string teacherId)
     {
-        var rows = await _db.ClassTeachers
+        var viaSubjects = await _db.ClassTeachers
             .Include(ct => ct.Class!)
                 .ThenInclude(c => c.School)
             .Include(ct => ct.Class!)
-                .ThenInclude(c => c.Students)
+                .ThenInclude(c => c.ClassStudents)
             .Include(ct => ct.Subject!)
                 .ThenInclude(s => s.School)
             .Where(ct => ct.TeacherId == teacherId)
             .ToListAsync();
 
-        return rows
+        var grouped = viaSubjects
             .GroupBy(ct => ct.ClassId)
-            .Select(g => (
+            .ToDictionary(g => g.Key, g => (
                 Class:        g.First().Class!,
                 Subjects:     g.Select(ct => ct.Subject!).ToList(),
-                StudentCount: g.First().Class!.Students.Count
-            ))
-            .ToList();
+                StudentCount: g.First().Class!.ClassStudents.Count
+            ));
+
+        // Blank classes assigned to this teacher as homeroom but with no subject
+        // assignment yet wouldn't otherwise appear here — surface them too so the
+        // teacher can open them and generate a class join code.
+        var homeroomOnly = await _db.Classes
+            .Include(c => c.School)
+            .Include(c => c.ClassStudents)
+            .Where(c => c.HomeroomTeacherId == teacherId && !grouped.Keys.Contains(c.Id))
+            .ToListAsync();
+
+        var result = grouped.Values.ToList();
+        result.AddRange(homeroomOnly.Select(c => (
+            Class: c,
+            Subjects: new List<Subject>(),
+            StudentCount: c.ClassStudents.Count
+        )));
+        return result;
+    }
+
+    private async Task<bool> IsTeacherAuthorizedForClassAsync(string teacherId, int classId)
+    {
+        var isHomeroom = await _db.Classes
+            .AnyAsync(c => c.Id == classId && c.HomeroomTeacherId == teacherId);
+        if (isHomeroom) return true;
+
+        return await _db.ClassTeachers
+            .AnyAsync(ct => ct.ClassId == classId && ct.TeacherId == teacherId);
+    }
+
+    public async Task<ClassJoinCodeDto?> GetClassJoinCodeAsync(string teacherId, int classId)
+    {
+        if (!await IsTeacherAuthorizedForClassAsync(teacherId, classId))
+            return null;
+
+        return await _db.ClassJoinCodes
+            .Where(c => c.ClassId == classId && c.IsActive)
+            .Select(c => new ClassJoinCodeDto(c.Code, c.CreatedAt))
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<(bool Success, string? Error, ClassJoinCodeDto? Code)> RegenerateClassJoinCodeAsync(string teacherId, int classId)
+    {
+        if (!await IsTeacherAuthorizedForClassAsync(teacherId, classId))
+            return (false, "Class not found or you are not assigned to it.", null);
+
+        await _db.ClassJoinCodes
+            .Where(c => c.ClassId == classId && c.IsActive)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.IsActive, false)
+                .SetProperty(c => c.RevokedAt, DateTime.UtcNow));
+
+        var code = Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant();
+        var entity = new ClassJoinCode
+        {
+            ClassId   = classId,
+            Code      = code,
+            IsActive  = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.ClassJoinCodes.Add(entity);
+        await _db.SaveChangesAsync();
+
+        return (true, null, new ClassJoinCodeDto(entity.Code, entity.CreatedAt));
     }
 
     public async Task<List<(Class Class, Subject Subject, List<(string Topic, int Count)> TopTopics)>>
@@ -50,9 +115,9 @@ public class TeacherDashboardService
         var cls = classTeachers.First().Class!;
         var subjectIds = classTeachers.Select(ct => ct.SubjectId).ToHashSet();
 
-        var studentIds = await _db.Set<ApplicationUser>()
-            .Where(u => u.ClassId == classId)
-            .Select(u => u.Id)
+        var studentIds = await _db.ClassStudents
+            .Where(cs => cs.ClassId == classId)
+            .Select(cs => cs.StudentId)
             .ToListAsync();
 
         var messages = studentIds.Count == 0
@@ -98,12 +163,13 @@ public class TeacherDashboardService
         {
             var cls = await _db.Classes
                 .Include(c => c.School)
-                .Include(c => c.Students)
+                .Include(c => c.ClassStudents)
+                    .ThenInclude(cs => cs.Student)
                 .FirstOrDefaultAsync(c => c.Id == cid);
 
             if (cls is null) continue;
 
-            var studentIds = cls.Students.Select(s => s.Id).ToList();
+            var studentIds = cls.ClassStudents.Select(cs => cs.StudentId).ToList();
 
             if (studentIds.Count == 0)
             {
@@ -121,7 +187,7 @@ public class TeacherDashboardService
                 .Take(5)
                 .ToListAsync();
 
-            var studentDict = cls.Students.ToDictionary(s => s.Id);
+            var studentDict = cls.ClassStudents.ToDictionary(cs => cs.StudentId, cs => cs.Student!);
             var topStudents = counts
                 .Where(c => studentDict.ContainsKey(c.UserId))
                 .Select(c => (Student: studentDict[c.UserId], QuestionCount: c.Count))

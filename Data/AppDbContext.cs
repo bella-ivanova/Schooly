@@ -11,6 +11,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<School> Schools { get; set; }
     public DbSet<Class> Classes { get; set; }
     public DbSet<ClassTeacher> ClassTeachers { get; set; }
+    public DbSet<ClassStudent> ClassStudents { get; set; }
+    public DbSet<ClassJoinCode> ClassJoinCodes { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
     public DbSet<ChatSession> ChatSessions { get; set; }
     public DbSet<Subject> Subjects { get; set; }
@@ -49,12 +51,23 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
              .HasForeignKey(c => c.HomeroomTeacherId)
              .IsRequired(false)
              .OnDelete(DeleteBehavior.SetNull);
+        });
 
-            b.HasMany(c => c.Students)
-             .WithOne(u => u.Class)
-             .HasForeignKey(u => u.ClassId)
-             .IsRequired(false)
-             .OnDelete(DeleteBehavior.SetNull);
+        builder.Entity<ClassStudent>(b =>
+        {
+            b.HasKey(cs => new { cs.ClassId, cs.StudentId });
+
+            b.HasOne(cs => cs.Class)
+             .WithMany(c => c.ClassStudents)
+             .HasForeignKey(cs => cs.ClassId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(cs => cs.Student)
+             .WithMany()
+             .HasForeignKey(cs => cs.StudentId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<ClassTeacher>(b =>
@@ -185,6 +198,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             b.HasOne(c => c.School)
              .WithMany()
              .HasForeignKey(c => c.SchoolId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ClassJoinCode>(b =>
+        {
+            b.Property(c => c.Code).IsRequired().HasMaxLength(24);
+            b.HasIndex(c => c.Code).IsUnique();
+            b.HasIndex(c => new { c.ClassId, c.IsActive });
+
+            b.HasOne(c => c.Class)
+             .WithMany()
+             .HasForeignKey(c => c.ClassId)
              .IsRequired()
              .OnDelete(DeleteBehavior.Cascade);
         });

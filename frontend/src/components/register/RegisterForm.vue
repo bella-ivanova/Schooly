@@ -18,6 +18,7 @@ const fullName = ref('')
 const password = ref('')
 const grade = ref('')
 const teacherRegistrationCode = ref('')
+const classJoinCode = ref('')
 const agreedToTerms = ref(false)
 const errorMessages = ref<string[]>([])
 const isSubmitting = ref(false)
@@ -39,6 +40,7 @@ async function handleSubmit() {
       role: role.value,
       grade: grade.value ? Number(grade.value) : undefined,
       teacherRegistrationCode: role.value === 'teacher' ? teacherRegistrationCode.value : undefined,
+      classJoinCode: role.value === 'student' && classJoinCode.value ? classJoinCode.value : undefined,
     })
     await router.push('/app')
   } catch (err) {
@@ -81,6 +83,12 @@ async function handleSubmit() {
         label="School registration code"
         type="password"
         placeholder="Provided by your school"
+      />
+      <Field
+        v-if="role === 'student'"
+        v-model="classJoinCode"
+        label="Class code (optional)"
+        placeholder="If your teacher has given you one"
       />
 
       <label class="terms-checkbox">

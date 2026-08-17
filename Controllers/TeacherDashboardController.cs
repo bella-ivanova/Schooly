@@ -110,4 +110,32 @@ public class TeacherDashboardController : ControllerBase
 
         return Ok(response);
     }
+
+    // GET /api/teacher/classes/{classId}/join-code
+    [HttpGet("classes/{classId:int}/join-code")]
+    public async Task<IActionResult> GetClassJoinCode(int classId)
+    {
+        var role = User.FindFirstValue("role");
+        if (role != "Teacher")
+            return StatusCode(403, new { error = "Access restricted to teachers." });
+
+        var teacherId = User.FindFirstValue("sub") ?? "";
+        var code = await _dashboard.GetClassJoinCodeAsync(teacherId, classId);
+        return Ok(code);
+    }
+
+    // POST /api/teacher/classes/{classId}/join-code/regenerate
+    [HttpPost("classes/{classId:int}/join-code/regenerate")]
+    public async Task<IActionResult> RegenerateClassJoinCode(int classId)
+    {
+        var role = User.FindFirstValue("role");
+        if (role != "Teacher")
+            return StatusCode(403, new { error = "Access restricted to teachers." });
+
+        var teacherId = User.FindFirstValue("sub") ?? "";
+        var (success, error, code) = await _dashboard.RegenerateClassJoinCodeAsync(teacherId, classId);
+        if (!success) return NotFound(new { error });
+
+        return Ok(code);
+    }
 }

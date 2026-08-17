@@ -130,7 +130,7 @@ public class AdminUserService
     {
         var query = _db.Classes
             .Include(c => c.HomeroomTeacher)
-            .Include(c => c.Students)
+            .Include(c => c.ClassStudents)
             .AsQueryable();
 
         if (schoolId != null)
@@ -139,7 +139,7 @@ public class AdminUserService
         var classes = await query.OrderBy(c => c.Name).ToListAsync();
 
         return classes
-            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.HomeroomTeacher?.UserName, c.Students.Count))
+            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count))
             .ToList();
     }
 
@@ -148,7 +148,7 @@ public class AdminUserService
         var classes = await _db.Classes
             .Include(c => c.School)
             .Include(c => c.HomeroomTeacher)
-            .Include(c => c.Students)
+            .Include(c => c.ClassStudents)
             .OrderBy(c => c.Name)
             .ToListAsync();
 
@@ -159,20 +159,15 @@ public class AdminUserService
         }
 
         foreach (var c in classes)
-            Console.WriteLine($"  {c.Name} — {c.School?.Name} | Класен: {c.HomeroomTeacher?.UserName ?? "—"} | Ученици: {c.Students.Count}");
+            Console.WriteLine($"  {c.Name} — {c.School?.Name} | Класен: {c.HomeroomTeacher?.UserName ?? "—"} | Ученици: {c.ClassStudents.Count}");
     }
 
     public async Task<(bool Success, string? Error)> DeleteClassAsync(int classId)
     {
-        var cls = await _db.Classes
-            .Include(c => c.Students)
-            .FirstOrDefaultAsync(c => c.Id == classId);
+        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId);
 
         if (cls == null)
             return (false, "Class not found.");
-
-        foreach (var s in cls.Students)
-            s.ClassId = null;
 
         _db.Classes.Remove(cls);
         await _db.SaveChangesAsync();
@@ -213,10 +208,19 @@ public class AdminUserService
         var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId);
         if (cls == null)
             return (false, "Class not found.");
+        if (student.SchoolId != null && student.SchoolId != cls.SchoolId)
+            return (false, "Student already belongs to a different school.");
 
-        student.ClassId  = cls.Id;
-        student.SchoolId = cls.SchoolId;
+        var alreadyMember = await _db.ClassStudents
+            .AnyAsync(cs => cs.ClassId == classId && cs.StudentId == studentId);
+        if (alreadyMember)
+            return (false, "Student is already in this class.");
+
+        _db.ClassStudents.Add(new ClassStudent { ClassId = cls.Id, StudentId = studentId });
+        if (student.SchoolId == null)
+            student.SchoolId = cls.SchoolId;
         await _users.UpdateAsync(student);
+        await _db.SaveChangesAsync();
         return (true, null);
     }
 
@@ -254,9 +258,7 @@ public class AdminUserService
 
     public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(int? schoolId = null)
     {
-        var query = _db.Set<ApplicationUser>()
-            .Include(u => u.Class)
-            .AsQueryable();
+        var query = _db.Set<ApplicationUser>().AsQueryable();
 
         if (schoolId != null)
             query = query.Where(u => u.SchoolId == schoolId);
@@ -266,6 +268,8 @@ public class AdminUserService
             .ThenBy(u => u.UserName)
             .ToListAsync();
 
+        var classNamesByStudent = await ClassNamesByStudentAsync(users.Select(u => u.Id));
+
         return users
             .Select(u => new UserSummaryDto(
                 u.Id,
@@ -273,14 +277,26 @@ public class AdminUserService
                 u.FullName,
                 u.Role.ToString(),
                 u.Grade,
-                u.Class?.Name))
+                classNamesByStudent.TryGetValue(u.Id, out var names) ? names : Array.Empty<string>()))
             .ToList();
+    }
+
+    private async Task<Dictionary<string, IReadOnlyList<string>>> ClassNamesByStudentAsync(IEnumerable<string> userIds)
+    {
+        var ids = userIds.ToList();
+        var rows = await _db.ClassStudents
+            .Where(cs => ids.Contains(cs.StudentId))
+            .Include(cs => cs.Class)
+            .ToListAsync();
+
+        return rows
+            .GroupBy(cs => cs.StudentId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(cs => cs.Class!.Name).ToList());
     }
 
     public async Task ListUsersAsync()
     {
         var users = await _db.Set<ApplicationUser>()
-            .Include(u => u.Class)
             .Include(u => u.School)
             .OrderBy(u => u.Role)
             .ThenBy(u => u.UserName)
@@ -292,10 +308,13 @@ public class AdminUserService
             return;
         }
 
+        var classNamesByStudent = await ClassNamesByStudentAsync(users.Select(u => u.Id));
+
         foreach (var u in users)
         {
             var gradeTag  = u.Grade.HasValue ? $"  Клас {u.Grade}" : "";
-            var classTag  = u.Class != null ? $" ({u.Class.Name})" : " (Без клас)";
+            var classNames = classNamesByStudent.TryGetValue(u.Id, out var names) ? names : Array.Empty<string>();
+            var classTag  = classNames.Count > 0 ? $" ({string.Join(", ", classNames)})" : " (Без клас)";
             var schoolTag = u.SchoolId != null ? $" | {u.School?.Name}" : "";
             Console.WriteLine($"  [{u.Role}] {u.UserName} — {u.FullName}{gradeTag}{classTag}{schoolTag}");
         }

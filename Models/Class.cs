@@ -11,6 +11,6 @@ public class Class
     public School? School { get; set; }
     public string? HomeroomTeacherId { get; set; }
     public ApplicationUser? HomeroomTeacher { get; set; }
-    public ICollection<ApplicationUser> Students { get; set; } = new List<ApplicationUser>();
+    public ICollection<ClassStudent> ClassStudents { get; set; } = new List<ClassStudent>();
     public ICollection<ClassTeacher> ClassTeachers { get; set; } = new List<ClassTeacher>();
 }

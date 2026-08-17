@@ -22,8 +22,8 @@ export interface RegisterRequest {
   role: 'student' | 'teacher'
   grade?: number
   classLetter?: string
-  schoolId?: number
   teacherRegistrationCode?: string
+  classJoinCode?: string
 }
 
 export interface AuthResponse {
@@ -89,6 +89,17 @@ export interface HistoryMessage {
   timestamp: string
 }
 
+export interface StudentClassEntry {
+  classId: number
+  className: string
+}
+
+export interface StudentClassesInfo {
+  schoolId: number | null
+  schoolName: string | null
+  classes: StudentClassEntry[]
+}
+
 // ── Teacher dashboard ────────────────────────────────────────────────────
 
 export interface TeacherClassInfo {
@@ -144,6 +155,20 @@ export interface SchoolInfo {
 export interface SchoolTeacherCode {
   code: string
   createdAt: string
+}
+
+export interface ClassJoinCode {
+  code: string
+  createdAt: string
+}
+
+export interface AdminUserSummary {
+  id: string
+  username: string
+  fullName: string
+  role: string
+  grade: number | null
+  classNames: string[]
 }
 
 // ── GlobalAdmin dashboard ────────────────────────────────────────────────

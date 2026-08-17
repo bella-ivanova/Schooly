@@ -65,7 +65,9 @@ public class AuthController : ControllerBase
             return StatusCode(429, new { error = "Registration attempted too recently. Please wait before trying again." });
 
         UserRole role;
-        var resolvedSchoolId = req.SchoolId;
+        int? resolvedSchoolId = null;
+        int? resolvedClassId = null;
+
         if (string.Equals(req.Role, "teacher", StringComparison.OrdinalIgnoreCase))
         {
             var (matched, schoolIdFromCode) = await _auth.ResolveTeacherRegistrationAsync(req.TeacherRegistrationCode ?? "");
@@ -78,11 +80,18 @@ public class AuthController : ControllerBase
         else
         {
             role = UserRole.Student;
+
+            var (codeOk, classIdFromCode, schoolIdFromCode) = await _auth.ResolveClassJoinCodeAsync(req.ClassJoinCode);
+            if (!codeOk)
+                return BadRequest(new { error = "Invalid class code." });
+
+            resolvedClassId  = classIdFromCode;
+            resolvedSchoolId = schoolIdFromCode;
         }
 
         var (user, errors) = await _auth.RegisterAsync(
             req.Username, req.Email, req.Password, role,
-            req.FullName, req.Grade, req.ClassLetter, resolvedSchoolId);
+            req.FullName, req.Grade, req.ClassLetter, resolvedSchoolId, resolvedClassId);
 
         if (user == null)
             return BadRequest(new { errors });
@@ -191,8 +200,8 @@ public record RegisterRequest(
     [Required, MaxLength(20)]  string  Role,
     int?    Grade,
     [MaxLength(5)]   string? ClassLetter,
-    int?    SchoolId,
-    [MaxLength(100)] string? TeacherRegistrationCode);
+    [MaxLength(100)] string? TeacherRegistrationCode,
+    [MaxLength(100)] string? ClassJoinCode);
 
 public record RefreshRequest([Required, MaxLength(256)] string RefreshToken);
 

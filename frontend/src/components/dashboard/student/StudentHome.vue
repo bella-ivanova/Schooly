@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import * as studentApi from '../../../api/student'
-import type { HistoryMessage, WeakSpot } from '../../../api/types'
+import type { ApiError, HistoryMessage, StudentClassEntry, WeakSpot } from '../../../api/types'
 import { useAuthStore } from '../../../stores/auth'
 import RecentActivityCard from './RecentActivityCard.vue'
 import WeakSpotsCard from './WeakSpotsCard.vue'
+import JoinClassCard from './JoinClassCard.vue'
 
 const authStore = useAuthStore()
 
 const history = ref<HistoryMessage[]>([])
 const weakSpots = ref<WeakSpot[]>([])
+const classes = ref<StudentClassEntry[]>([])
 const loading = ref(true)
+
+const joiningClass = ref(false)
+const joinError = ref<string | null>(null)
 
 const recentActivity = computed(() => {
   const seenTopics = new Set<string>()
@@ -27,11 +32,30 @@ const recentActivity = computed(() => {
 })
 
 onMounted(async () => {
-  const [historyRes, weakSpotsRes] = await Promise.all([studentApi.getHistory(), studentApi.getWeakSpots()])
+  const [historyRes, weakSpotsRes, classesRes] = await Promise.all([
+    studentApi.getHistory(),
+    studentApi.getWeakSpots(),
+    studentApi.getClasses(),
+  ])
   history.value = historyRes
   weakSpots.value = weakSpotsRes
+  classes.value = classesRes.classes
   loading.value = false
 })
+
+async function handleJoinClass(code: string) {
+  joinError.value = null
+  joiningClass.value = true
+  try {
+    const res = await studentApi.joinClass(code)
+    classes.value = res.classes
+  } catch (err) {
+    const apiError = err as ApiError
+    joinError.value = apiError.messages?.[0] ?? apiError.message ?? 'Could not join class.'
+  } finally {
+    joiningClass.value = false
+  }
+}
 </script>
 
 <template>
@@ -45,6 +69,7 @@ onMounted(async () => {
     <div v-else class="card-grid">
       <RecentActivityCard :entries="recentActivity" />
       <WeakSpotsCard :weak-spots="weakSpots" />
+      <JoinClassCard :classes="classes" :submitting="joiningClass" :error="joinError" @join="handleJoinClass" />
     </div>
   </div>
 </template>

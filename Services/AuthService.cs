@@ -32,7 +32,8 @@ public class AuthService
     // Registers a new user. Returns the created user on success.
     public async Task<(ApplicationUser? User, IReadOnlyList<string> Errors)> RegisterAsync(
         string username, string email, string password, UserRole role,
-        string fullName = "", int? grade = null, string? classLetter = null, int? schoolId = null)
+        string fullName = "", int? grade = null, string? classLetter = null,
+        int? schoolId = null, int? classId = null)
     {
         if (role == UserRole.Student && (grade is null or < 1 or > 12))
             return (null, new[] { "Students must have a grade between 1 and 12." });
@@ -54,7 +55,107 @@ public class AuthService
         };
 
         var (success, errors) = await _users.CreateAsync(user, password);
-        return success ? (user, Array.Empty<string>()) : (null, errors);
+        if (!success)
+            return (null, errors);
+
+        if (classId != null)
+        {
+            _db.ClassStudents.Add(new ClassStudent { ClassId = classId.Value, StudentId = user.Id });
+            await _db.SaveChangesAsync();
+        }
+
+        return (user, Array.Empty<string>());
+    }
+
+    // Resolves an optional class-join code into the class's Id and its school's Id.
+    // An empty code is not an error (registration/joining without a class is always
+    // allowed) — a non-empty code that matches nothing IS an error, so the caller can
+    // surface clear feedback instead of silently registering/joining without a class.
+    public async Task<(bool Ok, int? ResolvedClassId, int? ResolvedSchoolId)> ResolveClassJoinCodeAsync(string? suppliedCode)
+    {
+        if (string.IsNullOrEmpty(suppliedCode))
+            return (true, null, null);
+
+        var activeCodes = await _db.ClassJoinCodes
+            .Where(c => c.IsActive)
+            .Select(c => new { c.ClassId, c.Code })
+            .ToListAsync();
+
+        var suppliedBytes = Encoding.UTF8.GetBytes(suppliedCode);
+        foreach (var candidate in activeCodes)
+        {
+            var candidateBytes = Encoding.UTF8.GetBytes(candidate.Code);
+            if (candidateBytes.Length == suppliedBytes.Length &&
+                CryptographicOperations.FixedTimeEquals(suppliedBytes, candidateBytes))
+            {
+                var schoolId = await _db.Classes
+                    .Where(c => c.Id == candidate.ClassId)
+                    .Select(c => (int?)c.SchoolId)
+                    .FirstOrDefaultAsync();
+                return (true, candidate.ClassId, schoolId);
+            }
+        }
+
+        return (false, null, null);
+    }
+
+    // Attaches an already-registered Student to an additional class via that class's
+    // active join code. A student may belong to multiple classes, but they must all
+    // belong to the same school: the first join sets SchoolId, later joins are
+    // rejected if the code's class belongs to a different school.
+    public async Task<(bool Success, string? Error, int? ClassId, int? SchoolId)> JoinClassAsync(string userId, string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return (false, "A class code is required.", null, null);
+
+        var user = await _users.GetByIdAsync(userId);
+        if (user == null)
+            return (false, "User not found.", null, null);
+        if (user.Role != UserRole.Student)
+            return (false, "Only students can join a class this way.", null, null);
+
+        var (matched, classId, schoolId) = await ResolveClassJoinCodeAsync(code);
+        if (!matched || classId == null)
+            return (false, "Invalid class code.", null, null);
+
+        if (user.SchoolId != null && user.SchoolId != schoolId)
+            return (false, "This class belongs to a different school than the one you're already attached to.", null, null);
+
+        var alreadyMember = await _db.ClassStudents
+            .AnyAsync(cs => cs.ClassId == classId && cs.StudentId == userId);
+        if (alreadyMember)
+            return (false, "You're already in this class.", null, null);
+
+        _db.ClassStudents.Add(new ClassStudent { ClassId = classId.Value, StudentId = userId });
+        if (user.SchoolId == null)
+        {
+            user.SchoolId = schoolId;
+            await _users.UpdateAsync(user);
+        }
+        await _db.SaveChangesAsync();
+
+        return (true, null, classId, schoolId);
+    }
+
+    // Read-only lookup backing the student-facing "what classes am I in" endpoint.
+    public async Task<(int? SchoolId, string? SchoolName, IReadOnlyList<(int ClassId, string ClassName)> Classes)>
+        GetStudentClassesAsync(string userId)
+    {
+        var user = await _users.GetByIdAsync(userId);
+        if (user == null)
+            return (null, null, Array.Empty<(int, string)>());
+
+        string? schoolName = user.SchoolId != null
+            ? await _db.Schools.Where(s => s.Id == user.SchoolId).Select(s => s.Name).FirstOrDefaultAsync()
+            : null;
+
+        var classes = await _db.ClassStudents
+            .Where(cs => cs.StudentId == userId)
+            .Include(cs => cs.Class)
+            .Select(cs => new { cs.ClassId, Name = cs.Class!.Name })
+            .ToListAsync();
+
+        return (user.SchoolId, schoolName, classes.Select(c => (c.ClassId, c.Name)).ToList());
     }
 
     // Resolves a teacher registration attempt against the target school's active registration code.

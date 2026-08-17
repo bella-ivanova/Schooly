@@ -1,22 +1,38 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import * as schoolAdminApi from '../../../api/schoolAdmin'
-import type { AdminClassSummary, SchoolTeacherCode } from '../../../api/types'
+import type { AdminClassSummary, AdminUserSummary, SchoolTeacherCode } from '../../../api/types'
+import Field from '../../shared/Field.vue'
+import SelectField from '../../shared/SelectField.vue'
 
 const schoolName = ref<string | null>(null)
 const classes = ref<AdminClassSummary[]>([])
+const users = ref<AdminUserSummary[]>([])
 const teacherCode = ref<SchoolTeacherCode | null>(null)
 const loading = ref(true)
 const regenerating = ref(false)
 
+const newClassName = ref('')
+const newClassTeacherId = ref('')
+const creatingClass = ref(false)
+const createClassError = ref<string | null>(null)
+
+const teacherOptions = computed(() =>
+  users.value
+    .filter((u) => u.role === 'Teacher')
+    .map((t) => ({ value: t.id, label: t.fullName || t.username })),
+)
+
 onMounted(async () => {
-  const [school, classesRes, codeRes] = await Promise.all([
+  const [school, classesRes, usersRes, codeRes] = await Promise.all([
     schoolAdminApi.getSchool(),
     schoolAdminApi.getClasses(),
+    schoolAdminApi.getUsers(),
     schoolAdminApi.getTeacherCode(),
   ])
   schoolName.value = school.name
   classes.value = classesRes
+  users.value = usersRes
   teacherCode.value = codeRes
   loading.value = false
 })
@@ -27,6 +43,22 @@ async function handleRegenerateCode() {
     teacherCode.value = await schoolAdminApi.regenerateTeacherCode()
   } finally {
     regenerating.value = false
+  }
+}
+
+async function handleCreateClass() {
+  if (!newClassName.value.trim()) return
+  createClassError.value = null
+  creatingClass.value = true
+  try {
+    await schoolAdminApi.createClass(newClassName.value.trim(), newClassTeacherId.value || undefined)
+    classes.value = await schoolAdminApi.getClasses()
+    newClassName.value = ''
+    newClassTeacherId.value = ''
+  } catch (err) {
+    createClassError.value = (err as { message?: string }).message ?? 'Could not create class.'
+  } finally {
+    creatingClass.value = false
   }
 }
 </script>
@@ -61,6 +93,26 @@ async function handleRegenerateCode() {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div v-if="!loading" class="table-card code-card">
+      <div class="code-card-header">
+        <h2 class="section-title">Create a class</h2>
+        <p class="section-subtitle">Create a blank class for a teacher — they can generate a code from it for students to join.</p>
+      </div>
+      <form class="create-class-row" @submit.prevent="handleCreateClass">
+        <Field v-model="newClassName" label="Class name" placeholder="10A" />
+        <SelectField
+          v-model="newClassTeacherId"
+          label="Homeroom teacher"
+          placeholder="Select teacher"
+          :options="teacherOptions"
+        />
+        <button type="submit" class="regen-btn create-btn" :disabled="creatingClass || !newClassName.trim()">
+          {{ creatingClass ? 'Creating…' : 'Create class' }}
+        </button>
+      </form>
+      <p v-if="createClassError" class="create-class-error">{{ createClassError }}</p>
     </div>
 
     <div v-if="!loading" class="table-card code-card">
@@ -187,6 +239,27 @@ async function handleRegenerateCode() {
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
+}
+
+.create-class-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.create-class-row > * {
+  min-width: 180px;
+}
+
+.create-btn {
+  height: 42px;
+}
+
+.create-class-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-2);
 }
 
 .code-value {

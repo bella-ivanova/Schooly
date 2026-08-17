@@ -6,7 +6,7 @@ using StudyAssistant.Models;
 namespace StudyAssistant.Services;
 
 public record ClassSummaryDto(int Id, string Name, string? HomeroomTeacherUsername, int StudentCount);
-public record UserSummaryDto(string Id, string Username, string FullName, string Role, int? Grade, string? ClassName);
+public record UserSummaryDto(string Id, string Username, string FullName, string Role, int? Grade, IReadOnlyList<string> ClassNames);
 public record SubjectSummaryDto(int Id, string Name);
 public record SchoolSummaryDto(int Id, string Name, DateTime CreatedAt, int StudentCount, int TeacherCount);
 public record SchoolTeacherCodeDto(string Code, DateTime CreatedAt);
@@ -78,13 +78,13 @@ public class SchoolAdminService
     {
         var classes = await _db.Classes
             .Include(c => c.HomeroomTeacher)
-            .Include(c => c.Students)
+            .Include(c => c.ClassStudents)
             .Where(c => c.SchoolId == schoolId)
             .OrderBy(c => c.Name)
             .ToListAsync();
 
         return classes
-            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.HomeroomTeacher?.UserName, c.Students.Count))
+            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count))
             .ToList();
     }
 
@@ -119,13 +119,20 @@ public class SchoolAdminService
         if (cls == null)
             return (false, "Class not found.");
 
-        student.ClassId  = cls.Id;
-        student.SchoolId = schoolId;
+        var alreadyMember = await _db.ClassStudents
+            .AnyAsync(cs => cs.ClassId == classId && cs.StudentId == userId);
+        if (alreadyMember)
+            return (false, "Student is already in this class.");
+
+        _db.ClassStudents.Add(new ClassStudent { ClassId = classId, StudentId = userId });
+        if (student.SchoolId == null)
+            student.SchoolId = schoolId;
         await _users.UpdateAsync(student);
+        await _db.SaveChangesAsync();
         return (true, null);
     }
 
-    public async Task<(bool Success, string? Error)> RemoveStudentAsync(int schoolId, string userId)
+    public async Task<(bool Success, string? Error)> RemoveStudentAsync(int schoolId, int classId, string userId)
     {
         var student = await _users.GetByIdAsync(userId);
         if (student == null)
@@ -133,8 +140,13 @@ public class SchoolAdminService
         if (student.SchoolId != schoolId)
             return (false, "Student does not belong to this school.");
 
-        student.ClassId = null;
-        await _users.UpdateAsync(student);
+        var membership = await _db.ClassStudents
+            .FirstOrDefaultAsync(cs => cs.ClassId == classId && cs.StudentId == userId);
+        if (membership == null)
+            return (false, "Student is not in this class.");
+
+        _db.ClassStudents.Remove(membership);
+        await _db.SaveChangesAsync();
         return (true, null);
     }
 
@@ -214,11 +226,19 @@ public class SchoolAdminService
     public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(int schoolId)
     {
         var users = await _db.Set<ApplicationUser>()
-            .Include(u => u.Class)
             .Where(u => u.SchoolId == schoolId)
             .OrderBy(u => u.Role)
             .ThenBy(u => u.UserName)
             .ToListAsync();
+
+        var userIds = users.Select(u => u.Id).ToList();
+        var classNamesByStudent = await _db.ClassStudents
+            .Where(cs => userIds.Contains(cs.StudentId))
+            .Include(cs => cs.Class)
+            .ToListAsync();
+        var grouped = classNamesByStudent
+            .GroupBy(cs => cs.StudentId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(cs => cs.Class!.Name).ToList());
 
         return users
             .Select(u => new UserSummaryDto(
@@ -227,7 +247,7 @@ public class SchoolAdminService
                 u.FullName,
                 u.Role.ToString(),
                 u.Grade,
-                u.Class?.Name))
+                grouped.TryGetValue(u.Id, out var names) ? names : Array.Empty<string>()))
             .ToList();
     }
 
