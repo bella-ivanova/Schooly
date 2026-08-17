@@ -30,7 +30,13 @@ export async function* streamChatMessage(
     } else if ('done' in data) {
       yield { kind: 'done', scene: (data.scene as unknown) ?? null }
     } else if ('title' in data) {
-      yield { kind: 'meta', title: data.title as string, subject: data.subject as string }
+      yield {
+        kind: 'meta',
+        title: data.title as string,
+        subject: data.subject as string,
+        classId: (data.classId as number | null) ?? null,
+        className: (data.className as string | null) ?? null,
+      }
     } else if ('token' in data) {
       yield { kind: 'token', token: data.token as string }
     }

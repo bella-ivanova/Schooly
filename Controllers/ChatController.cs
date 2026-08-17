@@ -36,7 +36,7 @@ public class ChatController : ControllerBase
     //   data: {"sessionId":N}\n\n                          — always first
     //   data: {"token":"..."}\n\n                           — zero or more
     //   data: {"done":true,"scene":<json or null>}\n\n
-    //   data: {"title":"...","subject":"..."}\n\n           — only on the session's first exchange
+    //   data: {"title":"...","subject":"...","classId":N|null,"className":"..."|null}\n\n  — only on the session's first exchange
     [HttpPost("message")]
     [Authorize]
     public async Task SendMessage([FromBody] ChatMessageRequest req)
@@ -112,9 +112,10 @@ public class ChatController : ControllerBase
         if (isFirstExchange)
         {
             var title = await _chatSessions.GenerateTitleAsync(req.Message, answer);
-            await _chatSessions.SetFolderAndTitleOnceAsync(session.Id, subject, schoolId, title ?? "New chat");
+            var (_, _, classId, className) = await _chatSessions.SetFolderAndTitleOnceAsync(
+                session.Id, userId, subject, schoolId, title ?? "New chat");
 
-            var metaPayload = JsonSerializer.Serialize(new { title = title ?? "New chat", subject });
+            var metaPayload = JsonSerializer.Serialize(new { title = title ?? "New chat", subject, classId, className });
             await HttpContext.Response.WriteAsync($"data: {metaPayload}\n\n");
             await HttpContext.Response.Body.FlushAsync();
         }
@@ -135,6 +136,8 @@ public class ChatController : ControllerBase
             id            = s.Id,
             title         = s.Title,
             subject       = s.Subject?.Name,
+            classId       = s.ClassId,
+            className     = s.Class?.Name,
             createdAt     = s.CreatedAt,
             lastMessageAt = s.LastMessageAt
         });

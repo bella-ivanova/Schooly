@@ -102,18 +102,34 @@ public class TeacherDashboardService
     {
         var since = DateTime.UtcNow.AddDays(-days);
 
+        if (!await IsTeacherAuthorizedForClassAsync(teacherId, classId))
+            return new List<(Class, Subject, List<(string, int)>)>();
+
+        var cls = await _db.Classes
+            .Include(c => c.School)
+            .Include(c => c.Subject)
+            .FirstOrDefaultAsync(c => c.Id == classId);
+        if (cls == null)
+            return new List<(Class, Subject, List<(string, int)>)>();
+
         var classTeachers = await _db.ClassTeachers
-            .Include(ct => ct.Class!)
-                .ThenInclude(c => c.School)
             .Include(ct => ct.Subject)
             .Where(ct => ct.TeacherId == teacherId && ct.ClassId == classId)
             .ToListAsync();
 
-        if (classTeachers.Count == 0)
+        // Subject id -> Subject entity, deduplicated: ClassTeacher-assigned subjects
+        // plus the class's own tagged subject, which may have no ClassTeacher row yet
+        // (e.g. a homeroom teacher whose class was just tagged by a SchoolAdmin).
+        var subjectsById = classTeachers
+            .Where(ct => ct.Subject != null)
+            .ToDictionary(ct => ct.SubjectId, ct => ct.Subject!);
+        if (cls.SubjectId != null && cls.Subject != null && !subjectsById.ContainsKey(cls.SubjectId.Value))
+            subjectsById[cls.SubjectId.Value] = cls.Subject;
+
+        if (subjectsById.Count == 0)
             return new List<(Class, Subject, List<(string, int)>)>();
 
-        var cls = classTeachers.First().Class!;
-        var subjectIds = classTeachers.Select(ct => ct.SubjectId).ToHashSet();
+        var subjectIds = subjectsById.Keys.ToHashSet();
 
         var studentIds = await _db.ClassStudents
             .Where(cs => cs.ClassId == classId)
@@ -131,12 +147,12 @@ public class TeacherDashboardService
                          && m.Role == "user")
                 .ToListAsync();
 
-        return classTeachers
-            .Select(ct => (
+        return subjectsById
+            .Select(kv => (
                 Class:     cls,
-                Subject:   ct.Subject!,
+                Subject:   kv.Value,
                 TopTopics: messages
-                    .Where(m => m.SubjectId == ct.SubjectId)
+                    .Where(m => m.SubjectId == kv.Key)
                     .GroupBy(m => m.Topic)
                     .OrderByDescending(g => g.Count())
                     .Take(5)

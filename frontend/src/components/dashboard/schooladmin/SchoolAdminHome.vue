@@ -1,21 +1,27 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import * as schoolAdminApi from '../../../api/schoolAdmin'
-import type { AdminClassSummary, AdminUserSummary, SchoolTeacherCode } from '../../../api/types'
+import type { AdminClassSummary, AdminSubjectSummary, AdminUserSummary, SchoolTeacherCode } from '../../../api/types'
 import Field from '../../shared/Field.vue'
 import SelectField from '../../shared/SelectField.vue'
 
 const schoolName = ref<string | null>(null)
 const classes = ref<AdminClassSummary[]>([])
 const users = ref<AdminUserSummary[]>([])
+const subjects = ref<AdminSubjectSummary[]>([])
 const teacherCode = ref<SchoolTeacherCode | null>(null)
 const loading = ref(true)
 const regenerating = ref(false)
 
 const newClassName = ref('')
+const newClassSubjectId = ref('')
 const newClassTeacherId = ref('')
 const creatingClass = ref(false)
 const createClassError = ref<string | null>(null)
+
+const newSubjectName = ref('')
+const creatingSubject = ref(false)
+const createSubjectError = ref<string | null>(null)
 
 const teacherOptions = computed(() =>
   users.value
@@ -23,16 +29,22 @@ const teacherOptions = computed(() =>
     .map((t) => ({ value: t.id, label: t.fullName || t.username })),
 )
 
+const subjectOptions = computed(() =>
+  subjects.value.map((s) => ({ value: String(s.id), label: s.name })),
+)
+
 onMounted(async () => {
-  const [school, classesRes, usersRes, codeRes] = await Promise.all([
+  const [school, classesRes, usersRes, subjectsRes, codeRes] = await Promise.all([
     schoolAdminApi.getSchool(),
     schoolAdminApi.getClasses(),
     schoolAdminApi.getUsers(),
+    schoolAdminApi.getSubjects(),
     schoolAdminApi.getTeacherCode(),
   ])
   schoolName.value = school.name
   classes.value = classesRes
   users.value = usersRes
+  subjects.value = subjectsRes
   teacherCode.value = codeRes
   loading.value = false
 })
@@ -46,14 +58,34 @@ async function handleRegenerateCode() {
   }
 }
 
+async function handleCreateSubject() {
+  if (!newSubjectName.value.trim()) return
+  createSubjectError.value = null
+  creatingSubject.value = true
+  try {
+    await schoolAdminApi.createSubject(newSubjectName.value.trim())
+    subjects.value = await schoolAdminApi.getSubjects()
+    newSubjectName.value = ''
+  } catch (err) {
+    createSubjectError.value = (err as { message?: string }).message ?? 'Could not create subject.'
+  } finally {
+    creatingSubject.value = false
+  }
+}
+
 async function handleCreateClass() {
-  if (!newClassName.value.trim()) return
+  if (!newClassName.value.trim() || !newClassSubjectId.value) return
   createClassError.value = null
   creatingClass.value = true
   try {
-    await schoolAdminApi.createClass(newClassName.value.trim(), newClassTeacherId.value || undefined)
+    await schoolAdminApi.createClass(
+      newClassName.value.trim(),
+      Number(newClassSubjectId.value),
+      newClassTeacherId.value || undefined,
+    )
     classes.value = await schoolAdminApi.getClasses()
     newClassName.value = ''
+    newClassSubjectId.value = ''
     newClassTeacherId.value = ''
   } catch (err) {
     createClassError.value = (err as { message?: string }).message ?? 'Could not create class.'
@@ -76,6 +108,7 @@ async function handleCreateClass() {
         <thead>
           <tr>
             <th>Name</th>
+            <th>Subject</th>
             <th>Homeroom</th>
             <th>Students</th>
             <th>Actions</th>
@@ -84,12 +117,13 @@ async function handleCreateClass() {
         <tbody>
           <tr v-for="cls in classes" :key="cls.id">
             <td class="class-name">{{ cls.name }}</td>
+            <td>{{ cls.subjectName ?? '—' }}</td>
             <td>{{ cls.homeroomTeacherUsername ?? '—' }}</td>
             <td>{{ cls.studentCount }}</td>
             <td class="actions">Set homeroom · Add/remove student</td>
           </tr>
           <tr v-if="classes.length === 0">
-            <td colspan="4" class="empty">No classes yet.</td>
+            <td colspan="5" class="empty">No classes yet.</td>
           </tr>
         </tbody>
       </table>
@@ -97,18 +131,42 @@ async function handleCreateClass() {
 
     <div v-if="!loading" class="table-card code-card">
       <div class="code-card-header">
+        <h2 class="section-title">Subjects</h2>
+        <p class="section-subtitle">Add a subject before creating a class tagged to it.</p>
+      </div>
+      <form class="create-class-row" @submit.prevent="handleCreateSubject">
+        <Field v-model="newSubjectName" label="Subject name" placeholder="Math" />
+        <button type="submit" class="regen-btn create-btn" :disabled="creatingSubject || !newSubjectName.trim()">
+          {{ creatingSubject ? 'Creating…' : 'Add subject' }}
+        </button>
+      </form>
+      <p v-if="createSubjectError" class="create-class-error">{{ createSubjectError }}</p>
+    </div>
+
+    <div v-if="!loading" class="table-card code-card">
+      <div class="code-card-header">
         <h2 class="section-title">Create a class</h2>
-        <p class="section-subtitle">Create a blank class for a teacher — they can generate a code from it for students to join.</p>
+        <p class="section-subtitle">Create a class tagged with a subject — its teacher can generate a code from it for students to join.</p>
       </div>
       <form class="create-class-row" @submit.prevent="handleCreateClass">
         <Field v-model="newClassName" label="Class name" placeholder="10A" />
+        <SelectField
+          v-model="newClassSubjectId"
+          label="Subject"
+          placeholder="Select subject"
+          :options="subjectOptions"
+        />
         <SelectField
           v-model="newClassTeacherId"
           label="Homeroom teacher"
           placeholder="Select teacher"
           :options="teacherOptions"
         />
-        <button type="submit" class="regen-btn create-btn" :disabled="creatingClass || !newClassName.trim()">
+        <button
+          type="submit"
+          class="regen-btn create-btn"
+          :disabled="creatingClass || !newClassName.trim() || !newClassSubjectId"
+        >
           {{ creatingClass ? 'Creating…' : 'Create class' }}
         </button>
       </form>

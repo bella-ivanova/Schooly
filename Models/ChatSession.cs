@@ -15,6 +15,11 @@ public class ChatSession
     public int? SubjectId { get; set; }
     public Subject? Subject { get; set; }
 
+    // The student's class whose SubjectId tag matches the resolved SubjectId above,
+    // if any. Set once alongside SubjectId on the first exchange, same locking rule.
+    public int? ClassId { get; set; }
+    public Class? Class { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Denormalized recency column, bumped every time a message is saved into this

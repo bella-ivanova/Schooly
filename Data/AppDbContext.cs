@@ -51,6 +51,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
              .HasForeignKey(c => c.HomeroomTeacherId)
              .IsRequired(false)
              .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(c => c.Subject)
+             .WithMany()
+             .HasForeignKey(c => c.SubjectId)
+             .IsRequired(false)
+             .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<ClassStudent>(b =>
@@ -107,7 +113,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             b.HasOne(s => s.School)
              .WithMany()
              .HasForeignKey(s => s.SchoolId)
-             .IsRequired()
+             .IsRequired(false)
              .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -139,6 +145,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             b.HasOne(s => s.Subject)
              .WithMany()
              .HasForeignKey(s => s.SubjectId)
+             .IsRequired(false)
+             .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(s => s.Class)
+             .WithMany()
+             .HasForeignKey(s => s.ClassId)
              .IsRequired(false)
              .OnDelete(DeleteBehavior.SetNull);
 

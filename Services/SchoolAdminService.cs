@@ -5,7 +5,7 @@ using StudyAssistant.Models;
 
 namespace StudyAssistant.Services;
 
-public record ClassSummaryDto(int Id, string Name, string? HomeroomTeacherUsername, int StudentCount);
+public record ClassSummaryDto(int Id, string Name, int? SubjectId, string? SubjectName, string? HomeroomTeacherUsername, int StudentCount);
 public record UserSummaryDto(string Id, string Username, string FullName, string Role, int? Grade, IReadOnlyList<string> ClassNames);
 public record SubjectSummaryDto(int Id, string Name);
 public record SchoolSummaryDto(int Id, string Name, DateTime CreatedAt, int StudentCount, int TeacherCount);
@@ -22,10 +22,14 @@ public class SchoolAdminService
         _users = users;
     }
 
-    public async Task<(bool Success, string? Error)> AddClassAsync(int schoolId, string name, string? homeroomTeacherId)
+    public async Task<(bool Success, string? Error)> AddClassAsync(int schoolId, string name, int subjectId, string? homeroomTeacherId)
     {
         if (string.IsNullOrWhiteSpace(name))
             return (false, "Class name is required.");
+
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.SchoolId == schoolId);
+        if (subject == null)
+            return (false, "Subject not found in this school.");
 
         if (homeroomTeacherId != null)
         {
@@ -36,7 +40,21 @@ public class SchoolAdminService
                 return (false, "Teacher does not belong to this school.");
         }
 
-        _db.Classes.Add(new Class { Name = name, SchoolId = schoolId, HomeroomTeacherId = homeroomTeacherId });
+        _db.Classes.Add(new Class { Name = name, SchoolId = schoolId, SubjectId = subjectId, HomeroomTeacherId = homeroomTeacherId });
+        await _db.SaveChangesAsync();
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> CreateSubjectAsync(int schoolId, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, "Subject name is required.");
+
+        var exists = await _db.Subjects.AnyAsync(s => s.Name == name && s.SchoolId == schoolId);
+        if (exists)
+            return (false, $"Subject '{name}' already exists in this school.");
+
+        _db.Subjects.Add(new Subject { Name = name, SchoolId = schoolId });
         await _db.SaveChangesAsync();
         return (true, null);
     }
@@ -79,12 +97,13 @@ public class SchoolAdminService
         var classes = await _db.Classes
             .Include(c => c.HomeroomTeacher)
             .Include(c => c.ClassStudents)
+            .Include(c => c.Subject)
             .Where(c => c.SchoolId == schoolId)
             .OrderBy(c => c.Name)
             .ToListAsync();
 
         return classes
-            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count))
+            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.SubjectId, c.Subject?.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count))
             .ToList();
     }
 

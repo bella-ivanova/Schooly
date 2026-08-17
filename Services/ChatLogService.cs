@@ -9,23 +9,19 @@ public class ChatLogService
 {
     private readonly AppDbContext _db;
     private readonly IChatService _chat;
+    private readonly SubjectResolutionService _subjects;
 
-    public ChatLogService(AppDbContext db, IChatService chat)
+    public ChatLogService(AppDbContext db, IChatService chat, SubjectResolutionService subjects)
     {
-        _db   = db;
-        _chat = chat;
+        _db       = db;
+        _chat     = chat;
+        _subjects = subjects;
     }
 
     public async Task SaveMessageAsync(string userId, int sessionId, string role, string content,
         string detectedSubject = "Unknown", string topic = "Unknown", int? schoolId = null)
     {
-        int? subjectId = null;
-        if (schoolId != null && detectedSubject != "Unknown")
-        {
-            var sub = await _db.Subjects
-                .FirstOrDefaultAsync(s => s.Name == detectedSubject && s.SchoolId == schoolId);
-            subjectId = sub?.Id;
-        }
+        int? subjectId = await _subjects.GetOrCreateSubjectIdAsync(detectedSubject, schoolId);
 
         _db.ChatMessages.Add(new ChatMessage
         {

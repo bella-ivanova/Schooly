@@ -90,7 +90,20 @@ public class SchoolAdminController : ControllerBase
         var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.AddClassAsync(schoolId!.Value, body.Name, body.HomeroomTeacherId);
+        var (success, error) = await _admin.AddClassAsync(schoolId!.Value, body.Name, body.SubjectId, body.HomeroomTeacherId);
+        if (!success) return BadRequest(new { error });
+
+        return StatusCode(201);
+    }
+
+    // POST /api/admin/subjects
+    [HttpPost("subjects")]
+    public async Task<IActionResult> CreateSubject([FromBody] CreateSubjectRequest body)
+    {
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
+        if (!ok) return reject!;
+
+        var (success, error) = await _admin.CreateSubjectAsync(schoolId!.Value, body.Name);
         if (!success) return BadRequest(new { error });
 
         return StatusCode(201);
@@ -197,7 +210,8 @@ public class SchoolAdminController : ControllerBase
     }
 }
 
-public record CreateClassRequest(string Name, string? HomeroomTeacherId);
+public record CreateClassRequest(string Name, int SubjectId, string? HomeroomTeacherId);
+public record CreateSubjectRequest(string Name);
 public record SetHomeroomRequest(string TeacherId);
 public record AssignStudentRequest(string UserId);
 public record AssignTeacherToClassRequest(string TeacherId, string SubjectName);

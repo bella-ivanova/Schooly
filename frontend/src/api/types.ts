@@ -71,7 +71,7 @@ export type ChatSseFrame =
   | { kind: 'session'; sessionId: number }
   | { kind: 'token'; token: string }
   | { kind: 'done'; scene: unknown | null }
-  | { kind: 'meta'; title: string; subject: string }
+  | { kind: 'meta'; title: string; subject: string; classId: number | null; className: string | null }
 
 // ── Student dashboard ────────────────────────────────────────────────────
 
@@ -143,8 +143,15 @@ export interface TeacherActivityEntry {
 export interface AdminClassSummary {
   id: number
   name: string
+  subjectId: number | null
+  subjectName: string | null
   homeroomTeacherUsername: string | null
   studentCount: number
+}
+
+export interface AdminSubjectSummary {
+  id: number
+  name: string
 }
 
 export interface SchoolInfo {

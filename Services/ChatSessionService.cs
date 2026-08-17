@@ -9,12 +9,14 @@ public class ChatSessionService
     private readonly AppDbContext _db;
     private readonly IChatService _chat;
     private readonly IUserRepository _users;
+    private readonly SubjectResolutionService _subjects;
 
-    public ChatSessionService(AppDbContext db, IChatService chat, IUserRepository users)
+    public ChatSessionService(AppDbContext db, IChatService chat, IUserRepository users, SubjectResolutionService subjects)
     {
-        _db    = db;
-        _chat  = chat;
-        _users = users;
+        _db       = db;
+        _chat     = chat;
+        _users    = users;
+        _subjects = subjects;
     }
 
     // Creates a brand-new, untitled, unfiled session for a "new chat".
@@ -54,7 +56,7 @@ public class ChatSessionService
     // Folder-filterable session listing for the current user. subjectName null/blank -> "All".
     public async Task<List<ChatSession>> ListAsync(string userId, string? subjectName = null)
     {
-        var query = _db.ChatSessions.Include(s => s.Subject).Where(s => s.UserId == userId);
+        var query = _db.ChatSessions.Include(s => s.Subject).Include(s => s.Class).Where(s => s.UserId == userId);
         if (!string.IsNullOrWhiteSpace(subjectName))
             query = query.Where(s => s.Subject != null && s.Subject.Name == subjectName);
 
@@ -68,23 +70,41 @@ public class ChatSessionService
             .OrderBy(m => m.Timestamp)
             .ToListAsync();
 
-    // Resolves detectedSubject -> SubjectId the same way ChatLogService.SaveMessageAsync
-    // does, and locks it onto the session. Callers only invoke this on a session's first
-    // exchange, so the folder never drifts mid-conversation.
-    public async Task SetFolderAndTitleOnceAsync(int sessionId, string detectedSubject, int? schoolId, string? title)
+    // Get-or-creates the Subject for detectedSubject, then locks the session onto it
+    // (and, if the student belongs to a class tagged with that same subject in the
+    // same school, locks the session onto that class too). Callers only invoke this
+    // on a session's first exchange, so the folder never drifts mid-conversation.
+    public async Task<(int? SubjectId, string? SubjectName, int? ClassId, string? ClassName)> SetFolderAndTitleOnceAsync(
+        int sessionId, string userId, string detectedSubject, int? schoolId, string? title)
     {
-        int? subjectId = null;
-        if (schoolId != null && detectedSubject != "Unknown")
+        int? subjectId = await _subjects.GetOrCreateSubjectIdAsync(detectedSubject, schoolId);
+
+        int? classId = null;
+        if (subjectId != null && schoolId != null)
         {
-            var subj = await _db.Subjects
-                .FirstOrDefaultAsync(s => s.Name == detectedSubject && s.SchoolId == schoolId);
-            subjectId = subj?.Id;
+            classId = await _db.ClassStudents
+                .Where(cs => cs.StudentId == userId)
+                .Join(_db.Classes, cs => cs.ClassId, c => c.Id, (cs, c) => c)
+                .Where(c => c.SchoolId == schoolId && c.SubjectId == subjectId)
+                .OrderBy(c => c.Id)
+                .Select(c => (int?)c.Id)
+                .FirstOrDefaultAsync();
         }
+
+        string? subjectName = subjectId != null
+            ? await _db.Subjects.Where(s => s.Id == subjectId).Select(s => s.Name).FirstOrDefaultAsync()
+            : null;
+        string? className = classId != null
+            ? await _db.Classes.Where(c => c.Id == classId).Select(c => c.Name).FirstOrDefaultAsync()
+            : null;
 
         await _db.ChatSessions.Where(s => s.Id == sessionId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(x => x.SubjectId, subjectId)
+                .SetProperty(x => x.ClassId, classId)
                 .SetProperty(x => x.Title, title));
+
+        return (subjectId, subjectName, classId, className);
     }
 
     // Looks up the caller's SchoolId, since it isn't present in the JWT and this

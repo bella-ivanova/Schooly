@@ -125,6 +125,7 @@ builder.Services.AddScoped<MathOcrService>(sp =>
     new MathOcrService(sp.GetRequiredService<IHttpClientFactory>().CreateClient("mathocr")));
 // RAGService must be Scoped — _currentGrade and _temporaryChunks are per-request state.
 builder.Services.AddScoped<RAGService>();
+builder.Services.AddScoped<SubjectResolutionService>();
 builder.Services.AddScoped<ChatLogService>();
 builder.Services.AddScoped<ChatSessionService>();
 builder.Services.AddScoped<TeacherDashboardService>();
