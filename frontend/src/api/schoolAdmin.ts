@@ -50,13 +50,6 @@ export function updateClass(classId: number, name: string, subjectId: number): P
   })
 }
 
-export function assignStudent(classId: number, userId: string): Promise<void> {
-  return apiFetch<void>(`/api/admin/classes/${classId}/students`, {
-    method: 'POST',
-    body: JSON.stringify({ userId }),
-  })
-}
-
 export function removeStudent(classId: number, userId: string): Promise<void> {
   return apiFetch<void>(`/api/admin/classes/${classId}/students/${userId}`, { method: 'DELETE' })
 }

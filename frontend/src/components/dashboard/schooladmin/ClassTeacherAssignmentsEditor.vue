@@ -71,7 +71,7 @@ async function handleRemove(teacherId: string, subjectId: number) {
     <p v-else class="empty-note">No subject teachers assigned yet.</p>
 
     <form class="add-row" @submit.prevent="handleAssign">
-      <SelectField v-model="newTeacherId" label="Teacher" placeholder="Select teacher" :options="teacherOptions" />
+      <SelectField v-model="newTeacherId" label="Teacher" placeholder="Select teacher" :options="teacherOptions" searchable />
       <SelectField v-model="newSubjectId" label="Subject" placeholder="Select subject" :options="subjectOptions" />
       <button type="submit" class="add-btn" :disabled="assigning || !newTeacherId || !newSubjectId">
         {{ assigning ? 'Assigning…' : 'Assign' }}

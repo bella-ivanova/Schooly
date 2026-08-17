@@ -1,43 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import * as schoolAdminApi from '../../../api/schoolAdmin'
-import type { AdminUserSummary, ClassRosterStudent } from '../../../api/types'
-import SelectField from '../../shared/SelectField.vue'
+import type { ClassRosterStudent } from '../../../api/types'
 
 const props = defineProps<{
   classId: number
   students: ClassRosterStudent[]
-  allUsers: AdminUserSummary[]
 }>()
 
 const emit = defineEmits<{ changed: [] }>()
 
 const removingId = ref<string | null>(null)
-const newStudentId = ref('')
-const adding = ref(false)
-const addError = ref<string | null>(null)
-
-const addableStudentOptions = computed(() => {
-  const enrolledIds = new Set(props.students.map((s) => s.id))
-  return props.allUsers
-    .filter((u) => u.role === 'Student' && !enrolledIds.has(u.id))
-    .map((u) => ({ value: u.id, label: u.fullName || u.username }))
-})
-
-async function handleAdd() {
-  if (!newStudentId.value) return
-  addError.value = null
-  adding.value = true
-  try {
-    await schoolAdminApi.assignStudent(props.classId, newStudentId.value)
-    newStudentId.value = ''
-    emit('changed')
-  } catch (err) {
-    addError.value = (err as { message?: string }).message ?? 'Could not add student.'
-  } finally {
-    adding.value = false
-  }
-}
 
 async function handleRemove(userId: string) {
   removingId.value = userId
@@ -66,19 +39,6 @@ async function handleRemove(userId: string) {
       </li>
     </ul>
     <p v-else class="empty-note">No students in this class yet.</p>
-
-    <form class="add-row" @submit.prevent="handleAdd">
-      <SelectField
-        v-model="newStudentId"
-        label="Add student"
-        placeholder="Select student"
-        :options="addableStudentOptions"
-      />
-      <button type="submit" class="add-btn" :disabled="adding || !newStudentId">
-        {{ adding ? 'Adding…' : 'Add' }}
-      </button>
-    </form>
-    <p v-if="addError" class="error-note">{{ addError }}</p>
   </div>
 </template>
 
@@ -136,39 +96,5 @@ async function handleRemove(userId: string) {
   margin: 0;
   font-size: 13px;
   color: var(--muted);
-}
-
-.add-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.add-row > * {
-  min-width: 180px;
-}
-
-.add-btn {
-  background: var(--green-br);
-  color: var(--white);
-  border: none;
-  border-radius: var(--r-sm);
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  height: 42px;
-}
-
-.add-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.error-note {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ink-2);
 }
 </style>

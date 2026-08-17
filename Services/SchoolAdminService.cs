@@ -175,33 +175,6 @@ public class SchoolAdminService
         return new ClassDetailDto(cls.Id, cls.Name, cls.SubjectId, cls.Subject?.Name, cls.HomeroomTeacher?.UserName, students, teacherAssignments);
     }
 
-    public async Task<(bool Success, string? Error)> AssignStudentAsync(int schoolId, int classId, string userId)
-    {
-        var student = await _users.GetByIdAsync(userId);
-        if (student == null)
-            return (false, "User not found.");
-        if (student.Role != UserRole.Student)
-            return (false, "User is not a student.");
-        if (student.SchoolId != null && student.SchoolId != schoolId)
-            return (false, "Student belongs to a different school.");
-
-        var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.SchoolId == schoolId);
-        if (cls == null)
-            return (false, "Class not found.");
-
-        var alreadyMember = await _db.ClassStudents
-            .AnyAsync(cs => cs.ClassId == classId && cs.StudentId == userId);
-        if (alreadyMember)
-            return (false, "Student is already in this class.");
-
-        _db.ClassStudents.Add(new ClassStudent { ClassId = classId, StudentId = userId });
-        if (student.SchoolId == null)
-            student.SchoolId = schoolId;
-        await _users.UpdateAsync(student);
-        await _db.SaveChangesAsync();
-        return (true, null);
-    }
-
     public async Task<(bool Success, string? Error)> RemoveStudentAsync(int schoolId, int classId, string userId)
     {
         var student = await _users.GetByIdAsync(userId);

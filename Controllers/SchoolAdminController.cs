@@ -122,19 +122,6 @@ public class SchoolAdminController : ControllerBase
         return Ok();
     }
 
-    // POST /api/admin/classes/{classId}/students
-    [HttpPost("classes/{classId:int}/students")]
-    public async Task<IActionResult> AssignStudent(int classId, [FromBody] AssignStudentRequest body)
-    {
-        var (ok, schoolId, reject) = await ResolveSchoolAsync();
-        if (!ok) return reject!;
-
-        var (success, error) = await _admin.AssignStudentAsync(schoolId!.Value, classId, body.UserId);
-        if (!success) return BadRequest(new { error });
-
-        return Ok();
-    }
-
     // DELETE /api/admin/classes/{classId}/students/{userId}
     [HttpDelete("classes/{classId:int}/students/{userId}")]
     public async Task<IActionResult> RemoveStudent(int classId, string userId)
@@ -252,6 +239,5 @@ public class SchoolAdminController : ControllerBase
 public record CreateClassRequest(string Name, int SubjectId, string? HomeroomTeacherId);
 public record CreateSubjectRequest(string Name);
 public record SetHomeroomRequest(string TeacherId);
-public record AssignStudentRequest(string UserId);
 public record AssignTeacherToClassRequest(string TeacherId, string SubjectName);
 public record UpdateClassRequest(string Name, int SubjectId);

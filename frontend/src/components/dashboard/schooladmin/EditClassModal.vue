@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import * as schoolAdminApi from '../../../api/schoolAdmin'
-import type { AdminClassDetail, AdminUserSummary } from '../../../api/types'
+import type { AdminClassDetail } from '../../../api/types'
 import Field from '../../shared/Field.vue'
 import SelectField from '../../shared/SelectField.vue'
 import ClassRosterEditor from './ClassRosterEditor.vue'
@@ -9,7 +9,6 @@ import ClassTeacherAssignmentsEditor from './ClassTeacherAssignmentsEditor.vue'
 
 const props = defineProps<{
   classId: number
-  allUsers: AdminUserSummary[]
   teacherOptions: { value: string; label: string }[]
   subjectOptions: { value: string; label: string }[]
 }>()
@@ -102,7 +101,6 @@ onUnmounted(() => {
         <ClassRosterEditor
           :class-id="classId"
           :students="detail.students"
-          :all-users="allUsers"
           @changed="refetchAndNotify"
         />
 

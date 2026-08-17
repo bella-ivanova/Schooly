@@ -169,6 +169,7 @@ async function handleCreateClass() {
           label="Homeroom teacher"
           placeholder="Select teacher"
           :options="teacherOptions"
+          searchable
         />
         <button
           type="submit"
@@ -198,7 +199,6 @@ async function handleCreateClass() {
     <EditClassModal
       v-if="editingClassId !== null"
       :class-id="editingClassId"
-      :all-users="users"
       :teacher-options="teacherOptions"
       :subject-options="subjectOptions"
       @close="editingClassId = null"
