@@ -19,8 +19,9 @@ defineProps<{
 
 <style scoped>
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
+  overflow: hidden;
   background: var(--paper);
 }
 
