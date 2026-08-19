@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import SchoolyMark from '../shared/SchoolyMark.vue'
 import type { NavItem } from './navItem'
@@ -11,16 +11,32 @@ defineProps<{
 
 const authStore = useAuthStore()
 const router = useRouter()
+const route = useRoute()
+
+function isActive(item: NavItem): boolean {
+  if (item.active !== undefined) return item.active
+  return typeof item.to === 'string' && route.path === item.to
+}
 
 async function handleLogout() {
   await authStore.logout()
   await router.push('/login')
 }
+
+function goHome() {
+  router.push('/app')
+}
 </script>
 
 <template>
   <aside class="sidebar">
-    <div class="sidebar-header">
+    <div
+      class="sidebar-header"
+      role="button"
+      tabindex="0"
+      @click="goHome"
+      @keydown.enter="goHome"
+    >
       <SchoolyMark :size="28" variant="solid" />
       <span class="wordmark">Schooly</span>
     </div>
@@ -28,14 +44,24 @@ async function handleLogout() {
     <p class="role-label">{{ roleLabel }}</p>
 
     <nav class="nav-list">
-      <span
-        v-for="item in navItems"
-        :key="item.label"
-        class="nav-item"
-        :class="{ active: item.active, disabled: item.disabled, primary: item.primary }"
-      >
-        {{ item.label }}
-      </span>
+      <template v-for="item in navItems" :key="item.label">
+        <p v-if="item.sectionHeader" class="section-header">{{ item.label }}</p>
+        <router-link
+          v-else-if="item.to && !item.disabled"
+          :to="item.to"
+          class="nav-item"
+          :class="{ active: isActive(item), primary: item.primary }"
+        >
+          {{ item.label }}
+        </router-link>
+        <span
+          v-else
+          class="nav-item"
+          :class="{ active: isActive(item), disabled: item.disabled, primary: item.primary }"
+        >
+          {{ item.label }}
+        </span>
+      </template>
     </nav>
 
     <div class="sidebar-footer">
@@ -48,6 +74,7 @@ async function handleLogout() {
 <style scoped>
 .sidebar {
   flex: 0 0 220px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -61,6 +88,7 @@ async function handleLogout() {
   align-items: center;
   gap: 10px;
   padding: 0 8px 8px;
+  cursor: pointer;
 }
 
 .wordmark {
@@ -85,13 +113,36 @@ async function handleLogout() {
   gap: 4px;
 }
 
+.section-header {
+  margin: 12px 0 2px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .nav-item {
+  display: block;
   padding: 10px 12px;
   border-radius: var(--r-sm);
   font-size: 14px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: default;
+}
+
+a.nav-item {
+  cursor: pointer;
+}
+
+a.nav-item:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .nav-item.primary {

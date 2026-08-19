@@ -38,6 +38,18 @@ public class ChatSessionService
     public async Task<ChatSession?> GetOwnedAsync(int sessionId, string userId) =>
         await _db.ChatSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId);
 
+    // Ownership-checked delete. Messages cascade at the DB level (ChatMessage's FK to
+    // ChatSession is configured OnDelete Cascade in AppDbContext) — no manual cleanup needed.
+    public async Task<bool> DeleteAsync(int sessionId, string userId)
+    {
+        var session = await GetOwnedAsync(sessionId, userId);
+        if (session == null) return false;
+
+        _db.ChatSessions.Remove(session);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
     // Prior turns for multi-turn seeding, oldest first, capped so replayed prompt
     // size stays bounded.
     public async Task<List<(string Role, string Content)>> GetRecentTurnsAsync(int sessionId, int maxTurns = 20)

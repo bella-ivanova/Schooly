@@ -166,6 +166,28 @@ public class ChatController : ControllerBase
         return Ok(response);
     }
 
+    // DELETE /api/chat/sessions/{id}
+    [HttpDelete("sessions/{id:int}")]
+    [Authorize]
+    public async Task<IActionResult> DeleteSession(int id)
+    {
+        var userId = User.FindFirstValue("sub") ?? "";
+        var deleted = await _chatSessions.DeleteAsync(id, userId);
+        if (!deleted) return NotFound(new { error = "Session not found" });
+        return Ok();
+    }
+
+    // POST /api/chat/scene-html
+    // Renders a <STEREO> scene JSON (as extracted from a "done" SSE frame) into the
+    // standalone Three.js HTML page, for the frontend to display via <iframe srcdoc>.
+    [HttpPost("scene-html")]
+    [Authorize]
+    public IActionResult GetSceneHtml([FromBody] SceneHtmlRequest body)
+    {
+        var html = StereometryHtmlBuilder.Build(body.Scene);
+        return Ok(new { html });
+    }
+
     // POST /api/chat/upload
     // Ingests a PDF into the session-scoped temporary vector store.
     // Subsequent /api/chat/message calls in the same session include this content.
@@ -206,3 +228,4 @@ public class ChatController : ControllerBase
 }
 
 public record ChatMessageRequest([Required] string Message, int? SessionId = null);
+public record SceneHtmlRequest([Required] string Scene);

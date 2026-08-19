@@ -14,7 +14,7 @@ export function buildHeaders(hasBody: boolean): HeadersInit {
   return headers
 }
 
-async function toApiError(response: Response): Promise<ApiError> {
+export async function toApiError(response: Response): Promise<ApiError> {
   let body: { error?: string; errors?: string[] } = {}
   try {
     body = await response.json()

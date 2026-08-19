@@ -98,9 +98,38 @@ public class StudentController : ControllerBase
 
         var gradeStr = User.FindFirstValue("grade") ?? "0";
         var grade    = int.TryParse(gradeStr, out var g) ? g : 0;
+        var userId   = User.FindFirstValue("sub") ?? "";
 
-        var exam = await _examService.GenerateExamAsync(body.Topic, grade);
-        return Ok(new { exam });
+        var (id, exam) = await _examService.GenerateAndSaveAsync(body.Topic, grade, userId);
+        return Ok(new { id, exam });
+    }
+
+    // GET /api/student/exams
+    [HttpGet("exams")]
+    public async Task<IActionResult> ListExams()
+    {
+        var reject = RequireStudentRole();
+        if (reject != null) return reject;
+
+        var userId = User.FindFirstValue("sub") ?? "";
+        var exams  = await _examService.ListSavedAsync(userId);
+
+        var response = exams.Select(e => new { id = e.Id, topic = e.Topic, createdAt = e.CreatedAt });
+        return Ok(response);
+    }
+
+    // GET /api/student/exams/{id}
+    [HttpGet("exams/{id:int}")]
+    public async Task<IActionResult> GetExam(int id)
+    {
+        var reject = RequireStudentRole();
+        if (reject != null) return reject;
+
+        var userId = User.FindFirstValue("sub") ?? "";
+        var exam   = await _examService.GetSavedAsync(userId, id);
+        if (exam == null) return NotFound(new { error = "Exam not found" });
+
+        return Ok(new { id = exam.Id, topic = exam.Topic, content = exam.Content, createdAt = exam.CreatedAt });
     }
 
     // GET /api/student/classes

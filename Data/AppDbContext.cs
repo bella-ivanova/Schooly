@@ -19,6 +19,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TeacherSubject> TeacherSubjects { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<PasswordResetCode> PasswordResetCodes { get; set; }
+    public DbSet<SavedExam> SavedExams { get; set; }
     public DbSet<SchoolTeacherCode> SchoolTeacherCodes { get; set; }
     public DbSet<RateLimitEntry> RateLimitEntries { get; set; }
 
@@ -197,6 +198,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             b.HasOne(c => c.User)
              .WithMany()
              .HasForeignKey(c => c.UserId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SavedExam>(b =>
+        {
+            b.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            b.Property(e => e.Topic).IsRequired().HasMaxLength(300);
+            b.HasIndex(e => new { e.UserId, e.CreatedAt });
+
+            b.HasOne(e => e.User)
+             .WithMany()
+             .HasForeignKey(e => e.UserId)
              .IsRequired()
              .OnDelete(DeleteBehavior.Cascade);
         });

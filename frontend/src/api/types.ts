@@ -70,8 +70,34 @@ export interface ChatMessageRequest {
 export type ChatSseFrame =
   | { kind: 'session'; sessionId: number }
   | { kind: 'token'; token: string }
-  | { kind: 'done'; scene: unknown | null }
+  | { kind: 'done'; scene: string | null }
   | { kind: 'meta'; title: string; subject: string; classId: number | null; className: string | null }
+
+export interface ChatSessionSummary {
+  id: number
+  title: string | null
+  subject: string | null
+  classId: number | null
+  className: string | null
+  createdAt: string
+  lastMessageAt: string
+}
+
+export interface ChatSessionMessage {
+  role: string
+  content: string
+  subject: string | null
+  topic: string | null
+  timestamp: string
+}
+
+export interface ChatUploadResponse {
+  chunks: number
+}
+
+export interface SceneHtmlResponse {
+  html: string
+}
 
 // ── Student dashboard ────────────────────────────────────────────────────
 
@@ -98,6 +124,24 @@ export interface StudentClassesInfo {
   schoolId: number | null
   schoolName: string | null
   classes: StudentClassEntry[]
+}
+
+export interface GenerateExamResponse {
+  id: number
+  exam: string
+}
+
+export interface SavedExamSummary {
+  id: number
+  topic: string
+  createdAt: string
+}
+
+export interface SavedExamDetail {
+  id: number
+  topic: string
+  content: string
+  createdAt: string
 }
 
 // ── Teacher dashboard ────────────────────────────────────────────────────

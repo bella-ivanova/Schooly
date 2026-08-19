@@ -14,7 +14,7 @@ defineProps<{
       <span v-for="spot in weakSpots" :key="spot.topic" class="pill">{{ spot.topic }} ×{{ spot.count }}</span>
     </div>
 
-    <button type="button" class="cta" disabled title="Coming soon">Generate Practice Exam</button>
+    <router-link to="/app/student/exams" class="cta">Generate Practice Exam</router-link>
   </div>
 </template>
 
@@ -57,6 +57,9 @@ defineProps<{
 }
 
 .cta {
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
   border: none;
   border-radius: var(--r-sm);
   background: var(--green);
@@ -65,7 +68,10 @@ defineProps<{
   font-size: 14px;
   font-weight: 600;
   padding: 12px 16px;
-  cursor: not-allowed;
-  opacity: 0.7;
+  cursor: pointer;
+}
+
+.cta:hover {
+  background: var(--green-deep);
 }
 </style>

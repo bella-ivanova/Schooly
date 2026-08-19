@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import AppShell from '../components/shell/AppShell.vue'
 import StudentHome from '../components/dashboard/student/StudentHome.vue'
-import type { NavItem } from '../components/shell/navItem'
+import { useStudentNav } from '../composables/useStudentNav'
 
-const navItems: NavItem[] = [
-  { label: '+ New Chat', active: true, disabled: true, primary: true },
-  { label: 'Past Chats', disabled: true },
-  { label: 'Settings', disabled: true },
-]
+const { navItems } = useStudentNav()
 </script>
 
 <template>

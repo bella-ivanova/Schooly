@@ -39,6 +39,24 @@ const router = createRouter({
       meta: { roles: ['student'] },
     },
     {
+      path: '/app/student/chat/:sessionId?',
+      name: 'student-chat',
+      component: () => import('../views/StudentChatView.vue'),
+      meta: { roles: ['student'] },
+    },
+    {
+      path: '/app/student/exams',
+      name: 'student-exams',
+      component: () => import('../views/StudentExamsView.vue'),
+      meta: { roles: ['student'] },
+    },
+    {
+      path: '/app/student/exams/:id',
+      name: 'student-exam-detail',
+      component: () => import('../views/StudentExamDetailView.vue'),
+      meta: { roles: ['student'] },
+    },
+    {
       path: '/app/teacher',
       name: 'teacher-home',
       component: () => import('../views/TeacherHomeView.vue'),

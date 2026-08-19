@@ -11,11 +11,14 @@
   "dependencies": {
     "@fontsource/fredoka": "^5.3.0",
     "@fontsource/nunito": "^5.3.0",
+    "dompurify": "^3.4.13",
+    "marked": "^18.0.10",
     "pinia": "^4.0.3",
     "vue": "^3.5.40",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.0.5",
     "@types/node": "^24.13.3",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",

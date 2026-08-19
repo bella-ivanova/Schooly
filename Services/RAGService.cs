@@ -336,30 +336,30 @@ public class RAGService
 
         var context = await GetContextAsync(question);
 
-        string? apiMsg      = null;
-        string? sysOverride = null;
-
-        if (!string.IsNullOrEmpty(context))
+        if (string.IsNullOrEmpty(context))
         {
-            var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
-
-            sysOverride =
-                $"You are a school tutor. The student is in {gradeLabel}. The textbook excerpts below are from their curriculum (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
-                "Each excerpt is labeled with its grade and subject. A unit title may differ from what the student calls the topic — e.g. 'Solving Triangles' covers trigonometry.\n" +
-                "IMPORTANT: Base your answer strictly on what is present in the excerpts. Do NOT say a topic is absent unless no related content appears in the excerpts.\n" +
-                "Identify the relevant excerpt, then apply its definitions, formulas, and methods step by step.\n" +
-                "The student's problem may be a new example — use the textbook method with the student's numbers.\n" +
-                "Students know all prerequisites for concepts present in their grade material.\n" +
-                "Keep simple answers short; provide detailed explanations for complex topics.\n" +
-                "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.\n" +
-                "Respond in the same language the student used in their question.";
-
-            apiMsg =
-                "--- Textbook Material ---\n" +
-                context +
-                "\n--- End of Material ---\n\n" +
-                "<student_question>\n" + question + "\n</student_question>";
+            yield return "Няма намерен материал по този въпрос в наличните учебници. Опитай с друг въпрос или тема.";
+            yield break;
         }
+
+        var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
+
+        var sysOverride =
+            $"You are a school tutor. The student is in {gradeLabel}. The textbook excerpts below are from their curriculum (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
+            "Each excerpt is labeled with its grade and subject. A unit title may differ from what the student calls the topic — e.g. 'Solving Triangles' covers trigonometry.\n" +
+            "IMPORTANT: Base your answer strictly on what is present in the excerpts. Do NOT say a topic is absent unless no related content appears in the excerpts.\n" +
+            "Identify the relevant excerpt, then apply its definitions, formulas, and methods step by step.\n" +
+            "The student's problem may be a new example — use the textbook method with the student's numbers.\n" +
+            "Students know all prerequisites for concepts present in their grade material.\n" +
+            "Keep simple answers short; provide detailed explanations for complex topics.\n" +
+            "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.\n" +
+            "Respond in the same language the student used in their question.";
+
+        var apiMsg =
+            "--- Textbook Material ---\n" +
+            context +
+            "\n--- End of Material ---\n\n" +
+            "<student_question>\n" + question + "\n</student_question>";
 
         await foreach (var token in _chat.StreamTokensAsync(question, apiMsg, sysOverride))
             yield return token;
