@@ -10,6 +10,7 @@ public class RAGService
     private readonly QdrantService _qdrant;
     private readonly OCRService? _ocr;
     private readonly MathOcrService? _mathOcr;
+    private readonly LanguageDetectionService _languageDetector;
 
     // In-memory store for temporary PDFs loaded during the current chat session only.
     // These are never saved to Qdrant — they disappear when the session ends.
@@ -17,11 +18,12 @@ public class RAGService
 
     private int _currentGrade = 0;
 
-    public RAGService(IChatService chat, EmbeddingService embeddingService, QdrantService qdrant, OCRService? ocr = null, MathOcrService? mathOcr = null)
+    public RAGService(IChatService chat, EmbeddingService embeddingService, QdrantService qdrant, LanguageDetectionService languageDetector, OCRService? ocr = null, MathOcrService? mathOcr = null)
     {
         _chat             = chat;
         _embeddingService = embeddingService;
         _qdrant           = qdrant;
+        _languageDetector = languageDetector;
         _ocr              = ocr;
         _mathOcr          = mathOcr;
     }
@@ -305,6 +307,10 @@ public class RAGService
             return await Send(question, null);
 
         var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
+        var languageName = _languageDetector.DetectLanguageName(question);
+        var languageInstruction = languageName is not null
+            ? $"Respond entirely in {languageName}."
+            : "Respond in the same language the student used in their question.";
 
         // System-role: all tutor persona and behavior rules (student cannot override these).
         var systemOverride =
@@ -316,7 +322,7 @@ public class RAGService
             "Students know all prerequisites for concepts present in their grade material.\n" +
             "Keep simple answers short; provide detailed explanations for complex topics.\n" +
             "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.\n" +
-            "Respond in the same language the student used in their question.";
+            languageInstruction;
 
         // User-role: textbook context as reference data, then the student's question clearly delimited.
         var ragUserContent =
@@ -335,14 +341,20 @@ public class RAGService
         question = InputSanitizer.SanitizeUserInput(question, maxLength: 2000);
 
         var context = await GetContextAsync(question);
+        var languageName = _languageDetector.DetectLanguageName(question);
 
         if (string.IsNullOrEmpty(context))
         {
-            yield return "Няма намерен материал по този въпрос в наличните учебници. Опитай с друг въпрос или тема.";
+            yield return languageName == "English"
+                ? "No material was found for this question in the available textbooks. Try a different question or topic."
+                : "Няма намерен материал по този въпрос в наличните учебници. Опитай с друг въпрос или тема.";
             yield break;
         }
 
         var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
+        var languageInstruction = languageName is not null
+            ? $"Respond entirely in {languageName}."
+            : "Respond in the same language the student used in their question.";
 
         var sysOverride =
             $"You are a school tutor. The student is in {gradeLabel}. The textbook excerpts below are from their curriculum (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
@@ -353,7 +365,7 @@ public class RAGService
             "Students know all prerequisites for concepts present in their grade material.\n" +
             "Keep simple answers short; provide detailed explanations for complex topics.\n" +
             "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.\n" +
-            "Respond in the same language the student used in their question.";
+            languageInstruction;
 
         var apiMsg =
             "--- Textbook Material ---\n" +

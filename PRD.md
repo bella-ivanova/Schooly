@@ -9,7 +9,7 @@
 **When a student sends a message:**
 The system embeds the query, searches Qdrant filtered to grades 1 through N (where N is the student's enrolled grade), and injects the top-k matching curriculum chunks as context before calling the LLM. The LLM is instructed to answer only from the provided context.
 
-**Response language:** The LLM is instructed to answer in the same language the student used in their question, not a fixed language — this applies to chat answers, mock exams (`POST /api/student/exam`), and practice questions (`POST /api/student/practice-questions`). The app UI itself is in English regardless; response language is independent of UI language.
+**Response language:** The LLM is instructed to answer in the same language the student used in their question, not a fixed language — this applies to chat answers, mock exams (`POST /api/student/exam`), and practice questions (`POST /api/student/practice-questions`). The app UI itself is in English regardless; response language is independent of UI language. Language is determined by `LanguageDetectionService` (offline n-gram detection) rather than left to the model to infer, since inference alone was unreliable — see `CLAUDE.md`'s Language Policy section for the current implementation and its known limits with mock exam generation.
 
 **When the LLM response contains a `<STEREO>…</STEREO>` block:**
 The system extracts the JSON scene description and returns it as a structured `scene` field alongside the text response so the frontend can render an interactive 3D geometry visualisation.

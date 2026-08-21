@@ -5,10 +5,12 @@ namespace StudyAssistant.Services;
 public class PracticeQuestionService
 {
     private readonly IChatService _chat;
+    private readonly LanguageDetectionService _languageDetector;
 
-    public PracticeQuestionService(IChatService chat)
+    public PracticeQuestionService(IChatService chat, LanguageDetectionService languageDetector)
     {
         _chat = chat;
+        _languageDetector = languageDetector;
     }
 
     public async Task<List<string>> GenerateAsync(string originalQuestion, string aiResponse)
@@ -25,9 +27,13 @@ public class PracticeQuestionService
 
         try
         {
+            var languageName = _languageDetector.DetectLanguageName(originalQuestion);
+            var languageInstruction = languageName is not null
+                ? $"Generate the questions entirely in {languageName}."
+                : "Generate the questions in the same language as the student's original question.";
+
             var response = await _chat.OneShotAsync(
-                "You are a school tutor generating practice questions. " +
-                "Generate the questions in the same language as the student's original question.",
+                "You are a school tutor generating practice questions. " + languageInstruction,
                 userPrompt);
 
             var json = response.Trim();

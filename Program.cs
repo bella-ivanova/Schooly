@@ -133,6 +133,8 @@ builder.Services.AddScoped<SchoolAdminService>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<PracticeQuestionService>();
 builder.Services.AddScoped<ExamService>();
+// Stateless after AddAllLanguages() loads its embedded n-gram profiles — safe to share.
+builder.Services.AddSingleton<LanguageDetectionService>();
 
 // ── App pipeline ──────────────────────────────────────────────────────────
 var app = builder.Build();

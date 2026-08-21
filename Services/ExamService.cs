@@ -9,30 +9,40 @@ public class ExamService
     private readonly RAGService _rag;
     private readonly IChatService _chat;
     private readonly AppDbContext _db;
+    private readonly LanguageDetectionService _languageDetector;
 
-    public ExamService(RAGService rag, IChatService chat, AppDbContext db)
+    public ExamService(RAGService rag, IChatService chat, AppDbContext db, LanguageDetectionService languageDetector)
     {
         _rag  = rag;
         _chat = chat;
         _db   = db;
+        _languageDetector = languageDetector;
     }
 
     public async Task<string> GenerateExamAsync(string topic, int grade)
     {
         topic = InputSanitizer.SanitizeUserInput(topic, maxLength: 300);
+        var languageName = _languageDetector.DetectLanguageName(topic, requireStrongSignal: true);
         _rag.SetGrade(grade);
         var chunks = await _rag.GetChunksAsync(topic);
 
         if (string.IsNullOrWhiteSpace(chunks))
-            return $"Няма намерен материал за темата '{topic}'. Опитай с друга тема.";
+            return languageName == "English"
+                ? $"No material found for the topic '{topic}'. Try a different topic."
+                : $"Няма намерен материал за темата '{topic}'. Опитай с друга тема.";
+
+        var languageInstruction = languageName is not null
+            ? $"Write your entire response in {languageName}."
+            : "Respond in the same language as the topic given below.";
 
         var systemPrompt =
+            languageInstruction + "\n" +
             "You are a school exam generator. Use ONLY the provided textbook material.\n" +
             "Generate a mock exam that includes:\n" +
             "- 3 multiple choice questions (with 4 options each, mark the correct one with *)\n" +
             "- 2 short answer questions\n" +
             "- 1 problem-solving question with full working space\n" +
-            "Format clearly with numbered sections. Respond in the same language as the topic given below.";
+            "Format clearly with numbered sections. " + languageInstruction;
 
         var userPrompt =
             $"Grade: {grade}\n" +
