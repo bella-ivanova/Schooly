@@ -202,6 +202,15 @@ frontend/           Vue 3 + Vite + TypeScript SPA — dev server on :5173 (npm r
 - **Exception: internal classification labels stay Bulgarian.** `ChatLogService.cs`'s subject/topic classifier (used to tag chat messages for folder/metadata purposes) always produces its `subject`/`topic` output in Bulgarian — these are canonical Bulgarian curriculum subject names for internal categorization, not the AI's answer to the student, so this policy doesn't apply to them.
 - **Curriculum source material stays Bulgarian regardless.** This policy governs response language, not the language of the textbook content retrieved from Qdrant — `RAGService.cs`'s existing "...may be in a different language — translate as needed" instruction already handles translating source excerpts into the answer.
 
+## AI Answer Accuracy (`todorov/bggpt`)
+
+- **Known gap: `todorov/bggpt` is noticeably weaker on multi-step physics word problems than on pure symbolic math**, based on a 2026-08-21 manual test of 10 hard (upper-high-school/early-olympiad level) problems sent directly to Ollama (bypassing RAG, so this reflects raw model capability, not retrieval quality). Math: 5/6 fully correct (trig equation solving, integration by parts, Taylor-series limit, combinatorics/probability) plus 1 with a correct calculus setup but a wrong final cube-root arithmetic step. Physics: only 1/4 fully correct (simple harmonic motion) — the other 3 had genuine conceptual errors, not just arithmetic slips:
+  - Projectile motion: conflated "time to reach max height" with "total time of flight," halving the horizontal range.
+  - Series-parallel circuit: incorrectly claimed parallel-connected resistors carry equal *current* (they share equal *voltage*, not current) and reported the wrong current through one branch.
+  - Incline with friction: omitted the `cos(θ)` factor from the friction force (used `μmg` instead of `μmg·cos θ`) and let potential-energy terms wrongly cancel, giving a materially wrong final velocity.
+  
+  These errors were confidently formatted and easy to mistake for correct — a bigger risk for a tutoring product than an obviously garbled answer. Only one sample per problem was tested, so this isn't a rigorous benchmark, but it's a strong enough signal that **physics answers from this model should not be trusted without spot-checking**, especially anything involving force decomposition, circuit topology, or projectile/rotational kinematics. If physics curriculum ingestion is ever added (currently only `Database/DataPdf/Grade10/Math/` exists — see Directory Structure), this gap should be re-verified with RAG context included, and a stronger/larger model should be considered if physics tutoring becomes a priority.
+
 ## Definition of Done
 
 A feature is complete when all of the following are true:
