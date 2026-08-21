@@ -6,6 +6,7 @@ using StudyAssistant.Models;
 namespace StudyAssistant.Services;
 
 public record ClassJoinCodeDto(string Code, DateTime CreatedAt);
+public record TeacherRosterStudentDto(string Id, string Username, string FullName, int? Grade);
 
 public class TeacherDashboardService
 {
@@ -95,6 +96,18 @@ public class TeacherDashboardService
         await _db.SaveChangesAsync();
 
         return (true, null, new ClassJoinCodeDto(entity.Code, entity.CreatedAt));
+    }
+
+    public async Task<List<TeacherRosterStudentDto>?> GetClassRosterAsync(string teacherId, int classId)
+    {
+        if (!await IsTeacherAuthorizedForClassAsync(teacherId, classId))
+            return null;
+
+        return await _db.ClassStudents
+            .Where(cs => cs.ClassId == classId)
+            .Include(cs => cs.Student)
+            .Select(cs => new TeacherRosterStudentDto(cs.Student!.Id, cs.Student.UserName ?? "", cs.Student.FullName, cs.Student.Grade))
+            .ToListAsync();
     }
 
     public async Task<List<(Class Class, Subject Subject, List<(string Topic, int Count)> TopTopics)>>

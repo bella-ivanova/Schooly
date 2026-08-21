@@ -49,6 +49,30 @@ public class TeacherDashboardController : ControllerBase
         return Ok(response);
     }
 
+    // GET /api/teacher/classes/{classId}/students
+    [HttpGet("classes/{classId:int}/students")]
+    public async Task<IActionResult> GetClassRoster(int classId)
+    {
+        var role = User.FindFirstValue("role");
+        if (role != "Teacher" && role != "SchoolAdmin")
+            return StatusCode(403, new { error = "Access restricted to teachers and school administrators." });
+
+        var teacherId = User.FindFirstValue("sub") ?? "";
+        var roster = await _dashboard.GetClassRosterAsync(teacherId, classId);
+        if (roster == null)
+            return NotFound(new { error = "Class not found or you are not assigned to it." });
+
+        var response = roster.Select(s => new
+        {
+            id       = s.Id,
+            username = s.Username,
+            fullName = s.FullName,
+            grade    = s.Grade
+        }).ToList();
+
+        return Ok(response);
+    }
+
     // GET /api/teacher/classes/{classId}/struggles?days=30
     [HttpGet("classes/{classId:int}/struggles")]
     public async Task<IActionResult> GetStrugglesByClass(int classId, [FromQuery] int days = 30)

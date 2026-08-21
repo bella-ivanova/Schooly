@@ -63,6 +63,24 @@ const router = createRouter({
       meta: { roles: ['teacher'] },
     },
     {
+      path: '/app/teacher/chat/:sessionId?',
+      name: 'teacher-chat',
+      component: () => import('../views/TeacherChatView.vue'),
+      meta: { roles: ['teacher'] },
+    },
+    {
+      path: '/app/teacher/classes',
+      name: 'teacher-classes',
+      component: () => import('../views/TeacherClassesView.vue'),
+      meta: { roles: ['teacher'] },
+    },
+    {
+      path: '/app/teacher/classes/:classId',
+      name: 'teacher-class-detail',
+      component: () => import('../views/TeacherClassDetailView.vue'),
+      meta: { roles: ['teacher'] },
+    },
+    {
       path: '/app/school-admin',
       name: 'school-admin-home',
       component: () => import('../views/SchoolAdminHomeView.vue'),

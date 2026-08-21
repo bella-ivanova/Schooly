@@ -182,6 +182,13 @@ export interface TeacherActivityEntry {
   topStudents: { student: TeacherActivityStudent; questionCount: number }[]
 }
 
+export interface TeacherRosterStudent {
+  id: string
+  username: string
+  fullName: string
+  grade: number | null
+}
+
 // ── SchoolAdmin dashboard ────────────────────────────────────────────────
 
 export interface AdminClassSummary {

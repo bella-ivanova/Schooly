@@ -1,8 +1,12 @@
 import { apiFetch } from './client'
-import type { ClassJoinCode, TeacherActivityEntry, TeacherClassSummary, TeacherStruggleGroup } from './types'
+import type { ClassJoinCode, TeacherActivityEntry, TeacherClassSummary, TeacherRosterStudent, TeacherStruggleGroup } from './types'
 
 export function getClasses(): Promise<TeacherClassSummary[]> {
   return apiFetch<TeacherClassSummary[]>('/api/teacher/classes')
+}
+
+export function getClassRoster(classId: number): Promise<TeacherRosterStudent[]> {
+  return apiFetch<TeacherRosterStudent[]>(`/api/teacher/classes/${classId}/students`)
 }
 
 export function getStruggles(classId: number, days = 30): Promise<TeacherStruggleGroup[]> {

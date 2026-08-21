@@ -19,9 +19,17 @@ interface DisplayMessage {
   loadingPracticeQuestions?: boolean
 }
 
-const props = defineProps<{
-  sessionId?: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    sessionId?: number
+    basePath?: string
+    showExamButton?: boolean
+  }>(),
+  {
+    basePath: '/app/student/chat',
+    showExamButton: true,
+  },
+)
 
 const emit = defineEmits<{
   'session-updated': []
@@ -107,7 +115,7 @@ async function sendMessage(text: string) {
         const isNewChat = props.sessionId == null && currentSessionId.value == null
         currentSessionId.value = frame.sessionId
         if (isNewChat) {
-          router.replace(`/app/student/chat/${frame.sessionId}`)
+          router.replace(`${props.basePath}/${frame.sessionId}`)
         }
       } else if (frame.kind === 'token') {
         assistantMsg.content += frame.token
@@ -178,7 +186,7 @@ async function handleDeleteClick() {
   try {
     await chatApi.deleteSession(currentSessionId.value)
     emit('session-updated')
-    router.push('/app/student/chat')
+    router.push(props.basePath)
   } catch {
     confirmingDelete.value = false
     deleting.value = false
@@ -207,7 +215,7 @@ async function handleDeleteClick() {
         >
           {{ deleting ? 'Deleting…' : confirmingDelete ? 'Click to confirm' : 'Delete chat' }}
         </button>
-        <button type="button" class="exam-btn" @click="goToExams">Generate mock exam ↗</button>
+        <button v-if="showExamButton" type="button" class="exam-btn" @click="goToExams">Generate mock exam ↗</button>
       </div>
     </header>
 

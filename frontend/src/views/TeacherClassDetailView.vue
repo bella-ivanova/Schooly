@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppShell from '../components/shell/AppShell.vue'
-import TeacherHome from '../components/dashboard/teacher/TeacherHome.vue'
+import TeacherClassDetail from '../components/dashboard/teacher/TeacherClassDetail.vue'
 import { useTeacherNav } from '../composables/useTeacherNav'
 
 const { navItems } = useTeacherNav()
@@ -8,6 +8,6 @@ const { navItems } = useTeacherNav()
 
 <template>
   <AppShell role-label="Teacher" :nav-items="navItems">
-    <TeacherHome />
+    <TeacherClassDetail />
   </AppShell>
 </template>
