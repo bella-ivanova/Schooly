@@ -216,7 +216,7 @@ Embedding and LLM services handle UTF-8 natively. The only preprocessing require
 
 ## Environment Prerequisites
 
-The behavioral specification below assumes a working local LLM/OCR pipeline. Before testing: pull the Ollama models referenced by `Llm:OllamaModel`/`Llm:OllamaVisionModel`/`Llm:OllamaEmbedModel` (currently `minicpm-v` and `nomic-embed-text` — see `ollama list`), and start the `pix2text` container (`docker compose up -d pix2text`). See `README.md`'s "Local Environment Prerequisites" section.
+The behavioral specification below assumes a working local LLM/OCR pipeline. Before testing: pull the Ollama models referenced by `Llm:OllamaModel`/`Llm:OllamaVisionModel`/`Llm:OllamaEmbedModel` (currently `todorov/bggpt`, `minicpm-v`, and `nomic-embed-text` — see `ollama list`), and start the `pix2text` container (`docker compose up -d pix2text`). See `README.md`'s "Local Environment Prerequisites" section.
 
 ---
 

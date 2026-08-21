@@ -109,7 +109,7 @@ builder.Services.AddHttpClient("mathocr", c => c.Timeout = Timeout.InfiniteTimeS
 builder.Services.AddHttpClient("zhipuai", c => c.Timeout = Timeout.InfiniteTimeSpan);
 
 // ── LLM / RAG services ────────────────────────────────────────────────────
-var ollamaModel  = builder.Configuration["Llm:OllamaModel"]      ?? "minicpm-v";
+var ollamaModel  = builder.Configuration["Llm:OllamaModel"]      ?? "todorov/bggpt";
 var embedModel   = builder.Configuration["Llm:OllamaEmbedModel"]  ?? "nomic-embed-text";
 var visionModel  = builder.Configuration["Llm:OllamaVisionModel"] ?? "minicpm-v";
 var qdrantHost   = builder.Configuration["Qdrant:Host"]           ?? "localhost";
