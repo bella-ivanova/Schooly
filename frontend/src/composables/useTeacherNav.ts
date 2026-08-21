@@ -13,13 +13,20 @@ export function useTeacherNav() {
 
   onMounted(refreshSessions)
 
+  const recentSessions = computed(() =>
+    [...sessions.value]
+      .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+      .slice(0, 3),
+  )
+
   const navItems = computed<NavItem[]>(() => [
     { label: '+ New Chat', to: '/app/teacher/chat', primary: true },
     { label: 'Past Chats', sectionHeader: true },
-    ...sessions.value.map((s) => ({
+    ...recentSessions.value.map((s) => ({
       label: s.title ?? 'Untitled chat',
       to: `/app/teacher/chat/${s.id}`,
     })),
+    { label: 'All Chats', to: '/app/teacher/chats' },
     { label: 'Classes', to: '/app/teacher/classes' },
     { label: 'Students', disabled: true },
     { label: 'Settings', disabled: true },

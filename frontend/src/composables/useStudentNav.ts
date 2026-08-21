@@ -13,13 +13,20 @@ export function useStudentNav() {
 
   onMounted(refreshSessions)
 
+  const recentSessions = computed(() =>
+    [...sessions.value]
+      .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+      .slice(0, 3),
+  )
+
   const navItems = computed<NavItem[]>(() => [
     { label: '+ New Chat', to: '/app/student/chat', primary: true },
     { label: 'Past Chats', sectionHeader: true },
-    ...sessions.value.map((s) => ({
+    ...recentSessions.value.map((s) => ({
       label: s.title ?? 'Untitled chat',
       to: `/app/student/chat/${s.id}`,
     })),
+    { label: 'All Chats', to: '/app/student/chats' },
     { label: 'Settings', disabled: true },
   ])
 
