@@ -12,7 +12,10 @@ The system embeds the query, searches Qdrant filtered to grades 1 through N (whe
 **Response language:** The LLM is instructed to answer in the same language the student used in their question, not a fixed language — this applies to chat answers, mock exams (`POST /api/student/exam`), and practice questions (`POST /api/student/practice-questions`). The app UI itself is in English regardless; response language is independent of UI language. Language is determined by `LanguageDetectionService` (offline n-gram detection) rather than left to the model to infer, since inference alone was unreliable — see `CLAUDE.md`'s Language Policy section for the current implementation and its known limits with mock exam generation.
 
 **When the LLM response contains a `<STEREO>…</STEREO>` block:**
-The system extracts the JSON scene description and returns it as a structured `scene` field alongside the text response so the frontend can render an interactive 3D geometry visualisation.
+The system extracts the JSON scene description and returns it as a structured `scene` field alongside the text response so the frontend can render an interactive 3D geometry visualisation. The frontend fetches the rendered visualisation via `POST /api/chat/scene-html`, which takes that extracted scene JSON and returns standalone Three.js HTML (`StereometryHtmlBuilder.Build`) for display in a sandboxed `<iframe srcdoc>`.
+
+**When a student deletes a chat session (`DELETE /api/chat/sessions/{id}`):**
+The session and its messages are removed if the caller owns it; 404 otherwise. Used by the chat UI's "Past Chats" list.
 
 **When a student asks a question outside their curriculum:**
 If Qdrant returns no relevant chunks, the LLM is called with an empty context and a refusal system prompt. It responds that it can only help with material the student has studied — it does not answer from general knowledge.
@@ -93,7 +96,13 @@ Returns the student's own most-asked topics (grouped by topic, with subject and 
 Returns the student's own chat messages (default 50, clamped 1–200), oldest to newest, each with role, content, subject name, topic, and timestamp.
 
 **When a student calls `POST /api/student/exam`:**
-Generates a mock exam for the given topic, grade-filtered to the student's own grade (from the JWT, not the request body). If no curriculum material is found for the topic at that grade, returns a Bulgarian "no material found" message instead of a hallucinated exam.
+Generates a mock exam for the given topic, grade-filtered to the student's own grade (from the JWT, not the request body). If no curriculum material is found for the topic at that grade, returns a Bulgarian "no material found" message instead of a hallucinated exam. The generated exam is now also persisted as a `SavedExam` row; the response is `{ id, exam }` so the client can later fetch it again.
+
+**When a student calls `GET /api/student/exams`:**
+Returns the student's own saved exams (`{ id, topic, createdAt }` per row), most useful for a list screen; does not include the full exam content.
+
+**When a student calls `GET /api/student/exams/{id}`:**
+Returns one saved exam's full detail (`{ id, topic, content, createdAt }`) if it belongs to the calling student; 404 otherwise.
 
 **When a non-Student calls any `/api/student` endpoint:**
 Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middleware.
@@ -158,7 +167,10 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [x] `POST /api/student/practice-questions` returns exactly 3 practice questions; inputs are sanitised before reaching the LLM prompt; returns an empty list on failure rather than an error
 - [x] `GET /api/student/weak-spots?days=N` returns the calling student's own most-asked topics only; `days` is clamped to 1–365
 - [x] `GET /api/student/history?limit=N` returns the calling student's own chat messages only, oldest to newest; `limit` is clamped to 1–200
-- [x] `POST /api/student/exam` generates an exam grade-filtered to the calling student's own grade (from JWT); returns a graceful fallback message when no material is found for the topic
+- [x] `POST /api/student/exam` generates an exam grade-filtered to the calling student's own grade (from JWT); returns a graceful fallback message when no material is found for the topic; persists the exam as a `SavedExam` and returns `{ id, exam }`
+- [x] `GET /api/student/exams` returns the calling student's own saved exams only (`{ id, topic, createdAt }`); `GET /api/student/exams/{id}` returns full detail for one, 404 if it doesn't belong to the caller
+- [x] `DELETE /api/chat/sessions/{id}` removes a session and its messages if owned by the caller; 404 otherwise
+- [x] `POST /api/chat/scene-html` renders a `<STEREO>` scene JSON into standalone Three.js HTML for iframe display
 - [x] Non-Student JWT receives 403 on all `/api/student` endpoints; unauthenticated requests receive 401
 - [x] `GET /api/global-admin/curriculum/grades/{grade}/files` lists ingested file keys for that grade
 - [x] `POST /api/global-admin/curriculum/grades/{grade}/files` ingests a new PDF; rejects with 409 if the file key already exists
@@ -210,7 +222,7 @@ The behavioral specification below assumes a working local LLM/OCR pipeline. Bef
 
 ## Frontend Integration Readiness
 
-The backend behavioral spec above is implemented. A frontend scaffold now exists at `frontend/` (Vue 3 + Vite + TypeScript, see `README.md`'s "Frontend Integration To-Do") covering the API client plus login, registration, and forgot-password screens — `POST /api/auth/login`, `POST /api/auth/register`, and the full `forgot-password`/`verify-reset-code`/`reset-password` sequence (including its 404/429/400 error responses) are all exercised end-to-end from the UI; chat UI, dashboards, and most other screens are not yet built. Remaining items to attend to:
+The backend behavioral spec above is implemented. A frontend scaffold now exists at `frontend/` (Vue 3 + Vite + TypeScript, see `README.md`'s "Frontend Integration To-Do") covering the API client plus login, registration, and forgot-password screens — `POST /api/auth/login`, `POST /api/auth/register`, and the full `forgot-password`/`verify-reset-code`/`reset-password` sequence (including its 404/429/400 error responses) are all exercised end-to-end from the UI; per-role dashboards, student chat (`frontend/src/components/chat/`), and saved mock exams are also built and wired end-to-end (see `README.md`'s "Complete" section). Teacher/SchoolAdmin/GlobalAdmin chat-adjacent UI and a Settings screen (all roles) are not yet built. Remaining items to attend to:
 
 **Token refresh is implemented.** `POST /api/auth/refresh` (`{ refreshToken }` → `{ token, refreshToken }`) is now consumed by `frontend/src/api/client.ts`, which triggers it automatically on any `401`, retries the original request once, and dedups concurrent 401s behind a single in-flight refresh call so a burst of requests doesn't fire multiple simultaneous `/refresh` calls. Force-logout on a failed refresh is also implemented.
 
