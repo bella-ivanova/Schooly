@@ -42,6 +42,17 @@ A curriculum-aware AI tutoring platform for Bulgarian school students. The AI is
 - Frontend: teacher-side chat UI (the entire Teacher sidebar beyond its home dashboard — new chat, past chats, class/student lists — remains `disabled: true` placeholders), RAG source-citation UI, a Settings screen (all roles), and most remaining SchoolAdmin/GlobalAdmin dashboard *action* UIs (homeroom reassignment, teacher-subject qualification management, user/curriculum management, and their backing write-endpoint API wrappers). Student chat, the `<STEREO>` 3D viewer, and saved mock exams are now complete (see above), alongside the pre-existing exceptions: class creation/editing (name, subject tag, roster removal, teacher assignment), subject creation, and the class-join-code flow
 - Automated tests — none exist yet, backend or frontend
 
+## Roadmap
+
+Ordered next steps, decided 2026-08-21. Item 1 is the currently active priority; 2–4 are planned but not yet started.
+
+1. **Teacher chat UI (active)** — Build out the Teacher sidebar beyond its home dashboard: new chat, a past-chats list, and a chat view, mirroring the pattern already built for students. Backend `ChatController.cs` endpoints (`/api/chat/*`) are already role-agnostic (no role restriction), so this is frontend-only work: a teacher-facing nav composable (parallel to `useStudentNav.ts`) plus reusing/adapting the existing chat components (`frontend/src/components/chat/ChatView.vue`, `ChatComposer.vue`, `MessageBubble.vue`, `AttachedFileChip.vue`) and API wrappers (`frontend/src/api/chat.ts`).
+2. **Known bug fixes** — Two small, scoped backend fixes:
+   - `PracticeQuestionService.GenerateAsync` silently returns an empty list when the model's JSON array response is truncated before its closing `]` for Cyrillic output (observed only for Bulgarian, likely a token-cost side effect) — currently swallowed by a catch-all instead of retried or surfaced.
+   - `ZhipuAIChatService` is implemented but not registered as a failover `IChatService` backend in `Program.cs` — there is no automatic runtime failover between it and `OllamaChatService` today.
+3. **Admin write UIs** — Frontend wrappers for SchoolAdmin/GlobalAdmin endpoints that already exist on the backend but have no UI: homeroom reassignment (`PUT /api/admin/classes/{classId}/homeroom`), teacher-subject qualification management (`POST/DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}`), user/role management (`GET /api/admin/users`, `PUT /api/global-admin/users/{userId}/role`), and curriculum file upload/replace/delete UI (`POST/PUT/DELETE /api/global-admin/curriculum/grades/{grade}/files...`).
+4. **Automated tests** — Zero test coverage today, backend or frontend. Framework choice and starting scope (unit vs. integration, backend vs. frontend first) are intentionally left open for a future planning pass.
+
 ## Local Environment Prerequisites
 
 Before chat, RAG, or math-OCR endpoints will work, the following must be running/pulled locally:
