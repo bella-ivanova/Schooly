@@ -35,7 +35,7 @@ public static class RetrievalDiagnostics
             return;
         }
 
-        Console.WriteLine($"{"Rank",-5} {"Score",-8} {"Pass?",-6} {"Subject",-12} {"Grade",-6} {"Source",-30} Text");
+        Console.WriteLine($"{"Rank",-5} {"Score",-8} {"Pass?",-6} {"Subject",-12} {"Grade",-6} {"Page",-5} {"Source",-30} Text");
         Console.WriteLine(new string('-', 120));
 
         int rank = 1;
@@ -47,7 +47,7 @@ public static class RetrievalDiagnostics
 
             Console.WriteLine(
                 $"{rank,-5} {r.Score,-8:F4} {(passes ? "YES" : "no"),-6} {Truncate(r.Subject, 12),-12} " +
-                $"{r.Grade,-6} {Truncate(r.SourceFile, 30),-30} {preview}");
+                $"{r.Grade,-6} {r.Page,-5} {Truncate(r.SourceFile, 30),-30} {preview}");
             rank++;
         }
 

@@ -189,7 +189,10 @@ Pix2Text handles LaTeX at ingest time for formula-heavy textbook PDFs. The LLM m
 RAG searches with an upper bound of grade 1 — no cross-grade content can appear. This is the lower bound of the filter and must not be treated as an edge case that skips filtering.
 
 **Corrupt or image-only PDF upload**
-The OCR fallback chain runs in order: Pix2Text → vision OCR (Ollama) → PdfPig plain text. If all three return empty text, the upload endpoint returns a clear error message rather than silently storing empty chunks.
+PdfPig plain-text extraction runs on every page by default (fast, no OCR/language dependency). Pages that embed classic MathType/Equation-Editor formula fonts additionally get a Pix2Text formula-only pass appended after that page's prose (`PDFLoader.LoadTextWithSelectiveFormulaOcrAsync`, the path ingestion actually uses). Vision OCR (Ollama) is a whole-document fallback used only when Pix2Text itself is unavailable — a genuinely scanned, image-only PDF then relies on it. If the resulting text is empty, the upload endpoint returns a clear error message rather than silently storing empty chunks.
+
+**PDF text spanning a page break**
+Ingestion chunks each PDF page independently (`PDFLoader.ChunkPages`) rather than treating the whole document as one string, so a single ~400-char chunk never mixes content from two different pages — including a page's Pix2Text formula block, which is guaranteed to be chunked from that same page's own prose, never an adjacent page's. Pages with under 20 characters of cleaned text (a blank divider page, or a page whose only content was a bare page number) are skipped rather than merged into a neighboring page. Each stored chunk's Qdrant payload records its 1-indexed source page (`page`) for provenance.
 
 **Malformed `<STEREO>` block from LLM**
 If the regex extraction in `StereometryService.ExtractSceneJson()` finds no valid JSON, the `scene` field is `null` in the response. The text response is always returned regardless.

@@ -56,6 +56,7 @@ public class QdrantService
             point.Payload["subject"]    = chunk.Subject;
             point.Payload["grade"]      = chunk.Grade;
             point.Payload["sourceFile"] = chunk.SourceFile;
+            point.Payload["page"]       = chunk.PageNumber;
 
             points.Add(point);
         }
@@ -96,6 +97,8 @@ public class QdrantService
             Subject    = r.Payload["subject"].StringValue,
             Grade      = (int)r.Payload["grade"].IntegerValue,
             SourceFile = r.Payload["sourceFile"].StringValue,
+            // Guarded: points upserted before this field was added won't have it yet.
+            Page       = r.Payload.TryGetValue("page", out var page) ? (int)page.IntegerValue : 0,
             Score      = r.Score
         }).ToList();
     }
@@ -148,6 +151,7 @@ public class ChunkData
     public string  Subject    { get; set; } = "";
     public int     Grade      { get; set; }
     public string  SourceFile { get; set; } = "";
+    public int     PageNumber { get; set; }
 }
 
 // Data returned from a search
@@ -157,5 +161,6 @@ public class SearchResult
     public string Subject    { get; set; } = "";
     public int    Grade      { get; set; }
     public string SourceFile { get; set; } = "";
+    public int    Page       { get; set; }
     public float  Score      { get; set; }
 }

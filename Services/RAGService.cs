@@ -126,26 +126,26 @@ public class RAGService
         // get a formula-only Pix2Text pass (LatexOCR, never the general-text CnOcr path)
         // appended after the page's prose. Vision OCR is the fallback only when Pix2Text
         // itself is unavailable (e.g. a genuinely scanned, image-only PDF).
-        var text = _mathOcr != null
+        var pages = _mathOcr != null
             ? await PDFLoader.LoadTextWithSelectiveFormulaOcrAsync(pdfPath, _mathOcr)
             : _ocr != null
                 ? await PDFLoader.LoadTextWithOcrAsync(pdfPath, _ocr)
                 : PDFLoader.LoadText(pdfPath);
-        text = PDFLoader.CleanText(text);
-        var chunks = PDFLoader.ChunkText(text);
+        var chunks = PDFLoader.ChunkPages(pages);
 
-        var embeddings = await _embeddingService.GetEmbeddingsAsync(chunks);
+        var embeddings = await _embeddingService.GetEmbeddingsAsync(chunks.Select(c => c.Text).ToList());
 
         var chunkDataList = new List<ChunkData>();
         for (int i = 0; i < chunks.Count; i++)
         {
             chunkDataList.Add(new ChunkData
             {
-                Text       = chunks[i],
+                Text       = chunks[i].Text,
                 Embedding  = embeddings[i],
                 Subject    = subject,
                 Grade      = grade,
-                SourceFile = fileKey
+                SourceFile = fileKey,
+                PageNumber = chunks[i].PageNumber
             });
         }
 
@@ -183,13 +183,12 @@ public class RAGService
     // Adds a PDF temporarily for the current chat session only (not saved to Qdrant).
     public async Task<int> AddTemporaryPDFAsync(string pdfPath, string subject = "")
     {
-        var text = PDFLoader.LoadText(pdfPath);
-        text = PDFLoader.CleanText(text);
-        var chunks = PDFLoader.ChunkText(text);
-        var embeddings = await _embeddingService.GetEmbeddingsAsync(chunks);
+        var pages = PDFLoader.LoadText(pdfPath);
+        var chunks = PDFLoader.ChunkPages(pages);
+        var embeddings = await _embeddingService.GetEmbeddingsAsync(chunks.Select(c => c.Text).ToList());
 
         for (int i = 0; i < chunks.Count; i++)
-            _temporaryChunks.Add((chunks[i], embeddings[i], subject));
+            _temporaryChunks.Add((chunks[i].Text, embeddings[i], subject));
 
         var label = string.IsNullOrWhiteSpace(subject) ? "" : $" [{subject}]";
         Console.WriteLine($"Loaded '{Path.GetFileName(pdfPath)}'{label} temporarily — {chunks.Count} chunks.");
