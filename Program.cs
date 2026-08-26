@@ -137,7 +137,48 @@ builder.Services.AddScoped<ExamService>();
 builder.Services.AddSingleton<LanguageDetectionService>();
 
 // ── App pipeline ──────────────────────────────────────────────────────────
+// Args-gated diagnostic entry point — never reachable via HTTP, same CLI-only
+// pattern as VisualisationService. Usage:
+//   dotnet run -- diagnose-retrieval "<question>" <grade>
+if (args.Length > 0 && args[0] == "diagnose-retrieval")
+{
+    if (args.Length < 3 || !int.TryParse(args[2], out var diagGrade))
+    {
+        Console.WriteLine("Usage: dotnet run -- diagnose-retrieval \"<question>\" <grade>");
+        return;
+    }
+
+    var diagEmbedding = new EmbeddingService(embedModel);
+    var diagQdrant    = new QdrantService(qdrantHost, qdrantPort);
+    await RetrievalDiagnostics.RunAsync(args[1], diagGrade, diagEmbedding, diagQdrant);
+    return;
+}
+
 var app = builder.Build();
+
+// Args-gated diagnostic entry point — never reachable via HTTP, same CLI-only
+// pattern as diagnose-retrieval/VisualisationService. Usage:
+//   dotnet run -- reingest-grade <grade>
+// Deletes each already-ingested file's chunks for the grade, then re-ingests the
+// whole grade folder fresh (picks up ingestion pipeline changes, e.g. the OCR fix).
+if (args.Length > 0 && args[0] == "reingest-grade")
+{
+    if (args.Length < 2 || !int.TryParse(args[1], out var reingestGrade))
+    {
+        Console.WriteLine("Usage: dotnet run -- reingest-grade <grade>");
+        return;
+    }
+
+    using var scope = app.Services.CreateScope();
+    var ragService = scope.ServiceProvider.GetRequiredService<RAGService>();
+
+    var existingFiles = await ragService.GetIngestedFilesAsync(reingestGrade);
+    foreach (var fileKey in existingFiles)
+        await ragService.DeleteGradeFileAsync(reingestGrade, fileKey);
+
+    await ragService.IngestGradePDFsAsync(reingestGrade);
+    return;
+}
 
 app.UseForwardedHeaders();
 app.UseHsts();

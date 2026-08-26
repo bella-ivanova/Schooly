@@ -87,6 +87,58 @@ public static class PDFLoader
         return sb.ToString();
     }
 
+    // Classic MathType/Equation-Editor export fonts. A page containing any of these
+    // almost certainly has an embedded equation object that PdfPig's plain text
+    // extraction will have flattened into fragmented (but symbolically present) text.
+    private static readonly string[] FormulaFontMarkers = { "Symbol", "MTExtra", "MT-Extra" };
+
+    private static bool PageHasEmbeddedFormulaFont(UglyToad.PdfPig.Content.Page page) =>
+        page.Letters.Any(l => FormulaFontMarkers.Any(marker =>
+            l.FontName.Contains(marker, StringComparison.OrdinalIgnoreCase)));
+
+    // PdfPig text extraction is the default for every page — already correct for
+    // machine-readable PDFs (no OCR, no language dependency). Pages that embed
+    // classic MathType/Equation-Editor fonts additionally get a formula-only
+    // Pix2Text pass (LatexOCR, never the general-text CnOcr path), appended after
+    // that page's prose rather than spliced in place.
+    public static async Task<string> LoadTextWithSelectiveFormulaOcrAsync(string pdfPath, MathOcrService mathOcrService)
+    {
+        if (!File.Exists(pdfPath))
+            throw new FileNotFoundException(pdfPath);
+
+        using var document = UglyToad.PdfPig.PdfDocument.Open(pdfPath);
+        var pages = document.GetPages().ToList();
+        List<byte[]>? pageImages = null; // rendered lazily — only if a page actually needs it
+
+        var sb = new StringBuilder();
+        int flaggedCount = 0;
+
+        for (int i = 0; i < pages.Count; i++)
+        {
+            var page = pages[i];
+            sb.Append(page.Text);
+
+            if (PageHasEmbeddedFormulaFont(page))
+            {
+                flaggedCount++;
+                pageImages ??= GetPageImages(pdfPath);
+                if (i < pageImages.Count)
+                {
+                    Console.Write($"\r  Formula OCR page {i + 1}/{pages.Count}...");
+                    var formulas = await mathOcrService.DetectFormulasAsync(pageImages[i]);
+                    if (formulas.Count > 0)
+                        sb.Append("\n\nFormulas on this page:\n" +
+                                  string.Join("\n", formulas.Select(f => $"$${f}$$")));
+                }
+            }
+
+            sb.Append("\n\n");
+        }
+
+        if (flaggedCount > 0) Console.WriteLine();
+        return sb.ToString();
+    }
+
     public static string CleanText(string text)
     {
         // Normalize line endings

@@ -6,6 +6,7 @@ public class MathOcrService
 {
     private readonly HttpClient _httpClient;
     private const string ServerUrl = "http://127.0.0.1:8503/pix2text";
+    private const string FormulasServerUrl = "http://127.0.0.1:8503/pix2text/formulas";
 
     public MathOcrService(HttpClient httpClient)
     {
@@ -42,4 +43,34 @@ public class MathOcrService
         return doc.RootElement.GetProperty("results").GetString() ?? "";
     }
 
+    // Sends a PNG page image to the Pix2Text server's formula-only endpoint and
+    // gets back a list of LaTeX strings for the formula regions on that page —
+    // never touches the general-text (CnOcr) recognition path.
+    public async Task<List<string>> DetectFormulasAsync(byte[] imageBytes)
+    {
+        using var form = new MultipartFormDataContent();
+
+        var imageContent = new ByteArrayContent(imageBytes);
+        imageContent.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+
+        form.Add(imageContent, "image", "page.png");
+        form.Add(new StringContent("768"), "resized_shape");
+
+        var response = await _httpClient.PostAsync(FormulasServerUrl, form);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            throw new Exception($"Pix2Text formulas endpoint error {(int)response.StatusCode}: {body}");
+        }
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.GetProperty("formulas")
+            .EnumerateArray()
+            .Select(e => e.GetString() ?? "")
+            .Where(s => s.Length > 0)
+            .ToList();
+    }
 }

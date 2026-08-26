@@ -121,9 +121,13 @@ public class RAGService
     // Runs the OCR → chunk → embed → upsert pipeline for a single PDF already on disk.
     private async Task<int> IngestSingleFileAsync(string pdfPath, int grade, string subject, string fileKey)
     {
-        // Priority: Pix2Text (best for math) → vision OCR → plain PdfPig text
+        // PdfPig's plain text is the default for every page (correct for machine-readable
+        // PDFs, no OCR/language dependency). Pages with embedded formula fonts additionally
+        // get a formula-only Pix2Text pass (LatexOCR, never the general-text CnOcr path)
+        // appended after the page's prose. Vision OCR is the fallback only when Pix2Text
+        // itself is unavailable (e.g. a genuinely scanned, image-only PDF).
         var text = _mathOcr != null
-            ? await PDFLoader.LoadTextWithMathOcrAsync(pdfPath, _mathOcr)
+            ? await PDFLoader.LoadTextWithSelectiveFormulaOcrAsync(pdfPath, _mathOcr)
             : _ocr != null
                 ? await PDFLoader.LoadTextWithOcrAsync(pdfPath, _ocr)
                 : PDFLoader.LoadText(pdfPath);
