@@ -1,0 +1,369 @@
+{
+  "fixtureVersion": 1,
+  "sourceCollection": "studyassist",
+  "grade": 10,
+  "createdAt": "2026-08-26",
+  "questions": [
+    {
+      "id": "q01",
+      "question": "Каква е формулата за обема на кълбо (сфера)?",
+      "type": "formula-plain-language",
+      "tags": ["formula", "stereometry", "sphere"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 44,
+          "matchText": "Vкълбо",
+          "pointIdAtCapture": "00f3cd03-cd9c-4486-8173-121fe5c8fadc",
+          "note": "sphere volume formula V = 4/3 pi R^3, given as a worked numeric example rather than an isolated formula statement"
+        }
+      ],
+      "notes": "Formula asked about in plain language ('volume of a sphere') rather than symbolically."
+    },
+    {
+      "id": "q02",
+      "question": "Как се смята лицето на повърхнината на сфера?",
+      "type": "formula-plain-language",
+      "tags": ["formula", "stereometry", "sphere"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 47,
+          "matchText": "Sсф.= 4pR2",
+          "pointIdAtCapture": "238ffa7d-feaf-4b83-9eaa-bb4852cc6cac",
+          "note": "sphere surface area formula S = 4 pi R^2"
+        }
+      ],
+      "notes": "Formula asked about in plain language rather than symbolically."
+    },
+    {
+      "id": "q03",
+      "question": "Как да намеря обема на права призма, ако знам основата и височината?",
+      "type": "formula-plain-language",
+      "tags": ["formula", "stereometry", "prism"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 21,
+          "matchText": "V=B . h",
+          "pointIdAtCapture": "0600b8f0-685c-4e2f-85ae-7b2f35c80bcc",
+          "note": "prism volume formula V = B.h, embedded in a worked problem"
+        }
+      ],
+      "notes": "Casual 'how do I find' phrasing instead of the textbook's declarative style."
+    },
+    {
+      "id": "q04",
+      "question": "Какво е двустенен ъгъл между две равнини?",
+      "type": "single-hop",
+      "tags": ["definition", "stereometry", "dihedral-angle"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 18,
+          "matchText": "двустенни ъгъла",
+          "pointIdAtCapture": "06497a30-8b08-48c9-9030-4fade13840c4",
+          "note": "definition of the four dihedral angles formed by two intersecting planes"
+        }
+      ],
+      "notes": "Conceptual definition question, prose page (not formula-bearing)."
+    },
+    {
+      "id": "q05",
+      "question": "При какво условие всички околни ръбове на пирамида са равни?",
+      "type": "single-hop",
+      "tags": ["property", "stereometry", "pyramid"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 28,
+          "matchText": "Всички околни ръбове на една пирамида са равни",
+          "pointIdAtCapture": "03ce6457-3e90-43bc-9fb6-3f594a7be359",
+          "note": "Property 1: lateral edges of a pyramid are equal iff a circle can be circumscribed around the base"
+        }
+      ],
+      "notes": "Question rephrases the property's conclusion as a question about its condition."
+    },
+    {
+      "id": "q06",
+      "question": "Как се дефинира призма в геометрията?",
+      "type": "single-hop",
+      "tags": ["definition", "stereometry", "prism"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 20,
+          "matchText": "се нарича призма",
+          "pointIdAtCapture": "1a42bc8f-ff89-4d1a-906e-fe5d4fc535f6",
+          "note": "definition of a prism as a solid with two congruent n-gon faces in parallel planes"
+        }
+      ],
+      "notes": "Also used as one half of multi-hop question q19."
+    },
+    {
+      "id": "q07",
+      "question": "Какво прави една фигура пирамида — как се определя?",
+      "type": "single-hop",
+      "tags": ["definition", "stereometry", "pyramid"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 24,
+          "matchText": "се нарича пирамида",
+          "pointIdAtCapture": "07a31cc4-52a3-4bf1-8a8b-9521326c637a",
+          "note": "definition of a pyramid as a solid with a polygon base and triangular lateral faces sharing an apex"
+        }
+      ],
+      "notes": "Colloquial 'what makes a shape X' phrasing."
+    },
+    {
+      "id": "q08",
+      "question": "Как се дефинира прав кръгов конус?",
+      "type": "single-hop",
+      "tags": ["definition", "stereometry", "cone"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 38,
+          "matchText": "се нарича прав кръгов конус",
+          "pointIdAtCapture": "18b64073-9077-4f0b-91f9-e373200d8757",
+          "note": "formal definition of a right circular cone via a circle, an apex point, and the perpendicular line through the center"
+        }
+      ],
+      "notes": "Formal definition page, question mirrors textbook wording fairly closely (control case)."
+    },
+    {
+      "id": "q09",
+      "question": "Какво означава да проектираме една фигура върху равнина?",
+      "type": "colloquial",
+      "tags": ["definition", "stereometry", "projection"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 12,
+          "matchText": "ортогонална проекция на фигурата F",
+          "pointIdAtCapture": "21ff6fb3-b09f-4e2a-9509-bcb2d4e9b348",
+          "note": "definition of orthogonal projection of a figure onto a plane"
+        }
+      ],
+      "notes": "Casual phrasing ('what does it mean to project') vs. the textbook's formal 'ортогонална проекция' term."
+    },
+    {
+      "id": "q10",
+      "question": "Какво е пълната повърхнина на цилиндър и от какво се състои?",
+      "type": "single-hop",
+      "tags": ["definition", "stereometry", "cylinder"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 35,
+          "matchText": "пълна повърхнина (повърхнина) (S1)",
+          "pointIdAtCapture": "23fba4a4-838f-461c-86ec-d99db69684be",
+          "note": "total surface of a cylinder = lateral surface + the two bases"
+        }
+      ],
+      "notes": "Conceptual composition question rather than a numeric formula lookup."
+    },
+    {
+      "id": "q11",
+      "question": "Как се определя квадратен корен от число?",
+      "type": "colloquial",
+      "tags": ["definition", "irrational", "square-root"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/1IrationalArhimed copy.pdf",
+          "page": 2,
+          "matchText": "Квадратен корен от неотрицателно число",
+          "pointIdAtCapture": "093a34ba-6ff6-440b-a085-e380e69ffc1b",
+          "note": "definition: square root of a non-negative number a is the unique non-negative number whose square equals a"
+        }
+      ],
+      "notes": "Casual phrasing avoiding the textbook's 'се нарича' construction."
+    },
+    {
+      "id": "q12",
+      "question": "Кога един алгебричен израз се нарича ирационален?",
+      "type": "single-hop",
+      "tags": ["definition", "irrational"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/1IrationalArhimed copy.pdf",
+          "page": 6,
+          "matchText": "се нарича ирационален",
+          "pointIdAtCapture": "10a56ba4-3625-4a72-a806-19270923ed66",
+          "note": "definition: an algebraic expression containing a radical is called irrational"
+        }
+      ],
+      "notes": "Near-verbatim phrasing of the textbook definition (control case)."
+    },
+    {
+      "id": "q13",
+      "question": "Как да се отърва от корен в знаменателя на дроб?",
+      "type": "colloquial",
+      "tags": ["technique", "irrational", "rationalization"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/1IrationalArhimed copy.pdf",
+          "page": 4,
+          "matchText": "Освободете подкоренната величина от знаменател",
+          "pointIdAtCapture": "04b8f9aa-be67-4c46-b890-b37bedcbcf54",
+          "note": "worked examples freeing the denominator of a radical"
+        }
+      ],
+      "notes": "Very informal 'get rid of' phrasing vs. textbook's 'освободете подкоренната величина'."
+    },
+    {
+      "id": "q14",
+      "question": "Защо трябва да умножим знаменателя с определен израз, за да рационализираме дроб?",
+      "type": "single-hop",
+      "tags": ["technique", "irrational", "rationalization"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/1IrationalArhimed copy.pdf",
+          "page": 9,
+          "matchText": "трябва да умножим знаменателя",
+          "pointIdAtCapture": "04cb2e91-3820-443d-a972-7388d55448f5",
+          "note": "explains why multiplying by a suitably chosen expression rationalizes an irrational denominator"
+        }
+      ],
+      "notes": "'Why' question probing the reasoning behind the technique, not just the steps."
+    },
+    {
+      "id": "q15",
+      "question": "Как се опростява сложен ирационален израз стъпка по стъпка?",
+      "type": "single-hop",
+      "tags": ["technique", "irrational", "simplification"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/1IrationalArhimed copy.pdf",
+          "page": 27,
+          "matchText": "Опростете израза",
+          "pointIdAtCapture": "01c293fa-b9f0-4cd9-9201-b287e54cb592",
+          "note": "multi-step worked simplification of a complex irrational expression"
+        }
+      ],
+      "notes": "Dense symbolic worked-example page; question is phrased generically rather than quoting the specific expression."
+    },
+    {
+      "id": "q16",
+      "question": "Как се намира x-координатата на върха на парабола?",
+      "type": "formula-plain-language",
+      "tags": ["formula", "quadratic-function", "vertex"],
+      "requireAll": false,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/0IntroArhimed copy.pdf",
+          "page": 8,
+          "matchText": "x_{\\nu}=-{\\frac{b}",
+          "pointIdAtCapture": "0466a9e2-1013-4132-bcc0-d83f21b273bd",
+          "note": "vertex x-coordinate formula x_v = -b/2a, on a page that's almost entirely OCR'd symbolic math"
+        },
+        {
+          "sourceFile": "Math/0IntroArhimed copy.pdf",
+          "page": 8,
+          "matchText": "която е връх на параболата",
+          "pointIdAtCapture": "6ec04128-77c2-465a-aa64-27a81ff657a3",
+          "note": "alternate: prose worked-example chunk on the same page that names and computes the vertex directly (\"Намираме координатите на точка V, която е връх на параболата\") — a genuinely correct answer, not just topically related. Verified via diagnose-retrieval --prefix: this chunk ranks #1, ahead of the pinned formula chunk above (rank ~8), so requireAll is false here to credit either as a pass."
+        }
+      ],
+      "notes": "Formula-bearing page phrased in plain language ('vertex of a parabola') rather than symbolically. Two acceptable chunks on the same page (formula-only and prose-with-worked-example), see requireAll note above."
+    },
+    {
+      "id": "q17",
+      "question": "Ако имаме шест различни книги, по колко начина могат да се подредят на един рафт?",
+      "type": "colloquial",
+      "tags": ["combinatorics", "probability"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/0IntroArhimed copy.pdf",
+          "page": 6,
+          "matchText": "Шест книги могат да се подредят",
+          "pointIdAtCapture": "06034281-472f-41c5-b5b9-c1f7dcf42179",
+          "note": "worked probability problem about arranging six books, two by the same author, on a shelf"
+        }
+      ],
+      "notes": "Paraphrases the word problem's setup casually instead of quoting it."
+    },
+    {
+      "id": "q18",
+      "question": "В триъгълник е построена ъглополовяща, която среща успоредна на една страна права — как да намеря дължината на третата страна?",
+      "type": "single-hop",
+      "tags": ["geometry", "similar-triangles", "angle-bisector"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/0IntroArhimed copy.pdf",
+          "page": 11,
+          "matchText": "построена ъглополовящата",
+          "pointIdAtCapture": "7d10ea95-954d-4788-87a9-defeba7b3509",
+          "note": "multiple-choice problem: angle bisector AL, a parallel line through L, similar-triangles ratio to find AB"
+        }
+      ],
+      "notes": "Paraphrases the specific problem setup in more general terms."
+    },
+    {
+      "id": "q19",
+      "question": "Обяснете формулите за обем и лице на повърхнината на сфера — с какво се различават?",
+      "type": "multi-hop",
+      "tags": ["formula", "stereometry", "sphere", "multi-hop"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 44,
+          "matchText": "Vкълбо",
+          "pointIdAtCapture": "00f3cd03-cd9c-4486-8173-121fe5c8fadc",
+          "note": "sphere volume formula (same chunk as q01)"
+        },
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 47,
+          "matchText": "Sсф.= 4pR2",
+          "pointIdAtCapture": "238ffa7d-feaf-4b83-9eaa-bb4852cc6cac",
+          "note": "sphere surface area formula (same chunk as q02)"
+        }
+      ],
+      "notes": "Needs both the volume formula (p.44) and the surface-area formula (p.47) to answer fully — a genuine two-fact retrieval."
+    },
+    {
+      "id": "q20",
+      "question": "Какво е права призма и как се смята обемът ѝ?",
+      "type": "multi-hop",
+      "tags": ["definition", "formula", "stereometry", "prism", "multi-hop"],
+      "requireAll": true,
+      "expectedChunks": [
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 20,
+          "matchText": "се нарича призма",
+          "pointIdAtCapture": "1a42bc8f-ff89-4d1a-906e-fe5d4fc535f6",
+          "note": "prism definition (same chunk as q06)"
+        },
+        {
+          "sourceFile": "Math/5StereometryArhimed.pdf",
+          "page": 21,
+          "matchText": "V=B . h",
+          "pointIdAtCapture": "0600b8f0-685c-4e2f-85ae-7b2f35c80bcc",
+          "note": "prism volume formula (same chunk as q03)"
+        }
+      ],
+      "notes": "Needs both the definition (p.20) and the volume formula (p.21), one page apart — tests whether both adjacent-but-distinct chunks surface together."
+    }
+  ]
+}

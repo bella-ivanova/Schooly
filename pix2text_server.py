@@ -37,7 +37,14 @@ def is_suspect_formula(text: str) -> bool:
         return True
     for m in TEXT_WRAPPER_RE.finditer(text):
         inner = m.group(1).replace(' ', '').replace('~', '')
-        if inner.isalpha() and inner.lower() not in KNOWN_TEXT_TOKENS:
+        # isalnum() (not isalpha()): a garbled Cyrillic word sometimes comes out with a
+        # digit standing in for a visually similar Cyrillic letter (e.g. "3" for "З", as
+        # in the observed "HpH3MaTa" for "призмата"), which used to slip past a pure
+        # isalpha() check. Per KNOWN_TEXT_TOKENS above, legitimate wrapped content is
+        # always pure-alpha (a unit or function name) or pure-numeric (untouched, still
+        # allowed here via the any(isalpha) guard) — never a letter+digit mix.
+        if (inner.isalnum() and any(c.isalpha() for c in inner)
+                and inner.lower() not in KNOWN_TEXT_TOKENS):
             return True
     return False
 

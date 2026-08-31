@@ -133,7 +133,7 @@ public class RAGService
                 : PDFLoader.LoadText(pdfPath);
         var chunks = PDFLoader.ChunkPages(pages);
 
-        var embeddings = await _embeddingService.GetEmbeddingsAsync(chunks.Select(c => c.Text).ToList());
+        var embeddings = await _embeddingService.GetDocumentEmbeddingsAsync(chunks.Select(c => c.Text).ToList());
 
         var chunkDataList = new List<ChunkData>();
         for (int i = 0; i < chunks.Count; i++)
@@ -185,7 +185,7 @@ public class RAGService
     {
         var pages = PDFLoader.LoadText(pdfPath);
         var chunks = PDFLoader.ChunkPages(pages);
-        var embeddings = await _embeddingService.GetEmbeddingsAsync(chunks.Select(c => c.Text).ToList());
+        var embeddings = await _embeddingService.GetDocumentEmbeddingsAsync(chunks.Select(c => c.Text).ToList());
 
         for (int i = 0; i < chunks.Count; i++)
             _temporaryChunks.Add((chunks[i].Text, embeddings[i], subject));
@@ -223,7 +223,7 @@ public class RAGService
         if (_currentGrade == 0 && _temporaryChunks.Count == 0)
             return "";
 
-        var qEmbeddingList = await _embeddingService.GetEmbeddingsAsync(new List<string> { query });
+        var qEmbeddingList = await _embeddingService.GetQueryEmbeddingsAsync(new List<string> { query });
         if (qEmbeddingList.Count == 0) return "";
         var queryEmbedding = qEmbeddingList[0];
 

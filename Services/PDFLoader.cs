@@ -125,7 +125,13 @@ public static class PDFLoader
             if (PageHasEmbeddedFormulaFont(page))
             {
                 flaggedCount++;
-                pageImages ??= GetPageImages(pdfPath);
+                // dpi: 200, not the shared 96 default — a sharper source image measurably
+                // reduces garbled Cyrillic-as-Latin misrecognition in Pix2Text's formula OCR
+                // (verified: a known-garbled formula on a test page disappeared at 200 DPI
+                // across 3 repeat runs, with no meaningful inference-time cost). Passed
+                // explicitly here only — LoadTextWithOcrAsync's vision-OCR fallback path
+                // still uses the 96 default.
+                pageImages ??= GetPageImages(pdfPath, dpi: 200);
                 if (i < pageImages.Count)
                 {
                     Console.Write($"\r  Formula OCR page {i + 1}/{pdfPages.Count}...");
@@ -336,10 +342,35 @@ public static class PDFLoader
                     .ToList();
     }
 
-    // Returns the last N sentences from a chunk for use as overlap.
+    // Max length of the trailing-text overlap used when a flushed chunk has no detectable
+    // sentence boundary at all (see GetLastSentences) — short and bounded, unlike reusing
+    // the whole chunk. Character-based, not word-count-based: this corpus's dense OCR'd
+    // math text can run for hundreds of characters with almost no spaces (e.g.
+    // "Axxxxxxxxxxxxxx=+−++−==+()..."), so a word-count cap alone doesn't reliably bound
+    // the overlap length when tokens themselves are long.
+    private const int OverlapFallbackMaxChars = 80;
+
+    // Returns the last N sentences from a chunk for use as overlap. Falls back to a short
+    // character-based tail when SplitSentences finds no real boundary in the chunk (common
+    // in dense OCR'd math text, where periods are rarely followed by a space) — otherwise
+    // sentences.Count <= count would reuse the ENTIRE chunk as "1 sentence" of overlap.
+    // For a chunk that's actually an arbitrary word-boundary slice of an oversized,
+    // unpunctuated paragraph (e.g. a page's prose, or a long run of appended OCR'd
+    // formulas), that self-perpetuates the same leading text into every following chunk
+    // split from that paragraph — observed as many chunks sharing an identical prefix.
     private static List<string> GetLastSentences(string chunk, int count)
     {
-        var sentences = SplitSentences(chunk);
+        var trimmed = chunk.Trim();
+        var sentences = SplitSentences(trimmed);
+
+        if (sentences.Count == 1 && sentences[0] == trimmed)
+        {
+            var tail = trimmed.Length > OverlapFallbackMaxChars
+                ? trimmed[^OverlapFallbackMaxChars..]
+                : trimmed;
+            return new List<string> { tail };
+        }
+
         return sentences.Count <= count ? sentences : sentences.Skip(sentences.Count - count).ToList();
     }
 }

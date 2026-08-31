@@ -110,7 +110,7 @@ builder.Services.AddHttpClient("zhipuai", c => c.Timeout = Timeout.InfiniteTimeS
 
 // ── LLM / RAG services ────────────────────────────────────────────────────
 var ollamaModel  = builder.Configuration["Llm:OllamaModel"]      ?? "todorov/bggpt";
-var embedModel   = builder.Configuration["Llm:OllamaEmbedModel"]  ?? "nomic-embed-text";
+var embedModel   = builder.Configuration["Llm:OllamaEmbedModel"]  ?? "nomic-embed-text-v2-moe";
 var visionModel  = builder.Configuration["Llm:OllamaVisionModel"] ?? "minicpm-v";
 var qdrantHost   = builder.Configuration["Qdrant:Host"]           ?? "localhost";
 var qdrantPort   = int.TryParse(builder.Configuration["Qdrant:Port"], out var qp) ? qp : 6334;
@@ -139,18 +139,91 @@ builder.Services.AddSingleton<LanguageDetectionService>();
 // ── App pipeline ──────────────────────────────────────────────────────────
 // Args-gated diagnostic entry point — never reachable via HTTP, same CLI-only
 // pattern as VisualisationService. Usage:
-//   dotnet run -- diagnose-retrieval "<question>" <grade>
+//   dotnet run -- diagnose-retrieval "<question>" <grade> [--prefix]
 if (args.Length > 0 && args[0] == "diagnose-retrieval")
 {
     if (args.Length < 3 || !int.TryParse(args[2], out var diagGrade))
     {
-        Console.WriteLine("Usage: dotnet run -- diagnose-retrieval \"<question>\" <grade>");
+        Console.WriteLine("Usage: dotnet run -- diagnose-retrieval \"<question>\" <grade> [--prefix]");
         return;
     }
 
+    bool diagUsePrefix = args.Length > 3 && args[3] == "--prefix";
     var diagEmbedding = new EmbeddingService(embedModel);
     var diagQdrant    = new QdrantService(qdrantHost, qdrantPort);
-    await RetrievalDiagnostics.RunAsync(args[1], diagGrade, diagEmbedding, diagQdrant);
+    await RetrievalDiagnostics.RunAsync(args[1], diagGrade, diagEmbedding, diagQdrant, diagUsePrefix);
+    return;
+}
+
+// Args-gated, READ-ONLY diagnostic tool for browsing the production "studyassist"
+// collection so real chunks/pages can be picked to build a retrieval regression
+// fixture. Never wired to HTTP, never writes/deletes against the collection. Usage:
+//   dotnet run -- sample-chunks <grade> [<sourceFile>] [<limit>]
+if (args.Length > 0 && args[0] == "sample-chunks")
+{
+    if (args.Length < 2 || !int.TryParse(args[1], out var sampleGrade))
+    {
+        Console.WriteLine("Usage: dotnet run -- sample-chunks <grade> [<sourceFile>] [<limit>]");
+        return;
+    }
+
+    string? sampleFile = args.Length > 2 ? args[2] : null;
+    int sampleLimit = args.Length > 3 && int.TryParse(args[3], out var sl) ? sl : 15;
+    await ChunkSampler.SampleAsync(qdrantHost, qdrantPort, sampleGrade, sampleFile, sampleLimit);
+    return;
+}
+
+// Companion to sample-chunks — prints one chunk's full untruncated text by point id,
+// for copying an exact matchText snippet into a fixture. READ-ONLY. Usage:
+//   dotnet run -- show-chunk <pointId>
+if (args.Length > 0 && args[0] == "show-chunk")
+{
+    if (args.Length < 2)
+    {
+        Console.WriteLine("Usage: dotnet run -- show-chunk <pointId>");
+        return;
+    }
+
+    await ChunkSampler.ShowChunkAsync(qdrantHost, qdrantPort, args[1]);
+    return;
+}
+
+// Args-gated, READ-ONLY validator: resolves every fixture expectedChunk against the
+// production collection and reports OK/MISSING, catching typos or stale matchText
+// snippets before running the full comparison. Usage:
+//   dotnet run -- validate-fixture <fixturePath>
+if (args.Length > 0 && args[0] == "validate-fixture")
+{
+    if (args.Length < 2)
+    {
+        Console.WriteLine("Usage: dotnet run -- validate-fixture <fixturePath>");
+        return;
+    }
+
+    await ChunkSampler.ValidateFixtureAsync(qdrantHost, qdrantPort, args[1]);
+    return;
+}
+
+// Args-gated diagnostic entry point comparing retrieval quality across 3 embedding
+// configs (current / prefixed / prefixed+v2-moe) against a hand-authored fixture.
+// Only ever reads the production "studyassist" collection; uses disposable temp
+// collections for the other two configs, always torn down before returning. Usage:
+//   dotnet run -- compare-retrieval <fixturePath> [--full-corpus] [--current-prefix]
+// --full-corpus: configs 2/3 re-embed the ENTIRE grade's corpus instead of just the
+//   fixture's own chunks, removing the pool-size confound of a small decoy set.
+// --current-prefix: Config 1 embeds the query WITH the prefix — use after production
+//   has been migrated to always prefix, to validate the real collection end-to-end.
+if (args.Length > 0 && args[0] == "compare-retrieval")
+{
+    if (args.Length < 2)
+    {
+        Console.WriteLine("Usage: dotnet run -- compare-retrieval <fixturePath> [--full-corpus] [--current-prefix]");
+        return;
+    }
+
+    bool compareFullCorpus = args.Contains("--full-corpus");
+    bool compareCurrentPrefix = args.Contains("--current-prefix");
+    await RetrievalComparisonRunner.RunAsync(args[1], embedModel, qdrantHost, qdrantPort, compareFullCorpus, compareCurrentPrefix);
     return;
 }
 

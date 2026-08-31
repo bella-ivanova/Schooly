@@ -8,15 +8,19 @@ public static class RetrievalDiagnostics
     private const float CurrentMinScore = 0.1f;
 
     // Reproduces RAGService.GetContextAsync's current embedding behavior exactly:
-    // the raw question text, no "search_query:"/"search_document:" prefix.
-    public static async Task RunAsync(string question, int grade, EmbeddingService embeddingService, QdrantService qdrant)
+    // the raw question text, no "search_query:"/"search_document:" prefix — unless
+    // usePrefix is set, to compare against the same production collection/model with
+    // Nomic's documented query-side task prefix applied.
+    public static async Task RunAsync(string question, int grade, EmbeddingService embeddingService, QdrantService qdrant, bool usePrefix = false)
     {
+        var textToEmbed = usePrefix ? EmbeddingService.QueryPrefix + question : question;
+
         Console.WriteLine($"Question: \"{question}\"");
         Console.WriteLine($"Grade filter: <= {grade}");
-        Console.WriteLine($"Embedding model: {embeddingService.Model} (raw text, no prefix)");
+        Console.WriteLine($"Embedding model: {embeddingService.Model} " + (usePrefix ? $"(with \"{EmbeddingService.QueryPrefix}\" prefix)" : "(raw text, no prefix)"));
         Console.WriteLine();
 
-        var embeddings = await embeddingService.GetEmbeddingsAsync(new List<string> { question });
+        var embeddings = await embeddingService.GetEmbeddingsAsync(new List<string> { textToEmbed });
         if (embeddings.Count == 0)
         {
             Console.WriteLine("Embedding call returned no result — is the embedding model pulled?");

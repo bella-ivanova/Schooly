@@ -19,7 +19,7 @@ public class QdrantService
     }
 
     // Creates the collection if it doesn't already exist.
-    // vectorSize must match the embedding model output (nomic-embed-text = 768 dimensions).
+    // vectorSize must match the embedding model output (nomic-embed-text-v2-moe = 768 dimensions, same as the previous nomic-embed-text v1.5).
     public async Task EnsureCollectionAsync(uint vectorSize = 768)
     {
         var collections = await _client.ListCollectionsAsync();
