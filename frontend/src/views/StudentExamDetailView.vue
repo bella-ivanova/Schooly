@@ -64,7 +64,7 @@ function formatDate(iso: string) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 720px;
+  max-width: 1400px;
 }
 
 .back-link {

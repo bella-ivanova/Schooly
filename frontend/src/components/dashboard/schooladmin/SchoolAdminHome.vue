@@ -212,7 +212,6 @@ async function handleCreateClass() {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 960px;
 }
 
 .header {

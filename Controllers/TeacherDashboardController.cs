@@ -17,6 +17,18 @@ public class TeacherDashboardController : ControllerBase
         _dashboard = dashboard;
     }
 
+    // GET /api/teacher/subjects
+    [HttpGet("subjects")]
+    public async Task<IActionResult> GetMySubjects()
+    {
+        var role = User.FindFirstValue("role");
+        if (role != "Teacher")
+            return StatusCode(403, new { error = "Access restricted to teachers." });
+
+        var teacherId = User.FindFirstValue("sub") ?? "";
+        return Ok(await _dashboard.GetMySubjectsAsync(teacherId));
+    }
+
     // GET /api/teacher/classes
     [HttpGet("classes")]
     public async Task<IActionResult> GetMyClasses()

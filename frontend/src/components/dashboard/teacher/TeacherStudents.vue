@@ -65,7 +65,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  max-width: 960px;
 }
 
 .page-title {

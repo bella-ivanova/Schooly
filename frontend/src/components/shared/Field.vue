@@ -4,7 +4,7 @@ import { ref, computed } from 'vue'
 defineOptions({ inheritAttrs: false })
 
 const props = defineProps<{
-  label: string
+  label?: string
   type?: string
   modelValue: string
   placeholder?: string
@@ -27,7 +27,7 @@ const effectiveType = computed(() => {
 
 <template>
   <label class="field">
-    <span class="field-label-row">
+    <span v-if="label || $slots['label-end']" class="field-label-row">
       <span class="field-label">{{ label }}</span>
       <span class="field-label-end"><slot name="label-end" /></span>
     </span>

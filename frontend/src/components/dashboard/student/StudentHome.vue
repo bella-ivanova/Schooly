@@ -79,7 +79,6 @@ async function handleJoinClass(code: string) {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  max-width: 960px;
 }
 
 .welcome {

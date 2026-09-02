@@ -86,7 +86,7 @@ function formatDate(iso: string) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 640px;
+  max-width: 1400px;
 }
 
 .header {

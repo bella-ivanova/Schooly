@@ -22,6 +22,18 @@ public class TeacherDashboardService
         _chatLog = chatLog;
     }
 
+    // Canonical subjects this teacher is assigned to teach, from TeacherSubject directly —
+    // distinct from GetMyClassesAsync's per-class subject listing, which can repeat across classes.
+    public async Task<List<string>> GetMySubjectsAsync(string teacherId)
+    {
+        return await _db.TeacherSubjects
+            .Where(ts => ts.TeacherId == teacherId)
+            .Select(ts => ts.Subject!.Name)
+            .Distinct()
+            .OrderBy(name => name)
+            .ToListAsync();
+    }
+
     public async Task<List<(Class Class, List<Subject> Subjects, int StudentCount)>> GetMyClassesAsync(string teacherId)
     {
         var viaSubjects = await _db.ClassTeachers

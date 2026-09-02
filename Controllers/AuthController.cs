@@ -56,7 +56,7 @@ public class AuthController : ControllerBase
         var jwt          = _auth.GenerateJwt(user!);
         var refreshToken = await _auth.GenerateRefreshTokenAsync(user!);
 
-        return Ok(new { token = jwt, refreshToken, user = Summary(user!) });
+        return Ok(new { token = jwt, refreshToken, user = await _auth.BuildUserSummaryAsync(user!) });
     }
 
     // POST /api/auth/register
@@ -103,7 +103,7 @@ public class AuthController : ControllerBase
         var jwt          = _auth.GenerateJwt(user);
         var refreshToken = await _auth.GenerateRefreshTokenAsync(user);
 
-        return Ok(new { token = jwt, refreshToken, user = Summary(user) });
+        return Ok(new { token = jwt, refreshToken, user = await _auth.BuildUserSummaryAsync(user) });
     }
 
     // POST /api/auth/refresh
@@ -193,7 +193,7 @@ public class AuthController : ControllerBase
         if (user == null)
             return BadRequest(new { error });
 
-        return Ok(Summary(user));
+        return Ok(await _auth.BuildUserSummaryAsync(user));
     }
 
     // POST /api/auth/change-password
@@ -213,15 +213,6 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Password changed successfully." });
     }
 
-    private static object Summary(ApplicationUser u) => new
-    {
-        id       = u.Id,
-        username = u.UserName,
-        email    = u.Email,
-        fullName = u.FullName,
-        role     = u.Role.ToString().ToLower(),
-        grade    = u.Grade
-    };
 }
 
 public record LoginRequest(

@@ -254,7 +254,7 @@ async function handleDeleteClick() {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-width: 960px;
+  max-width: 1400px;
 }
 
 .chat-header {

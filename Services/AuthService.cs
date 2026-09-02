@@ -11,6 +11,9 @@ using StudyAssistant.Models;
 
 namespace StudyAssistant.Services;
 
+public record AuthUserSummaryDto(string Id, string? Username, string? Email, string FullName,
+    string Role, int? Grade, string? SchoolName, string? ClassLetter);
+
 public class AuthService
 {
     private readonly IUserRepository _users;
@@ -305,6 +308,22 @@ public class AuthService
             return (null, "Failed to update profile.");
 
         return (user, null);
+    }
+
+    // Builds the caller-facing summary DTO for login/register/update-profile responses.
+    // SchoolName is resolved with a direct AppDbContext query rather than a School nav-prop
+    // read, because UserManager.FindByIdAsync (behind IUserRepository) does not eager-load
+    // ApplicationUser.School — see GetStudentClassesAsync for the identical pattern.
+    public async Task<AuthUserSummaryDto> BuildUserSummaryAsync(ApplicationUser user)
+    {
+        string? schoolName = user.SchoolId != null
+            ? await _db.Schools.Where(s => s.Id == user.SchoolId).Select(s => s.Name).FirstOrDefaultAsync()
+            : null;
+
+        return new AuthUserSummaryDto(
+            user.Id, user.UserName, user.Email, user.FullName,
+            user.Role.ToString().ToLower(), user.Grade, schoolName,
+            user.Role == UserRole.Student ? user.ClassLetter : null);
     }
 
     // Verifies the current password (unlike the post-reset-code ChangePasswordDirectlyAsync)

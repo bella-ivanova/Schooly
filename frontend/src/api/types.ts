@@ -7,6 +7,8 @@ export interface UserSummary {
   fullName: string
   role: UserRole
   grade: number | null
+  schoolName: string | null
+  classLetter: string | null
 }
 
 export interface LoginRequest {

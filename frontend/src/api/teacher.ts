@@ -36,3 +36,7 @@ export function getClassJoinCode(classId: number): Promise<ClassJoinCode | null>
 export function regenerateClassJoinCode(classId: number): Promise<ClassJoinCode> {
   return apiFetch<ClassJoinCode>(`/api/teacher/classes/${classId}/join-code/regenerate`, { method: 'POST' })
 }
+
+export function getMySubjects(): Promise<string[]> {
+  return apiFetch<string[]>('/api/teacher/subjects')
+}
