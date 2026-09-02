@@ -41,28 +41,30 @@ function goHome() {
       <span class="wordmark">Schooly</span>
     </div>
 
-    <p class="role-label">{{ roleLabel }}</p>
+    <div class="sidebar-scroll">
+      <p class="role-label">{{ roleLabel }}</p>
 
-    <nav class="nav-list">
-      <template v-for="item in navItems" :key="item.label">
-        <p v-if="item.sectionHeader" class="section-header">{{ item.label }}</p>
-        <router-link
-          v-else-if="item.to && !item.disabled"
-          :to="item.to"
-          class="nav-item"
-          :class="{ active: isActive(item), primary: item.primary }"
-        >
-          {{ item.label }}
-        </router-link>
-        <span
-          v-else
-          class="nav-item"
-          :class="{ active: isActive(item), disabled: item.disabled, primary: item.primary }"
-        >
-          {{ item.label }}
-        </span>
-      </template>
-    </nav>
+      <nav class="nav-list">
+        <template v-for="item in navItems" :key="item.label">
+          <p v-if="item.sectionHeader" class="section-header">{{ item.label }}</p>
+          <router-link
+            v-else-if="item.to && !item.disabled"
+            :to="item.to"
+            class="nav-item"
+            :class="{ active: isActive(item), primary: item.primary }"
+          >
+            {{ item.label }}
+          </router-link>
+          <span
+            v-else
+            class="nav-item"
+            :class="{ active: isActive(item), disabled: item.disabled, primary: item.primary }"
+          >
+            {{ item.label }}
+          </span>
+        </template>
+      </nav>
+    </div>
 
     <div class="sidebar-footer">
       <span class="user-name">{{ authStore.user?.fullName }}</span>
@@ -89,6 +91,31 @@ function goHome() {
   gap: 10px;
   padding: 0 8px 8px;
   cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: var(--r-sm);
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .wordmark {
@@ -164,7 +191,7 @@ a.nav-item:hover:not(.active) {
 }
 
 .sidebar-footer {
-  margin-top: auto;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
