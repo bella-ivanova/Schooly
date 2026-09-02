@@ -73,6 +73,77 @@ public class TeacherDashboardController : ControllerBase
         return Ok(response);
     }
 
+    // GET /api/teacher/students
+    [HttpGet("students")]
+    public async Task<IActionResult> GetAllStudents()
+    {
+        var role = User.FindFirstValue("role");
+        if (role != "Teacher" && role != "SchoolAdmin")
+            return StatusCode(403, new { error = "Access restricted to teachers and school administrators." });
+
+        var teacherId = User.FindFirstValue("sub") ?? "";
+        var students = await _dashboard.GetAllStudentsAsync(teacherId);
+
+        var response = students.Select(s => new
+        {
+            id         = s.Id,
+            username   = s.Username,
+            fullName   = s.FullName,
+            grade      = s.Grade,
+            classNames = s.ClassNames
+        }).ToList();
+
+        return Ok(response);
+    }
+
+    // GET /api/teacher/students/{studentId}
+    [HttpGet("students/{studentId}")]
+    public async Task<IActionResult> GetStudentDetail(string studentId)
+    {
+        var role = User.FindFirstValue("role");
+        if (role != "Teacher" && role != "SchoolAdmin")
+            return StatusCode(403, new { error = "Access restricted to teachers and school administrators." });
+
+        var teacherId = User.FindFirstValue("sub") ?? "";
+        var student = await _dashboard.GetStudentDetailAsync(teacherId, studentId);
+        if (student == null)
+            return NotFound(new { error = "Student not found or not taught by you." });
+
+        return Ok(new
+        {
+            id         = student.Id,
+            username   = student.Username,
+            fullName   = student.FullName,
+            grade      = student.Grade,
+            classNames = student.ClassNames
+        });
+    }
+
+    // GET /api/teacher/students/{studentId}/stats?days=30
+    [HttpGet("students/{studentId}/stats")]
+    public async Task<IActionResult> GetStudentStats(string studentId, [FromQuery] int days = 30)
+    {
+        var role = User.FindFirstValue("role");
+        if (role != "Teacher" && role != "SchoolAdmin")
+            return StatusCode(403, new { error = "Access restricted to teachers and school administrators." });
+
+        if (days < 1)   days = 1;
+        if (days > 365) days = 365;
+
+        var teacherId = User.FindFirstValue("sub") ?? "";
+        var stats = await _dashboard.GetStudentStatsAsync(teacherId, studentId, days);
+        if (stats == null)
+            return NotFound(new { error = "Student not found or not taught by you." });
+
+        return Ok(new
+        {
+            questionCount30d = stats.QuestionCount30d,
+            lastActiveAt     = stats.LastActiveAt,
+            savedExamCount   = stats.SavedExamCount,
+            weakSpots        = stats.WeakSpots.Select(w => new { topic = w.Topic, subject = w.Subject, count = w.Count }).ToList()
+        });
+    }
+
     // GET /api/teacher/classes/{classId}/struggles?days=30
     [HttpGet("classes/{classId:int}/struggles")]
     public async Task<IActionResult> GetStrugglesByClass(int classId, [FromQuery] int days = 30)

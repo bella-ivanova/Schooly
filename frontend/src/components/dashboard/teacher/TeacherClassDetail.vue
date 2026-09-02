@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import * as teacherApi from '../../../api/teacher'
 import type { ApiError, ClassJoinCode, TeacherClassSummary, TeacherRosterStudent, TeacherStruggleGroup } from '../../../api/types'
 import ClassRosterCard from './ClassRosterCard.vue'
@@ -8,6 +8,7 @@ import StruggleTopicsCard from './StruggleTopicsCard.vue'
 import MostActiveStudentsCard from './MostActiveStudentsCard.vue'
 
 const route = useRoute()
+const router = useRouter()
 const classId = computed(() => Number(route.params.classId))
 
 const classInfo = ref<TeacherClassSummary | null>(null)
@@ -44,6 +45,10 @@ async function load() {
 }
 
 watch(classId, load, { immediate: true })
+
+function openStudent(studentId: string) {
+  router.push(`/app/teacher/students/${studentId}`)
+}
 
 async function handleRegenerateJoinCode() {
   regeneratingCode.value = true
@@ -88,7 +93,7 @@ async function handleRegenerateJoinCode() {
         <MostActiveStudentsCard :students="activity" />
       </div>
 
-      <ClassRosterCard :students="roster" />
+      <ClassRosterCard :students="roster" @select="openStudent" />
     </template>
   </div>
 </template>
@@ -115,6 +120,11 @@ async function handleRegenerateJoinCode() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  position: sticky;
+  top: -40px;
+  z-index: 2;
+  padding: 4px 0 12px;
+  background: var(--paper);
 }
 
 .page-title {

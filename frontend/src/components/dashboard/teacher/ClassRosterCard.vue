@@ -6,6 +6,10 @@ const props = defineProps<{
   students: TeacherRosterStudent[]
 }>()
 
+defineEmits<{
+  select: [studentId: string]
+}>()
+
 const search = ref('')
 
 const filteredStudents = computed(() => {
@@ -39,10 +43,16 @@ function avatarClass(id: string): string {
     <div v-if="students.length === 0" class="empty">No students in this class yet.</div>
     <div v-else-if="filteredStudents.length === 0" class="empty">No students match "{{ search }}".</div>
     <div v-else class="student-grid">
-      <div v-for="student in filteredStudents" :key="student.id" class="student-tile">
+      <button
+        v-for="student in filteredStudents"
+        :key="student.id"
+        type="button"
+        class="student-tile"
+        @click="$emit('select', student.id)"
+      >
         <span class="avatar" :class="avatarClass(student.id)">{{ initials(student.fullName) }}</span>
         <span class="student-name">{{ student.fullName }}</span>
-      </div>
+      </button>
     </div>
   </div>
 </template>
@@ -108,6 +118,13 @@ function avatarClass(id: string): string {
   background: var(--cream-2);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-tile:hover {
+  border-color: var(--green-br);
 }
 
 .student-name {

@@ -86,6 +86,11 @@ async function handleJoinClass(code: string) {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  position: sticky;
+  top: -40px;
+  z-index: 2;
+  padding: 4px 0 12px;
+  background: var(--paper);
 }
 
 .page-title {

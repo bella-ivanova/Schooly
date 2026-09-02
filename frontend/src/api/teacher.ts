@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { ClassJoinCode, TeacherActivityEntry, TeacherClassSummary, TeacherRosterStudent, TeacherStruggleGroup } from './types'
+import type { ClassJoinCode, TeacherActivityEntry, TeacherClassSummary, TeacherRosterStudent, TeacherStruggleGroup, TeacherStudentStats, TeacherStudentSummary } from './types'
 
 export function getClasses(): Promise<TeacherClassSummary[]> {
   return apiFetch<TeacherClassSummary[]>('/api/teacher/classes')
@@ -7,6 +7,18 @@ export function getClasses(): Promise<TeacherClassSummary[]> {
 
 export function getClassRoster(classId: number): Promise<TeacherRosterStudent[]> {
   return apiFetch<TeacherRosterStudent[]>(`/api/teacher/classes/${classId}/students`)
+}
+
+export function getAllStudents(): Promise<TeacherStudentSummary[]> {
+  return apiFetch<TeacherStudentSummary[]>('/api/teacher/students')
+}
+
+export function getStudentDetail(studentId: string): Promise<TeacherStudentSummary> {
+  return apiFetch<TeacherStudentSummary>(`/api/teacher/students/${studentId}`)
+}
+
+export function getStudentStats(studentId: string, days = 30): Promise<TeacherStudentStats> {
+  return apiFetch<TeacherStudentStats>(`/api/teacher/students/${studentId}/stats?days=${days}`)
 }
 
 export function getStruggles(classId: number, days = 30): Promise<TeacherStruggleGroup[]> {

@@ -28,8 +28,8 @@ export function useTeacherNav() {
     })),
     { label: 'All Chats', to: '/app/teacher/chats' },
     { label: 'Classes', to: '/app/teacher/classes' },
-    { label: 'Students', disabled: true },
-    { label: 'Settings', disabled: true },
+    { label: 'Students', to: '/app/teacher/students' },
+    { label: 'Settings', to: '/app/teacher/settings' },
   ])
 
   return { navItems, refreshSessions }

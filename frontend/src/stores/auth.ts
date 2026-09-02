@@ -39,5 +39,14 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
-  return { user, token, isAuthenticated, role, login, register, logout }
+  // Merges a fresh copy of the user's own data (e.g. after a Settings profile edit)
+  // into both the reactive store and the cached localStorage copy, so the sidebar/
+  // dashboard reflect it immediately without requiring a re-login.
+  function updateUser(partial: Partial<UserSummary>): void {
+    if (!user.value) return
+    user.value = { ...user.value, ...partial }
+    tokenStorage.setUser(user.value)
+  }
+
+  return { user, token, isAuthenticated, role, login, register, logout, updateUser }
 })

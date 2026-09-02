@@ -23,6 +23,10 @@ export const tokenStorage = {
     if (user) localStorage.setItem(USER_KEY, JSON.stringify(user))
   },
 
+  setUser: (user: UserSummary): void => {
+    localStorage.setItem(USER_KEY, JSON.stringify(user))
+  },
+
   clear: (): void => {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)

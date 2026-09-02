@@ -63,6 +63,12 @@ const router = createRouter({
       meta: { roles: ['student'] },
     },
     {
+      path: '/app/student/settings',
+      name: 'student-settings',
+      component: () => import('../views/StudentSettingsView.vue'),
+      meta: { roles: ['student'] },
+    },
+    {
       path: '/app/teacher',
       name: 'teacher-home',
       component: () => import('../views/TeacherHomeView.vue'),
@@ -93,15 +99,45 @@ const router = createRouter({
       meta: { roles: ['teacher'] },
     },
     {
+      path: '/app/teacher/students',
+      name: 'teacher-students',
+      component: () => import('../views/TeacherStudentsView.vue'),
+      meta: { roles: ['teacher'] },
+    },
+    {
+      path: '/app/teacher/students/:studentId',
+      name: 'teacher-student-detail',
+      component: () => import('../views/TeacherStudentDetailView.vue'),
+      meta: { roles: ['teacher'] },
+    },
+    {
+      path: '/app/teacher/settings',
+      name: 'teacher-settings',
+      component: () => import('../views/TeacherSettingsView.vue'),
+      meta: { roles: ['teacher'] },
+    },
+    {
       path: '/app/school-admin',
       name: 'school-admin-home',
       component: () => import('../views/SchoolAdminHomeView.vue'),
       meta: { roles: ['schooladmin'] },
     },
     {
+      path: '/app/school-admin/settings',
+      name: 'school-admin-settings',
+      component: () => import('../views/SchoolAdminSettingsView.vue'),
+      meta: { roles: ['schooladmin'] },
+    },
+    {
       path: '/app/global-admin',
       name: 'global-admin-home',
       component: () => import('../views/GlobalAdminHomeView.vue'),
+      meta: { roles: ['admin'] },
+    },
+    {
+      path: '/app/global-admin/settings',
+      name: 'global-admin-settings',
+      component: () => import('../views/GlobalAdminSettingsView.vue'),
       meta: { roles: ['admin'] },
     },
     { path: '/:pathMatch(.*)*', name: 'not-found', redirect: '/app' },

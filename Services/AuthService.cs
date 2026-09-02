@@ -280,6 +280,48 @@ public class AuthService
         return await _users.ChangePasswordDirectlyAsync(user, newPassword);
     }
 
+    // Updates the caller's own display name and, for students, their grade.
+    // Email, school, and class membership are not editable through this path.
+    public async Task<(ApplicationUser? User, string? Error)> UpdateProfileAsync(string userId, string fullName, int? grade)
+    {
+        var user = await _users.GetByIdAsync(userId);
+        if (user == null)
+            return (null, "User not found.");
+
+        var trimmedName = fullName.Trim();
+        if (string.IsNullOrWhiteSpace(trimmedName))
+            return (null, "Full name is required.");
+
+        user.FullName = trimmedName;
+
+        if (user.Role == UserRole.Student)
+        {
+            if (grade is null or < 1 or > 12)
+                return (null, "Students must have a grade between 1 and 12.");
+            user.Grade = grade;
+        }
+
+        if (!await _users.UpdateAsync(user))
+            return (null, "Failed to update profile.");
+
+        return (user, null);
+    }
+
+    // Verifies the current password (unlike the post-reset-code ChangePasswordDirectlyAsync)
+    // before applying a new one.
+    public async Task<(bool Success, IReadOnlyList<string> Errors)> ChangePasswordAsync(
+        string userId, string currentPassword, string newPassword)
+    {
+        var user = await _users.GetByIdAsync(userId);
+        if (user == null)
+            return (false, new[] { "User not found." });
+
+        if (currentPassword == newPassword)
+            return (false, new[] { "New password must be different from your current password." });
+
+        return await _users.ChangePasswordAsync(user, currentPassword, newPassword);
+    }
+
     public string GenerateJwt(ApplicationUser user)
     {
         var secret   = _config["Jwt:Secret"]   ?? throw new InvalidOperationException("Jwt:Secret is not configured.");

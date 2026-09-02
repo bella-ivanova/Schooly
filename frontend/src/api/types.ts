@@ -56,6 +56,16 @@ export interface ResetPasswordRequest {
   newPassword: string
 }
 
+export interface UpdateProfileRequest {
+  fullName: string
+  grade?: number
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
 export interface ApiError {
   status: number
   message: string
@@ -187,6 +197,27 @@ export interface TeacherRosterStudent {
   username: string
   fullName: string
   grade: number | null
+}
+
+export interface TeacherStudentSummary {
+  id: string
+  username: string
+  fullName: string
+  grade: number | null
+  classNames: string[]
+}
+
+export interface TeacherStudentWeakSpot {
+  topic: string
+  subject: string
+  count: number
+}
+
+export interface TeacherStudentStats {
+  questionCount30d: number
+  lastActiveAt: string | null
+  savedExamCount: number
+  weakSpots: TeacherStudentWeakSpot[]
 }
 
 // ── SchoolAdmin dashboard ────────────────────────────────────────────────

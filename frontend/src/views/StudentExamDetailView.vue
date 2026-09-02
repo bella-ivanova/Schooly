@@ -49,8 +49,10 @@ function formatDate(iso: string) {
       <div v-if="loading" class="state-msg">Loading…</div>
       <div v-else-if="error" class="state-msg error">{{ error }}</div>
       <template v-else-if="exam">
-        <h1 class="page-title">{{ exam.topic }}</h1>
-        <p class="page-subtitle">Generated {{ formatDate(exam.createdAt) }}</p>
+        <div class="header">
+          <h1 class="page-title">{{ exam.topic }}</h1>
+          <p class="page-subtitle">Generated {{ formatDate(exam.createdAt) }}</p>
+        </div>
         <div class="exam-content" v-html="renderMarkdown(exam.content)" />
       </template>
     </div>
@@ -75,6 +77,17 @@ function formatDate(iso: string) {
 
 .back-link:hover {
   text-decoration: underline;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: -40px;
+  z-index: 2;
+  padding: 4px 0 12px;
+  background: var(--paper);
 }
 
 .page-title {

@@ -22,4 +22,8 @@ public interface IUserRepository
     Task<string> GeneratePasswordResetTokenAsync(ApplicationUser user);
     Task<(bool Success, IReadOnlyList<string> Errors)> ResetPasswordAsync(ApplicationUser user, string token, string newPassword);
     Task<(bool Success, IReadOnlyList<string> Errors)> ChangePasswordDirectlyAsync(ApplicationUser user, string newPassword);
+
+    // Verifies the current password before applying the new one — unlike
+    // ChangePasswordDirectlyAsync, which is only safe for the post-reset-code flow.
+    Task<(bool Success, IReadOnlyList<string> Errors)> ChangePasswordAsync(ApplicationUser user, string currentPassword, string newPassword);
 }

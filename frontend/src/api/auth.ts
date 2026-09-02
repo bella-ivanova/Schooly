@@ -1,12 +1,15 @@
 import { apiFetch } from './client'
 import type {
   AuthResponse,
+  ChangePasswordRequest,
   ForgotPasswordRequest,
   LoginRequest,
   RefreshRequest,
   RefreshResponse,
   RegisterRequest,
   ResetPasswordRequest,
+  UpdateProfileRequest,
+  UserSummary,
   VerifyResetCodeRequest,
 } from './types'
 
@@ -54,6 +57,20 @@ export function verifyResetCode(req: VerifyResetCodeRequest): Promise<{ message:
 
 export function resetPassword(req: ResetPasswordRequest): Promise<{ message: string }> {
   return apiFetch<{ message: string }>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  })
+}
+
+export function updateProfile(req: UpdateProfileRequest): Promise<UserSummary> {
+  return apiFetch<UserSummary>('/api/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify(req),
+  })
+}
+
+export function changePassword(req: ChangePasswordRequest): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>('/api/auth/change-password', {
     method: 'POST',
     body: JSON.stringify(req),
   })

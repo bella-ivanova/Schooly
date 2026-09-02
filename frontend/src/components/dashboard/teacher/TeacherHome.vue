@@ -110,6 +110,11 @@ onMounted(async () => {
   font-family: var(--font-heading);
   font-size: 28px;
   color: var(--ink);
+  position: sticky;
+  top: -40px;
+  z-index: 2;
+  padding: 4px 0 12px;
+  background: var(--paper);
 }
 
 .loading {

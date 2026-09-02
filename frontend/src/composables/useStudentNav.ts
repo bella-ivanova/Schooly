@@ -27,7 +27,7 @@ export function useStudentNav() {
       to: `/app/student/chat/${s.id}`,
     })),
     { label: 'All Chats', to: '/app/student/chats' },
-    { label: 'Settings', disabled: true },
+    { label: 'Settings', to: '/app/student/settings' },
   ])
 
   return { navItems, refreshSessions }

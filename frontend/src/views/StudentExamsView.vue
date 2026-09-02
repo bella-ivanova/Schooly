@@ -49,10 +49,12 @@ function formatDate(iso: string) {
 <template>
   <AppShell role-label="Student" :nav-items="navItems">
     <div class="exams-view">
-      <h1 class="page-title">Practice Exams</h1>
-      <p class="page-subtitle">
-        Type any topic you want to drill — even one you've mostly mastered but want more practice on.
-      </p>
+      <div class="header">
+        <h1 class="page-title">Practice Exams</h1>
+        <p class="page-subtitle">
+          Type any topic you want to drill — even one you've mostly mastered but want more practice on.
+        </p>
+      </div>
 
       <form class="generate-form" @submit.prevent="handleGenerate">
         <Field v-model="topic" label="Topic" placeholder="e.g. Photosynthesis, Quadratic equations…" />
@@ -85,6 +87,17 @@ function formatDate(iso: string) {
   flex-direction: column;
   gap: 16px;
   max-width: 640px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: -40px;
+  z-index: 2;
+  padding: 4px 0 12px;
+  background: var(--paper);
 }
 
 .page-title {

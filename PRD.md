@@ -29,6 +29,12 @@ Responses stream token-by-token to the frontend via Server-Sent Events or chunke
 **When the student's JWT expires mid-session:**
 The client silently exchanges the refresh token for a new JWT and retries the request. The student never sees an auth error during normal use.
 
+**When any authenticated user calls `PUT /api/auth/profile`:**
+Updates the caller's own full name; for students, also updates grade (validated 1–12). Email, school, and class membership are not editable through this endpoint.
+
+**When any authenticated user calls `POST /api/auth/change-password`:**
+Verifies the current password before applying the new one (distinct from the reset-code flow, which skips that check); rejects if the new password equals the current one.
+
 **After every message exchange:**
 Both the user message and the assistant response are persisted to the `chat_messages` table. Each record is tagged with a detected subject (linked to a `Subject` entity, get-or-created by `SubjectResolutionService` from the LLM's classified subject string) and a topic string produced by a one-shot LLM classification call. On a session's first exchange, the session itself is locked onto that `Subject` folder and — if the student belongs to a class tagged with that same subject in the same school — onto that class's `ClassId` too; if the student is later removed from the class, their affected sessions are re-filed onto the class's subject folder rather than left pointing at a class they've left.
 
@@ -40,6 +46,12 @@ Returns the top 5 most-asked topics per subject for that class over the last N d
 
 **When a teacher calls `GET /api/teacher/activity?days=N`:**
 Returns the top 5 most active students (by question count in `chat_messages`) per class over the last N days (default 30, clamped to 1–365).
+
+**When a teacher calls `GET /api/teacher/students`:**
+Returns every distinct student across every class the teacher teaches (homeroom classes ∪ `ClassTeacher`-assigned classes, deduplicated by student), each with the list of class names shared with the teacher.
+
+**When a teacher calls `GET /api/teacher/students/{studentId}`:**
+Returns that one student's detail (same shape as the list above) if they belong to at least one of the teacher's classes; 404 otherwise.
 
 **When a non-teacher or non-school-admin calls any teacher endpoint:**
 Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middleware.
@@ -139,7 +151,9 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [x] `GET /api/teacher/classes` requires a valid JWT with `role = Teacher` or `SchoolAdmin`; returns class list with subjects and student counts
 - [x] `GET /api/teacher/classes/{classId}/struggles?days=30` returns per-subject topic frequency for the teacher's own classes only; returns 404 for classes not assigned to the caller
 - [x] `GET /api/teacher/activity?days=30` returns top-5 most active students per class; `days` is clamped to 1–365
-- [x] Student role (or any non-teacher role) JWT receives 403 on all three teacher endpoints; unauthenticated requests receive 401
+- [x] `GET /api/teacher/students` returns a teacher's students deduplicated across every class they teach (homeroom ∪ subject-assignment classes), each with the class names shared with the teacher
+- [x] `GET /api/teacher/students/{studentId}` returns that student's detail only if they belong to one of the teacher's classes; 404 otherwise
+- [x] Student role (or any non-teacher role) JWT receives 403 on all teacher endpoints; unauthenticated requests receive 401
 - [x] `GET /api/admin/classes` requires a valid JWT with `role = SchoolAdmin`; returns class list with subject tag, homeroom teacher username, and student count
 - [x] `POST /api/admin/classes` creates a class scoped to the caller's school, tagged with a `subjectId` that must belong to that school; optional homeroom teacher must belong to the same school
 - [x] `GET /api/admin/classes/{classId}` returns class detail (name, subject, homeroom, roster, teacher assignments); 404 for a class outside the caller's school
@@ -172,6 +186,8 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [x] `DELETE /api/chat/sessions/{id}` removes a session and its messages if owned by the caller; 404 otherwise
 - [x] `POST /api/chat/scene-html` renders a `<STEREO>` scene JSON into standalone Three.js HTML for iframe display
 - [x] Non-Student JWT receives 403 on all `/api/student` endpoints; unauthenticated requests receive 401
+- [x] `PUT /api/auth/profile` updates the caller's own full name; updates grade only when the caller is a Student (1–12 validated); requires a valid JWT
+- [x] `POST /api/auth/change-password` verifies the current password before applying a new one; rejects when the new password equals the current one; requires a valid JWT
 - [x] `GET /api/global-admin/curriculum/grades/{grade}/files` lists ingested file keys for that grade
 - [x] `POST /api/global-admin/curriculum/grades/{grade}/files` ingests a new PDF; rejects with 409 if the file key already exists
 - [x] `PUT /api/global-admin/curriculum/grades/{grade}/files/{fileKey}` replaces the content at that key, re-ingesting whether or not it previously existed
@@ -225,7 +241,7 @@ The behavioral specification below assumes a working local LLM/OCR pipeline. Bef
 
 ## Frontend Integration Readiness
 
-The backend behavioral spec above is implemented. A frontend scaffold now exists at `frontend/` (Vue 3 + Vite + TypeScript, see `README.md`'s "Frontend Integration To-Do") covering the API client plus login, registration, and forgot-password screens — `POST /api/auth/login`, `POST /api/auth/register`, and the full `forgot-password`/`verify-reset-code`/`reset-password` sequence (including its 404/429/400 error responses) are all exercised end-to-end from the UI; per-role dashboards, student chat (`frontend/src/components/chat/`), and saved mock exams are also built and wired end-to-end (see `README.md`'s "Complete" section). Teacher/SchoolAdmin/GlobalAdmin chat-adjacent UI and a Settings screen (all roles) are not yet built. Remaining items to attend to:
+The backend behavioral spec above is implemented. A frontend scaffold now exists at `frontend/` (Vue 3 + Vite + TypeScript, see `README.md`'s "Frontend Integration To-Do") covering the API client plus login, registration, and forgot-password screens — `POST /api/auth/login`, `POST /api/auth/register`, and the full `forgot-password`/`verify-reset-code`/`reset-password` sequence (including its 404/429/400 error responses) are all exercised end-to-end from the UI; per-role dashboards, student chat (`frontend/src/components/chat/`), saved mock exams, the teacher chat/Classes/Students UI, and a Settings screen for all four roles are also built and wired end-to-end (see `README.md`'s "Complete" section). SchoolAdmin/GlobalAdmin chat-adjacent UI is not yet built. Remaining items to attend to:
 
 **Token refresh is implemented.** `POST /api/auth/refresh` (`{ refreshToken }` → `{ token, refreshToken }`) is now consumed by `frontend/src/api/client.ts`, which triggers it automatically on any `401`, retries the original request once, and dedups concurrent 401s behind a single in-flight refresh call so a burst of requests doesn't fire multiple simultaneous `/refresh` calls. Force-logout on a failed refresh is also implemented.
 

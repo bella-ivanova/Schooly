@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StudyAssistant.Data;
 using StudyAssistant.Models;
@@ -177,6 +179,40 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Password reset successfully." });
     }
 
+    // PUT /api/auth/profile
+    [Authorize]
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest req)
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        if (_rateLimiter.IsGeneralApiThrottled(ip, out _))
+            return StatusCode(429, new { error = "Too many requests. Please wait before trying again." });
+
+        var userId = User.FindFirstValue("sub") ?? "";
+        var (user, error) = await _auth.UpdateProfileAsync(userId, req.FullName, req.Grade);
+        if (user == null)
+            return BadRequest(new { error });
+
+        return Ok(Summary(user));
+    }
+
+    // POST /api/auth/change-password
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req)
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        if (_rateLimiter.IsGeneralApiThrottled(ip, out _))
+            return StatusCode(429, new { error = "Too many requests. Please wait before trying again." });
+
+        var userId = User.FindFirstValue("sub") ?? "";
+        var (success, errors) = await _auth.ChangePasswordAsync(userId, req.CurrentPassword, req.NewPassword);
+        if (!success)
+            return BadRequest(new { errors });
+
+        return Ok(new { message = "Password changed successfully." });
+    }
+
     private static object Summary(ApplicationUser u) => new
     {
         id       = u.Id,
@@ -214,4 +250,12 @@ public record VerifyResetCodeRequest(
 public record ResetPasswordRequest(
     [Required, MaxLength(254)] string Email,
     [Required, MaxLength(6)]   string Code,
+    [Required, MaxLength(128)] string NewPassword);
+
+public record UpdateProfileRequest(
+    [Required, MaxLength(150)] string FullName,
+    int? Grade);
+
+public record ChangePasswordRequest(
+    [Required, MaxLength(128)] string CurrentPassword,
     [Required, MaxLength(128)] string NewPassword);

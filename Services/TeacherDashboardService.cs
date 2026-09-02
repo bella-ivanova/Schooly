@@ -7,12 +7,20 @@ namespace StudyAssistant.Services;
 
 public record ClassJoinCodeDto(string Code, DateTime CreatedAt);
 public record TeacherRosterStudentDto(string Id, string Username, string FullName, int? Grade);
+public record TeacherStudentDto(string Id, string Username, string FullName, int? Grade, List<string> ClassNames);
+public record TeacherStudentWeakSpotDto(string Topic, string Subject, int Count);
+public record TeacherStudentStatsDto(int QuestionCount30d, DateTime? LastActiveAt, int SavedExamCount, List<TeacherStudentWeakSpotDto> WeakSpots);
 
 public class TeacherDashboardService
 {
     private readonly AppDbContext _db;
+    private readonly ChatLogService _chatLog;
 
-    public TeacherDashboardService(AppDbContext db) { _db = db; }
+    public TeacherDashboardService(AppDbContext db, ChatLogService chatLog)
+    {
+        _db = db;
+        _chatLog = chatLog;
+    }
 
     public async Task<List<(Class Class, List<Subject> Subjects, int StudentCount)>> GetMyClassesAsync(string teacherId)
     {
@@ -108,6 +116,104 @@ public class TeacherDashboardService
             .Include(cs => cs.Student)
             .Select(cs => new TeacherRosterStudentDto(cs.Student!.Id, cs.Student.UserName ?? "", cs.Student.FullName, cs.Student.Grade))
             .ToListAsync();
+    }
+
+    // All class ids this teacher has access to, whether via a ClassTeacher subject
+    // assignment or as a class's homeroom teacher — same union GetMyClassesAsync uses,
+    // shared here so the cross-class student views can't miss homeroom-only classes.
+    private async Task<List<int>> GetAuthorizedClassIdsAsync(string teacherId)
+    {
+        var viaSubjects = await _db.ClassTeachers
+            .Where(ct => ct.TeacherId == teacherId)
+            .Select(ct => ct.ClassId)
+            .Distinct()
+            .ToListAsync();
+
+        var homeroomIds = await _db.Classes
+            .Where(c => c.HomeroomTeacherId == teacherId)
+            .Select(c => c.Id)
+            .ToListAsync();
+
+        return viaSubjects.Union(homeroomIds).ToList();
+    }
+
+    public async Task<List<TeacherStudentDto>> GetAllStudentsAsync(string teacherId)
+    {
+        var classIds = await GetAuthorizedClassIdsAsync(teacherId);
+        if (classIds.Count == 0)
+            return new List<TeacherStudentDto>();
+
+        var rows = await _db.ClassStudents
+            .Where(cs => classIds.Contains(cs.ClassId))
+            .Include(cs => cs.Student)
+            .Include(cs => cs.Class)
+            .ToListAsync();
+
+        return rows
+            .GroupBy(cs => cs.StudentId)
+            .Select(g => new TeacherStudentDto(
+                g.Key,
+                g.First().Student!.UserName ?? "",
+                g.First().Student!.FullName,
+                g.First().Student!.Grade,
+                g.Select(cs => cs.Class!.Name).Distinct().ToList()))
+            .ToList();
+    }
+
+    public async Task<TeacherStudentDto?> GetStudentDetailAsync(string teacherId, string studentId)
+    {
+        var classIds = await GetAuthorizedClassIdsAsync(teacherId);
+        if (classIds.Count == 0)
+            return null;
+
+        var rows = await _db.ClassStudents
+            .Where(cs => classIds.Contains(cs.ClassId) && cs.StudentId == studentId)
+            .Include(cs => cs.Student)
+            .Include(cs => cs.Class)
+            .ToListAsync();
+
+        if (rows.Count == 0)
+            return null;
+
+        return new TeacherStudentDto(
+            studentId,
+            rows[0].Student!.UserName ?? "",
+            rows[0].Student!.FullName,
+            rows[0].Student!.Grade,
+            rows.Select(cs => cs.Class!.Name).Distinct().ToList());
+    }
+
+    public async Task<TeacherStudentStatsDto?> GetStudentStatsAsync(string teacherId, string studentId, int days = 30)
+    {
+        var classIds = await GetAuthorizedClassIdsAsync(teacherId);
+        if (classIds.Count == 0)
+            return null;
+
+        var isAuthorized = await _db.ClassStudents
+            .AnyAsync(cs => classIds.Contains(cs.ClassId) && cs.StudentId == studentId);
+        if (!isAuthorized)
+            return null;
+
+        var since = DateTime.UtcNow.AddDays(-days);
+
+        var questionCount = await _db.ChatMessages
+            .CountAsync(m => m.UserId == studentId && m.Role == "user" && m.Timestamp >= since);
+
+        var lastActiveAt = await _db.ChatSessions
+            .Where(s => s.UserId == studentId)
+            .OrderByDescending(s => s.LastMessageAt)
+            .Select(s => (DateTime?)s.LastMessageAt)
+            .FirstOrDefaultAsync();
+
+        var savedExamCount = await _db.SavedExams.CountAsync(e => e.UserId == studentId);
+
+        var weakSpots = await _chatLog.GetWeakSpotsAsync(studentId, days, minCount: 2);
+
+        return new TeacherStudentStatsDto(
+            questionCount,
+            lastActiveAt,
+            savedExamCount,
+            weakSpots.Select(w => new TeacherStudentWeakSpotDto(w.Topic, w.Subject, w.Count)).ToList());
     }
 
     public async Task<List<(Class Class, Subject Subject, List<(string Topic, int Count)> TopTopics)>>
