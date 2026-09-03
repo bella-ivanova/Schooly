@@ -6,28 +6,39 @@ const props = defineProps<{
   school: SchoolSummary
 }>()
 
+defineEmits<{ select: [] }>()
+
 const createdLabel = computed(() =>
   new Date(props.school.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
 )
 </script>
 
 <template>
-  <div class="school-card">
+  <button type="button" class="school-card" @click="$emit('select')">
     <span class="school-name">{{ school.name }}</span>
     <span class="school-created">Created {{ createdLabel }}</span>
     <span class="school-counts">{{ school.studentCount }} students · {{ school.teacherCount }} teachers</span>
-  </div>
+  </button>
 </template>
 
 <style scoped>
 .school-card {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
   padding: 18px 20px;
   background: var(--card);
-  border: 1px solid var(--line);
+  border: 2px solid var(--line);
   border-radius: var(--r);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.school-card:hover {
+  border-color: var(--green-br);
 }
 
 .school-name {

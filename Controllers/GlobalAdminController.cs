@@ -123,6 +123,17 @@ public class GlobalAdminController : ControllerBase
         return Ok();
     }
 
+    // GET /api/global-admin/subjects
+    [HttpGet("subjects")]
+    public async Task<IActionResult> GetSubjects()
+    {
+        var reject = RequireAdminRole();
+        if (reject != null) return reject;
+
+        var subjects = await _admin.ListSubjectsAsync(schoolId: null);
+        return Ok(subjects);
+    }
+
     // POST /api/global-admin/classes/{classId}/students
     [HttpPost("classes/{classId:int}/students")]
     public async Task<IActionResult> AssignStudent(int classId, [FromBody] GlobalAssignStudentRequest body)

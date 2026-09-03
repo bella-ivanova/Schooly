@@ -135,6 +135,42 @@ const router = createRouter({
       meta: { roles: ['admin'] },
     },
     {
+      path: '/app/global-admin/schools',
+      name: 'global-admin-schools',
+      component: () => import('../views/GlobalAdminSchoolsView.vue'),
+      meta: { roles: ['admin'] },
+    },
+    {
+      path: '/app/global-admin/classes',
+      name: 'global-admin-classes',
+      component: () => import('../views/GlobalAdminClassesView.vue'),
+      meta: { roles: ['admin'] },
+    },
+    {
+      path: '/app/global-admin/users',
+      name: 'global-admin-users',
+      component: () => import('../views/GlobalAdminUsersView.vue'),
+      meta: { roles: ['admin'] },
+    },
+    {
+      path: '/app/global-admin/subjects',
+      name: 'global-admin-subjects',
+      component: () => import('../views/GlobalAdminSubjectsView.vue'),
+      meta: { roles: ['admin'] },
+    },
+    {
+      path: '/app/global-admin/curriculum',
+      name: 'global-admin-curriculum',
+      component: () => import('../views/GlobalAdminCurriculumView.vue'),
+      meta: { roles: ['admin'] },
+    },
+    {
+      path: '/app/global-admin/schools/:schoolId',
+      name: 'global-admin-school-detail',
+      component: () => import('../views/GlobalAdminSchoolDetailView.vue'),
+      meta: { roles: ['admin'] },
+    },
+    {
       path: '/app/global-admin/settings',
       name: 'global-admin-settings',
       component: () => import('../views/GlobalAdminSettingsView.vue'),

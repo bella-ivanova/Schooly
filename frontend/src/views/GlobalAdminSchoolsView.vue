@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import AppShell from '../components/shell/AppShell.vue'
-import GlobalAdminHome from '../components/dashboard/globaladmin/GlobalAdminHome.vue'
+import GlobalAdminSchools from '../components/dashboard/globaladmin/GlobalAdminSchools.vue'
 import type { NavItem } from '../components/shell/navItem'
 
 const navItems: NavItem[] = [
-  { label: 'Home', active: true },
-  { label: 'Schools', to: '/app/global-admin/schools' },
+  { label: 'Home', to: '/app/global-admin' },
+  { label: 'Schools', active: true },
   { label: 'All Classes', to: '/app/global-admin/classes' },
   { label: 'All Users', to: '/app/global-admin/users' },
   { label: 'Subjects', to: '/app/global-admin/subjects' },
@@ -16,6 +16,6 @@ const navItems: NavItem[] = [
 
 <template>
   <AppShell role-label="Global Admin" :nav-items="navItems">
-    <GlobalAdminHome />
+    <GlobalAdminSchools />
   </AppShell>
 </template>

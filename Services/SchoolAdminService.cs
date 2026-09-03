@@ -5,9 +5,9 @@ using StudyAssistant.Models;
 
 namespace StudyAssistant.Services;
 
-public record ClassSummaryDto(int Id, string Name, int? SubjectId, string? SubjectName, string? HomeroomTeacherUsername, int StudentCount);
-public record UserSummaryDto(string Id, string Username, string FullName, string Role, int? Grade, IReadOnlyList<string> ClassNames);
-public record SubjectSummaryDto(int Id, string Name);
+public record ClassSummaryDto(int Id, string Name, int? SubjectId, string? SubjectName, string? HomeroomTeacherUsername, int StudentCount, int SchoolId, string SchoolName);
+public record UserSummaryDto(string Id, string Username, string FullName, string Role, int? Grade, IReadOnlyList<string> ClassNames, int? SchoolId, string? SchoolName, IReadOnlyList<string> Subjects);
+public record SubjectSummaryDto(int Id, string Name, int SchoolId, string SchoolName);
 public record SchoolSummaryDto(int Id, string Name, DateTime CreatedAt, int StudentCount, int TeacherCount);
 public record SchoolTeacherCodeDto(string Code, DateTime CreatedAt);
 public record ClassTeacherAssignmentDto(string TeacherId, string TeacherUsername, int SubjectId, string SubjectName);
@@ -110,8 +110,10 @@ public class SchoolAdminService
             .OrderBy(c => c.Name)
             .ToListAsync();
 
+        var schoolName = await GetSchoolNameAsync(schoolId) ?? "";
+
         return classes
-            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.SubjectId, c.Subject?.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count))
+            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.SubjectId, c.Subject?.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count, schoolId, schoolName))
             .ToList();
     }
 
@@ -309,6 +311,16 @@ public class SchoolAdminService
             .GroupBy(cs => cs.StudentId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(cs => cs.Class!.Name).ToList());
 
+        var classTeachers = await _db.ClassTeachers
+            .Where(ct => userIds.Contains(ct.TeacherId))
+            .Include(ct => ct.Subject)
+            .ToListAsync();
+        var subjectsByTeacher = classTeachers
+            .GroupBy(ct => ct.TeacherId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(ct => ct.Subject!.Name).Distinct().ToList());
+
+        var schoolName = await GetSchoolNameAsync(schoolId) ?? "";
+
         return users
             .Select(u => new UserSummaryDto(
                 u.Id,
@@ -316,7 +328,10 @@ public class SchoolAdminService
                 u.FullName,
                 u.Role.ToString(),
                 u.Grade,
-                grouped.TryGetValue(u.Id, out var names) ? names : Array.Empty<string>()))
+                grouped.TryGetValue(u.Id, out var names) ? names : Array.Empty<string>(),
+                schoolId,
+                schoolName,
+                subjectsByTeacher.TryGetValue(u.Id, out var subjects) ? subjects : Array.Empty<string>()))
             .ToList();
     }
 
@@ -327,8 +342,10 @@ public class SchoolAdminService
             .OrderBy(s => s.Name)
             .ToListAsync();
 
+        var schoolName = await GetSchoolNameAsync(schoolId) ?? "";
+
         return subjects
-            .Select(s => new SubjectSummaryDto(s.Id, s.Name))
+            .Select(s => new SubjectSummaryDto(s.Id, s.Name, schoolId, schoolName))
             .ToList();
     }
 }

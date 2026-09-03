@@ -141,6 +141,7 @@ public class AdminUserService
             .Include(c => c.HomeroomTeacher)
             .Include(c => c.ClassStudents)
             .Include(c => c.Subject)
+            .Include(c => c.School)
             .AsQueryable();
 
         if (schoolId != null)
@@ -149,7 +150,7 @@ public class AdminUserService
         var classes = await query.OrderBy(c => c.Name).ToListAsync();
 
         return classes
-            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.SubjectId, c.Subject?.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count))
+            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.SubjectId, c.Subject?.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count, c.SchoolId, c.School?.Name ?? ""))
             .ToList();
     }
 
@@ -268,7 +269,7 @@ public class AdminUserService
 
     public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(int? schoolId = null)
     {
-        var query = _db.Set<ApplicationUser>().AsQueryable();
+        var query = _db.Set<ApplicationUser>().Include(u => u.School).AsQueryable();
 
         if (schoolId != null)
             query = query.Where(u => u.SchoolId == schoolId);
@@ -279,6 +280,7 @@ public class AdminUserService
             .ToListAsync();
 
         var classNamesByStudent = await ClassNamesByStudentAsync(users.Select(u => u.Id));
+        var subjectsByTeacher = await SubjectNamesByTeacherAsync(users.Select(u => u.Id));
 
         return users
             .Select(u => new UserSummaryDto(
@@ -287,8 +289,24 @@ public class AdminUserService
                 u.FullName,
                 u.Role.ToString(),
                 u.Grade,
-                classNamesByStudent.TryGetValue(u.Id, out var names) ? names : Array.Empty<string>()))
+                classNamesByStudent.TryGetValue(u.Id, out var names) ? names : Array.Empty<string>(),
+                u.SchoolId,
+                u.School?.Name,
+                subjectsByTeacher.TryGetValue(u.Id, out var subjects) ? subjects : Array.Empty<string>()))
             .ToList();
+    }
+
+    private async Task<Dictionary<string, IReadOnlyList<string>>> SubjectNamesByTeacherAsync(IEnumerable<string> userIds)
+    {
+        var ids = userIds.ToList();
+        var rows = await _db.ClassTeachers
+            .Where(ct => ids.Contains(ct.TeacherId))
+            .Include(ct => ct.Subject)
+            .ToListAsync();
+
+        return rows
+            .GroupBy(ct => ct.TeacherId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(ct => ct.Subject!.Name).Distinct().ToList());
     }
 
     private async Task<Dictionary<string, IReadOnlyList<string>>> ClassNamesByStudentAsync(IEnumerable<string> userIds)
@@ -466,6 +484,16 @@ public class AdminUserService
 
         var (success, error) = await CreateSubjectAsync(school.Id, name);
         Console.WriteLine(success ? $"Предмет '{name}' е създаден в '{schoolName}'." : error);
+    }
+
+    public async Task<IReadOnlyList<SubjectSummaryDto>> ListSubjectsAsync(int? schoolId = null)
+    {
+        var query = _db.Subjects.Include(s => s.School).Where(s => s.SchoolId != null);
+        if (schoolId != null)
+            query = query.Where(s => s.SchoolId == schoolId);
+
+        var subjects = await query.OrderBy(s => s.School!.Name).ThenBy(s => s.Name).ToListAsync();
+        return subjects.Select(s => new SubjectSummaryDto(s.Id, s.Name, s.SchoolId!.Value, s.School!.Name)).ToList();
     }
 
     public async Task<(bool Success, string? Error)> DeleteSubjectAsync(int subjectId)

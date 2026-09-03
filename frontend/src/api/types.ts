@@ -231,11 +231,15 @@ export interface AdminClassSummary {
   subjectName: string | null
   homeroomTeacherUsername: string | null
   studentCount: number
+  schoolId: number
+  schoolName: string
 }
 
 export interface AdminSubjectSummary {
   id: number
   name: string
+  schoolId: number
+  schoolName: string
 }
 
 export interface SchoolInfo {
@@ -260,6 +264,9 @@ export interface AdminUserSummary {
   role: string
   grade: number | null
   classNames: string[]
+  schoolId: number | null
+  schoolName: string | null
+  subjects: string[]
 }
 
 export interface ClassTeacherAssignment {

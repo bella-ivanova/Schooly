@@ -1,29 +1,72 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import * as globalAdminApi from '../../../api/globalAdmin'
-import type { SchoolSummary } from '../../../api/types'
-import SchoolCard from './SchoolCard.vue'
+import type { AdminClassSummary, AdminSubjectSummary, AdminUserSummary, ApiError, SchoolSummary } from '../../../api/types'
+import { useAuthStore } from '../../../stores/auth'
+import StatsCard from './StatsCard.vue'
+
+const authStore = useAuthStore()
 
 const schools = ref<SchoolSummary[]>([])
+const users = ref<AdminUserSummary[]>([])
+const classes = ref<AdminClassSummary[]>([])
+const subjects = ref<AdminSubjectSummary[]>([])
 const loading = ref(true)
+const error = ref<string | null>(null)
+
+function countByRole(role: string): number {
+  return users.value.filter((u) => u.role === role).length
+}
+
+const peopleStats = computed(() => [
+  { label: 'Total users', value: users.value.length },
+  { label: 'Students', value: countByRole('Student') },
+  { label: 'Teachers', value: countByRole('Teacher') },
+  { label: 'School Admins', value: countByRole('SchoolAdmin') },
+  { label: 'Global Admins', value: countByRole('Admin') },
+])
+
+const schoolsStats = computed(() => [
+  { label: 'Schools', value: schools.value.length },
+  { label: 'Classes', value: classes.value.length },
+  { label: 'Subjects', value: subjects.value.length },
+])
 
 onMounted(async () => {
-  schools.value = await globalAdminApi.getSchools()
-  loading.value = false
+  loading.value = true
+  error.value = null
+  try {
+    const [schoolsRes, usersRes, classesRes, subjectsRes] = await Promise.all([
+      globalAdminApi.getSchools(),
+      globalAdminApi.getUsers(),
+      globalAdminApi.getClasses(),
+      globalAdminApi.getSubjects(),
+    ])
+    schools.value = schoolsRes
+    users.value = usersRes
+    classes.value = classesRes
+    subjects.value = subjectsRes
+  } catch (err) {
+    const apiError = err as ApiError
+    error.value = apiError.messages?.[0] ?? apiError.message ?? 'Could not load statistics.'
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 
 <template>
   <div class="global-admin-home">
-    <div class="header">
-      <h1 class="page-title">Schools</h1>
-      <p class="page-subtitle">Unscoped · all schools</p>
+    <div class="welcome">
+      <h1 class="page-title">Welcome back, {{ authStore.user?.fullName }}</h1>
+      <p class="page-subtitle">Cross-school overview</p>
     </div>
 
     <div v-if="loading" class="loading">Loading...</div>
-    <div v-else-if="schools.length === 0" class="empty">No schools registered yet.</div>
-    <div v-else class="school-grid">
-      <SchoolCard v-for="school in schools" :key="school.id" :school="school" />
+    <div v-else-if="error" class="state-msg error">{{ error }}</div>
+    <div v-else class="card-grid">
+      <StatsCard title="People" :stats="peopleStats" />
+      <StatsCard title="Schools & Curriculum" :stats="schoolsStats" />
     </div>
   </div>
 </template>
@@ -32,10 +75,10 @@ onMounted(async () => {
 .global-admin-home {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
-.header {
+.welcome {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -60,14 +103,18 @@ onMounted(async () => {
 }
 
 .loading,
-.empty {
+.state-msg {
   color: var(--muted);
   font-size: 14px;
 }
 
-.school-grid {
+.state-msg.error {
+  color: var(--t-lit);
+}
+
+.card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
 }
 </style>

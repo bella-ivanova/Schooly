@@ -4,11 +4,12 @@ import SettingsPanel from '../components/settings/SettingsPanel.vue'
 import type { NavItem } from '../components/shell/navItem'
 
 const navItems: NavItem[] = [
-  { label: 'Schools', to: '/app/global-admin' },
-  { label: 'All Classes', disabled: true },
-  { label: 'All Users', disabled: true },
-  { label: 'Subjects', disabled: true },
-  { label: 'Curriculum Files', disabled: true },
+  { label: 'Home', to: '/app/global-admin' },
+  { label: 'Schools', to: '/app/global-admin/schools' },
+  { label: 'All Classes', to: '/app/global-admin/classes' },
+  { label: 'All Users', to: '/app/global-admin/users' },
+  { label: 'Subjects', to: '/app/global-admin/subjects' },
+  { label: 'Curriculum Files', to: '/app/global-admin/curriculum' },
   { label: 'Settings', active: true },
 ]
 </script>
