@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import * as schoolAdminApi from '../../../api/schoolAdmin'
 import type { AdminClassSummary, AdminSubjectSummary, AdminUserSummary, SchoolTeacherCode } from '../../../api/types'
 import Field from '../../shared/Field.vue'
 import SelectField from '../../shared/SelectField.vue'
-import EditClassModal from './EditClassModal.vue'
+
+const router = useRouter()
 
 const schoolName = ref<string | null>(null)
 const classes = ref<AdminClassSummary[]>([])
@@ -13,17 +15,19 @@ const subjects = ref<AdminSubjectSummary[]>([])
 const teacherCode = ref<SchoolTeacherCode | null>(null)
 const loading = ref(true)
 const regenerating = ref(false)
-const editingClassId = ref<number | null>(null)
 
 const newClassName = ref('')
 const newClassSubjectId = ref('')
 const newClassTeacherId = ref('')
+const newClassGrade = ref('')
 const creatingClass = ref(false)
 const createClassError = ref<string | null>(null)
 
-const newSubjectName = ref('')
-const creatingSubject = ref(false)
-const createSubjectError = ref<string | null>(null)
+const classGradeFilter = ref('')
+
+function openClass(classId: number) {
+  router.push(`/app/school-admin/classes/${classId}`)
+}
 
 const teacherOptions = computed(() =>
   users.value
@@ -33,6 +37,22 @@ const teacherOptions = computed(() =>
 
 const subjectOptions = computed(() =>
   subjects.value.map((s) => ({ value: String(s.id), label: s.name })),
+)
+
+const gradeOptions = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i + 1),
+  label: `Grade ${i + 1}`,
+}))
+
+const classGradeFilterOptions = computed(() => {
+  const grades = Array.from(new Set(classes.value.map((c) => c.grade).filter((g): g is number => g != null))).sort(
+    (a, b) => a - b,
+  )
+  return [{ value: '', label: 'All grades' }, ...grades.map((g) => ({ value: String(g), label: `Grade ${g}` }))]
+})
+
+const filteredClasses = computed(() =>
+  classGradeFilter.value ? classes.value.filter((c) => String(c.grade) === classGradeFilter.value) : classes.value,
 )
 
 onMounted(async () => {
@@ -51,31 +71,12 @@ onMounted(async () => {
   loading.value = false
 })
 
-async function handleClassUpdated() {
-  classes.value = await schoolAdminApi.getClasses()
-}
-
 async function handleRegenerateCode() {
   regenerating.value = true
   try {
     teacherCode.value = await schoolAdminApi.regenerateTeacherCode()
   } finally {
     regenerating.value = false
-  }
-}
-
-async function handleCreateSubject() {
-  if (!newSubjectName.value.trim()) return
-  createSubjectError.value = null
-  creatingSubject.value = true
-  try {
-    await schoolAdminApi.createSubject(newSubjectName.value.trim())
-    subjects.value = await schoolAdminApi.getSubjects()
-    newSubjectName.value = ''
-  } catch (err) {
-    createSubjectError.value = (err as { message?: string }).message ?? 'Could not create subject.'
-  } finally {
-    creatingSubject.value = false
   }
 }
 
@@ -88,11 +89,13 @@ async function handleCreateClass() {
       newClassName.value.trim(),
       Number(newClassSubjectId.value),
       newClassTeacherId.value || undefined,
+      newClassGrade.value ? Number(newClassGrade.value) : undefined,
     )
     classes.value = await schoolAdminApi.getClasses()
     newClassName.value = ''
     newClassSubjectId.value = ''
     newClassTeacherId.value = ''
+    newClassGrade.value = ''
   } catch (err) {
     createClassError.value = (err as { message?: string }).message ?? 'Could not create class.'
   } finally {
@@ -109,47 +112,41 @@ async function handleCreateClass() {
     </div>
 
     <div v-if="loading" class="loading">Loading...</div>
-    <div v-else class="table-card">
-      <table class="classes-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Subject</th>
-            <th>Homeroom</th>
-            <th>Students</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="cls in classes" :key="cls.id">
-            <td class="class-name">{{ cls.name }}</td>
-            <td>{{ cls.subjectName ?? '—' }}</td>
-            <td>{{ cls.homeroomTeacherUsername ?? '—' }}</td>
-            <td>{{ cls.studentCount }}</td>
-            <td class="actions">
-              <button class="edit-link-btn" @click="editingClassId = cls.id">Edit</button>
-            </td>
-          </tr>
-          <tr v-if="classes.length === 0">
-            <td colspan="5" class="empty">No classes yet.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div v-if="!loading" class="table-card code-card">
-      <div class="code-card-header">
-        <h2 class="section-title">Subjects</h2>
-        <p class="section-subtitle">Add a subject before creating a class tagged to it.</p>
+    <template v-else>
+      <div class="filters">
+        <SelectField v-model="classGradeFilter" label="Grade" :options="classGradeFilterOptions" />
       </div>
-      <form class="create-class-row" @submit.prevent="handleCreateSubject">
-        <Field v-model="newSubjectName" label="Subject name" placeholder="Math" />
-        <button type="submit" class="regen-btn create-btn" :disabled="creatingSubject || !newSubjectName.trim()">
-          {{ creatingSubject ? 'Creating…' : 'Add subject' }}
-        </button>
-      </form>
-      <p v-if="createSubjectError" class="create-class-error">{{ createSubjectError }}</p>
-    </div>
+
+      <div class="table-card">
+        <table class="classes-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Grade</th>
+              <th>Subject</th>
+              <th>Homeroom</th>
+              <th>Students</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="cls in filteredClasses" :key="cls.id">
+              <td class="class-name">{{ cls.name }}</td>
+              <td>{{ cls.grade ?? '—' }}</td>
+              <td>{{ cls.subjectName ?? '—' }}</td>
+              <td>{{ cls.homeroomTeacherUsername ?? '—' }}</td>
+              <td>{{ cls.studentCount }}</td>
+              <td class="actions">
+                <button class="edit-link-btn" @click="openClass(cls.id)">View</button>
+              </td>
+            </tr>
+            <tr v-if="filteredClasses.length === 0">
+              <td colspan="6" class="empty">{{ classes.length === 0 ? 'No classes yet.' : 'No classes match this filter.' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
 
     <div v-if="!loading" class="table-card code-card">
       <div class="code-card-header">
@@ -158,6 +155,12 @@ async function handleCreateClass() {
       </div>
       <form class="create-class-row" @submit.prevent="handleCreateClass">
         <Field v-model="newClassName" label="Class name" placeholder="10A" />
+        <SelectField
+          v-model="newClassGrade"
+          label="Grade"
+          placeholder="Select grade"
+          :options="gradeOptions"
+        />
         <SelectField
           v-model="newClassSubjectId"
           label="Subject"
@@ -195,15 +198,6 @@ async function handleCreateClass() {
         </button>
       </div>
     </div>
-
-    <EditClassModal
-      v-if="editingClassId !== null"
-      :class-id="editingClassId"
-      :teacher-options="teacherOptions"
-      :subject-options="subjectOptions"
-      @close="editingClassId = null"
-      @updated="handleClassUpdated"
-    />
   </div>
 </template>
 
@@ -241,6 +235,16 @@ async function handleCreateClass() {
 .loading {
   color: var(--muted);
   font-size: 14px;
+}
+
+.filters {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.filters > * {
+  min-width: 200px;
 }
 
 .table-card {

@@ -5,7 +5,7 @@ using StudyAssistant.Models;
 
 namespace StudyAssistant.Services;
 
-public record ClassSummaryDto(int Id, string Name, int? SubjectId, string? SubjectName, string? HomeroomTeacherUsername, int StudentCount, int SchoolId, string SchoolName);
+public record ClassSummaryDto(int Id, string Name, int? Grade, int? SubjectId, string? SubjectName, string? HomeroomTeacherUsername, int StudentCount, int SchoolId, string SchoolName);
 public record UserSummaryDto(string Id, string Username, string FullName, string Role, int? Grade, IReadOnlyList<string> ClassNames, int? SchoolId, string? SchoolName, IReadOnlyList<string> Subjects);
 public record SubjectSummaryDto(int Id, string Name, int SchoolId, string SchoolName);
 public record SchoolSummaryDto(int Id, string Name, DateTime CreatedAt, int StudentCount, int TeacherCount);
@@ -13,9 +13,10 @@ public record SchoolTeacherCodeDto(string Code, DateTime CreatedAt);
 public record ClassTeacherAssignmentDto(string TeacherId, string TeacherUsername, int SubjectId, string SubjectName);
 public record ClassRosterStudentDto(string Id, string Username, string FullName);
 public record ClassDetailDto(
-    int Id, string Name, int? SubjectId, string? SubjectName, string? HomeroomTeacherUsername,
+    int Id, string Name, int? Grade, int? SubjectId, string? SubjectName, string? HomeroomTeacherUsername,
     IReadOnlyList<ClassRosterStudentDto> Students,
     IReadOnlyList<ClassTeacherAssignmentDto> TeacherAssignments);
+public record TeacherSubjectDto(int SubjectId, string SubjectName);
 
 public class SchoolAdminService
 {
@@ -30,10 +31,12 @@ public class SchoolAdminService
         _chatSessions = chatSessions;
     }
 
-    public async Task<(bool Success, string? Error)> AddClassAsync(int schoolId, string name, int subjectId, string? homeroomTeacherId)
+    public async Task<(bool Success, string? Error)> AddClassAsync(int schoolId, string name, int subjectId, string? homeroomTeacherId, int? grade = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return (false, "Class name is required.");
+        if (grade is < 1 or > 12)
+            return (false, "Grade must be between 1 and 12.");
 
         var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.SchoolId == schoolId);
         if (subject == null)
@@ -48,7 +51,7 @@ public class SchoolAdminService
                 return (false, "Teacher does not belong to this school.");
         }
 
-        _db.Classes.Add(new Class { Name = name, SchoolId = schoolId, SubjectId = subjectId, HomeroomTeacherId = homeroomTeacherId });
+        _db.Classes.Add(new Class { Name = name, SchoolId = schoolId, SubjectId = subjectId, HomeroomTeacherId = homeroomTeacherId, Grade = grade });
         await _db.SaveChangesAsync();
         return (true, null);
     }
@@ -113,7 +116,7 @@ public class SchoolAdminService
         var schoolName = await GetSchoolNameAsync(schoolId) ?? "";
 
         return classes
-            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.SubjectId, c.Subject?.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count, schoolId, schoolName))
+            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.Grade, c.SubjectId, c.Subject?.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count, schoolId, schoolName))
             .ToList();
     }
 
@@ -134,10 +137,12 @@ public class SchoolAdminService
         return (true, null);
     }
 
-    public async Task<(bool Success, string? Error)> UpdateClassAsync(int schoolId, int classId, string name, int subjectId)
+    public async Task<(bool Success, string? Error)> UpdateClassAsync(int schoolId, int classId, string name, int subjectId, int? grade = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return (false, "Class name is required.");
+        if (grade is < 1 or > 12)
+            return (false, "Grade must be between 1 and 12.");
 
         var cls = await _db.Classes.FirstOrDefaultAsync(c => c.Id == classId && c.SchoolId == schoolId);
         if (cls == null)
@@ -149,6 +154,7 @@ public class SchoolAdminService
 
         cls.Name = name;
         cls.SubjectId = subjectId;
+        cls.Grade = grade;
         await _db.SaveChangesAsync();
         return (true, null);
     }
@@ -174,7 +180,7 @@ public class SchoolAdminService
             .Select(ct => new ClassTeacherAssignmentDto(ct.TeacherId, ct.Teacher!.UserName ?? "", ct.SubjectId, ct.Subject!.Name))
             .ToList();
 
-        return new ClassDetailDto(cls.Id, cls.Name, cls.SubjectId, cls.Subject?.Name, cls.HomeroomTeacher?.UserName, students, teacherAssignments);
+        return new ClassDetailDto(cls.Id, cls.Name, cls.Grade, cls.SubjectId, cls.Subject?.Name, cls.HomeroomTeacher?.UserName, students, teacherAssignments);
     }
 
     public async Task<(bool Success, string? Error)> RemoveStudentAsync(int schoolId, int classId, string userId)
@@ -294,6 +300,24 @@ public class SchoolAdminService
         return (true, null);
     }
 
+    public async Task<(bool Success, string? Error, IReadOnlyList<TeacherSubjectDto>? Subjects)> GetTeacherSubjectsAsync(int schoolId, string teacherId)
+    {
+        var teacher = await _users.GetByIdAsync(teacherId);
+        if (teacher == null)
+            return (false, "Teacher not found.", null);
+        if (teacher.SchoolId != schoolId)
+            return (false, "Teacher does not belong to this school.", null);
+
+        var subjects = await _db.TeacherSubjects
+            .Where(ts => ts.TeacherId == teacherId)
+            .Include(ts => ts.Subject)
+            .OrderBy(ts => ts.Subject!.Name)
+            .Select(ts => new TeacherSubjectDto(ts.SubjectId, ts.Subject!.Name))
+            .ToListAsync();
+
+        return (true, null, subjects);
+    }
+
     public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(int schoolId)
     {
         var users = await _db.Set<ApplicationUser>()
@@ -347,5 +371,24 @@ public class SchoolAdminService
         return subjects
             .Select(s => new SubjectSummaryDto(s.Id, s.Name, schoolId, schoolName))
             .ToList();
+    }
+
+    public async Task<(bool Success, string? Error)> DeleteSubjectAsync(int schoolId, int subjectId)
+    {
+        var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Id == subjectId && s.SchoolId == schoolId);
+        if (subject == null)
+            return (false, "Subject not found in this school.");
+
+        var usedByClass = await _db.Classes.AnyAsync(c => c.SubjectId == subjectId);
+        if (usedByClass)
+            return (false, "Subject is still assigned to at least one class and cannot be deleted.");
+
+        var usedByTeacher = await _db.TeacherSubjects.AnyAsync(ts => ts.SubjectId == subjectId);
+        if (usedByTeacher)
+            return (false, "Subject is still assigned to at least one teacher and cannot be deleted.");
+
+        _db.Subjects.Remove(subject);
+        await _db.SaveChangesAsync();
+        return (true, null);
     }
 }

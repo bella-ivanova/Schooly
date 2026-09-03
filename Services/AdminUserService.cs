@@ -79,10 +79,12 @@ public class AdminUserService
     // ── Classes ───────────────────────────────────────────────────────────────
 
     public async Task<(bool Success, string? Error)> AddClassAsync(
-        int schoolId, string name, int subjectId, string? homeroomTeacherId)
+        int schoolId, string name, int subjectId, string? homeroomTeacherId, int? grade = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return (false, "Class name is required.");
+        if (grade is < 1 or > 12)
+            return (false, "Grade must be between 1 and 12.");
         if (!await SchoolExistsAsync(schoolId))
             return (false, "School not found.");
 
@@ -97,7 +99,7 @@ public class AdminUserService
                 return (false, "Teacher not found.");
         }
 
-        _db.Classes.Add(new Class { Name = name, SchoolId = schoolId, SubjectId = subjectId, HomeroomTeacherId = homeroomTeacherId });
+        _db.Classes.Add(new Class { Name = name, SchoolId = schoolId, SubjectId = subjectId, HomeroomTeacherId = homeroomTeacherId, Grade = grade });
         await _db.SaveChangesAsync();
         return (true, null);
     }
@@ -150,7 +152,7 @@ public class AdminUserService
         var classes = await query.OrderBy(c => c.Name).ToListAsync();
 
         return classes
-            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.SubjectId, c.Subject?.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count, c.SchoolId, c.School?.Name ?? ""))
+            .Select(c => new ClassSummaryDto(c.Id, c.Name, c.Grade, c.SubjectId, c.Subject?.Name, c.HomeroomTeacher?.UserName, c.ClassStudents.Count, c.SchoolId, c.School?.Name ?? ""))
             .ToList();
     }
 

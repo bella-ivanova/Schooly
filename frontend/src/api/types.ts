@@ -227,6 +227,7 @@ export interface TeacherStudentStats {
 export interface AdminClassSummary {
   id: number
   name: string
+  grade: number | null
   subjectId: number | null
   subjectName: string | null
   homeroomTeacherUsername: string | null
@@ -269,6 +270,11 @@ export interface AdminUserSummary {
   subjects: string[]
 }
 
+export interface AdminTeacherSubject {
+  subjectId: number
+  subjectName: string
+}
+
 export interface ClassTeacherAssignment {
   teacherId: string
   teacherUsername: string
@@ -285,6 +291,7 @@ export interface ClassRosterStudent {
 export interface AdminClassDetail {
   id: number
   name: string
+  grade: number | null
   subjectId: number | null
   subjectName: string | null
   homeroomTeacherUsername: string | null

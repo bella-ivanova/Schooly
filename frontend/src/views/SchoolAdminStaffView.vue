@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import AppShell from '../components/shell/AppShell.vue'
-import SchoolAdminHome from '../components/dashboard/schooladmin/SchoolAdminHome.vue'
+import SchoolAdminStaff from '../components/dashboard/schooladmin/SchoolAdminStaff.vue'
 import type { NavItem } from '../components/shell/navItem'
 
 const navItems: NavItem[] = [
-  { label: 'Classes', active: true },
+  { label: 'Classes', to: '/app/school-admin' },
   { label: 'Subjects', to: '/app/school-admin/subjects' },
-  { label: 'Staff & Students', to: '/app/school-admin/staff' },
+  { label: 'Staff & Students', active: true },
   { label: 'Settings', to: '/app/school-admin/settings' },
 ]
 </script>
 
 <template>
   <AppShell role-label="School Admin" :nav-items="navItems">
-    <SchoolAdminHome />
+    <SchoolAdminStaff />
   </AppShell>
 </template>

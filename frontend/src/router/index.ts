@@ -129,6 +129,24 @@ const router = createRouter({
       meta: { roles: ['schooladmin'] },
     },
     {
+      path: '/app/school-admin/classes/:classId',
+      name: 'school-admin-class-detail',
+      component: () => import('../views/SchoolAdminClassDetailView.vue'),
+      meta: { roles: ['schooladmin'] },
+    },
+    {
+      path: '/app/school-admin/subjects',
+      name: 'school-admin-subjects',
+      component: () => import('../views/SchoolAdminSubjectsView.vue'),
+      meta: { roles: ['schooladmin'] },
+    },
+    {
+      path: '/app/school-admin/staff',
+      name: 'school-admin-staff',
+      component: () => import('../views/SchoolAdminStaffView.vue'),
+      meta: { roles: ['schooladmin'] },
+    },
+    {
       path: '/app/global-admin',
       name: 'global-admin-home',
       component: () => import('../views/GlobalAdminHomeView.vue'),

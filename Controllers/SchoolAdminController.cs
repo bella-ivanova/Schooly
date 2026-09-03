@@ -90,7 +90,7 @@ public class SchoolAdminController : ControllerBase
         var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.AddClassAsync(schoolId!.Value, body.Name, body.SubjectId, body.HomeroomTeacherId);
+        var (success, error) = await _admin.AddClassAsync(schoolId!.Value, body.Name, body.SubjectId, body.HomeroomTeacherId, body.Grade);
         if (!success) return BadRequest(new { error });
 
         return StatusCode(201);
@@ -168,7 +168,7 @@ public class SchoolAdminController : ControllerBase
         var (ok, schoolId, reject) = await ResolveSchoolAsync();
         if (!ok) return reject!;
 
-        var (success, error) = await _admin.UpdateClassAsync(schoolId!.Value, classId, body.Name, body.SubjectId);
+        var (success, error) = await _admin.UpdateClassAsync(schoolId!.Value, classId, body.Name, body.SubjectId, body.Grade);
         if (!success) return BadRequest(new { error });
 
         return Ok();
@@ -213,6 +213,19 @@ public class SchoolAdminController : ControllerBase
         return Ok();
     }
 
+    // GET /api/admin/teachers/{teacherId}/subjects
+    [HttpGet("teachers/{teacherId}/subjects")]
+    public async Task<IActionResult> GetTeacherSubjects(string teacherId)
+    {
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
+        if (!ok) return reject!;
+
+        var (success, error, subjects) = await _admin.GetTeacherSubjectsAsync(schoolId!.Value, teacherId);
+        if (!success) return BadRequest(new { error });
+
+        return Ok(subjects);
+    }
+
     // GET /api/admin/subjects
     [HttpGet("subjects")]
     public async Task<IActionResult> GetSubjects()
@@ -222,6 +235,19 @@ public class SchoolAdminController : ControllerBase
 
         var subjects = await _admin.ListSubjectsAsync(schoolId!.Value);
         return Ok(subjects);
+    }
+
+    // DELETE /api/admin/subjects/{subjectId}
+    [HttpDelete("subjects/{subjectId:int}")]
+    public async Task<IActionResult> DeleteSubject(int subjectId)
+    {
+        var (ok, schoolId, reject) = await ResolveSchoolAsync();
+        if (!ok) return reject!;
+
+        var (success, error) = await _admin.DeleteSubjectAsync(schoolId!.Value, subjectId);
+        if (!success) return BadRequest(new { error });
+
+        return Ok();
     }
 
     // GET /api/admin/users
@@ -236,8 +262,8 @@ public class SchoolAdminController : ControllerBase
     }
 }
 
-public record CreateClassRequest(string Name, int SubjectId, string? HomeroomTeacherId);
+public record CreateClassRequest(string Name, int SubjectId, string? HomeroomTeacherId, int? Grade);
 public record CreateSubjectRequest(string Name);
 public record SetHomeroomRequest(string TeacherId);
 public record AssignTeacherToClassRequest(string TeacherId, string SubjectName);
-public record UpdateClassRequest(string Name, int SubjectId);
+public record UpdateClassRequest(string Name, int SubjectId, int? Grade);

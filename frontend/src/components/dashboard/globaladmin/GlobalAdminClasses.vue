@@ -19,8 +19,14 @@ const newClassSchoolId = ref('')
 const newClassName = ref('')
 const newClassSubjectId = ref('')
 const newClassTeacherId = ref('')
+const newClassGrade = ref('')
 const creatingClass = ref(false)
 const createClassError = ref<string | null>(null)
+
+const gradeOptions = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i + 1),
+  label: `Grade ${i + 1}`,
+}))
 
 const deletingClass = ref<AdminClassSummary | null>(null)
 const deleting = ref(false)
@@ -30,6 +36,7 @@ const assigningTeacherClass = ref<AdminClassSummary | null>(null)
 
 const classSchoolFilter = ref('')
 const classSubjectFilter = ref('')
+const classGradeFilter = ref('')
 
 const schoolOptions = computed(() => schools.value.map((s) => ({ value: String(s.id), label: s.name })))
 
@@ -40,10 +47,18 @@ const subjectFilterOptions = computed(() => {
   return [{ value: '', label: 'All subjects' }, ...names.map((n) => ({ value: n, label: n }))]
 })
 
+const gradeFilterOptions = computed(() => {
+  const grades = Array.from(new Set(classes.value.map((c) => c.grade).filter((g): g is number => g != null))).sort(
+    (a, b) => a - b,
+  )
+  return [{ value: '', label: 'All grades' }, ...grades.map((g) => ({ value: String(g), label: `Grade ${g}` }))]
+})
+
 const filteredClasses = computed(() =>
   classes.value.filter((c) => {
     if (classSchoolFilter.value && String(c.schoolId) !== classSchoolFilter.value) return false
     if (classSubjectFilter.value && c.subjectName !== classSubjectFilter.value) return false
+    if (classGradeFilter.value && String(c.grade) !== classGradeFilter.value) return false
     return true
   }),
 )
@@ -112,11 +127,13 @@ async function handleCreateClass() {
       newClassName.value.trim(),
       Number(newClassSubjectId.value),
       newClassTeacherId.value || undefined,
+      newClassGrade.value ? Number(newClassGrade.value) : undefined,
     )
     classes.value = await globalAdminApi.getClasses()
     newClassName.value = ''
     newClassSubjectId.value = ''
     newClassTeacherId.value = ''
+    newClassGrade.value = ''
   } catch (err) {
     createClassError.value = (err as { message?: string }).message ?? 'Could not create class.'
   } finally {
@@ -154,6 +171,7 @@ async function handleAssigned() {
       <div class="filters">
         <SelectField v-model="classSchoolFilter" label="School" :options="schoolFilterOptions" />
         <SelectField v-model="classSubjectFilter" label="Subject" :options="subjectFilterOptions" />
+        <SelectField v-model="classGradeFilter" label="Grade" :options="gradeFilterOptions" />
       </div>
 
       <div class="table-card">
@@ -162,6 +180,7 @@ async function handleAssigned() {
             <tr>
               <th>Name</th>
               <th>School</th>
+              <th>Grade</th>
               <th>Subject</th>
               <th>Homeroom</th>
               <th>Students</th>
@@ -172,6 +191,7 @@ async function handleAssigned() {
             <tr v-for="cls in filteredClasses" :key="cls.id">
               <td class="class-name">{{ cls.name }}</td>
               <td>{{ cls.schoolName }}</td>
+              <td>{{ cls.grade ?? '—' }}</td>
               <td>{{ cls.subjectName ?? '—' }}</td>
               <td>{{ cls.homeroomTeacherUsername ?? '—' }}</td>
               <td>{{ cls.studentCount }}</td>
@@ -182,7 +202,7 @@ async function handleAssigned() {
               </td>
             </tr>
             <tr v-if="filteredClasses.length === 0">
-              <td colspan="6" class="empty">No classes match this filter.</td>
+              <td colspan="7" class="empty">No classes match this filter.</td>
             </tr>
           </tbody>
         </table>
@@ -202,6 +222,12 @@ async function handleAssigned() {
             searchable
           />
           <Field v-model="newClassName" label="Class name" placeholder="10A" />
+          <SelectField
+            v-model="newClassGrade"
+            label="Grade"
+            placeholder="Select grade"
+            :options="gradeOptions"
+          />
           <SelectField
             v-model="newClassSubjectId"
             label="Subject"

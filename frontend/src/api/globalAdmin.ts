@@ -27,10 +27,11 @@ export function createClass(
   name: string,
   subjectId: number,
   homeroomTeacherId?: string,
+  grade?: number,
 ): Promise<void> {
   return apiFetch<void>('/api/global-admin/classes', {
     method: 'POST',
-    body: JSON.stringify({ schoolId, name, subjectId, homeroomTeacherId }),
+    body: JSON.stringify({ schoolId, name, subjectId, homeroomTeacherId, grade }),
   })
 }
 

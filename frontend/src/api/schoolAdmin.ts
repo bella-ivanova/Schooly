@@ -1,5 +1,13 @@
 import { apiFetch } from './client'
-import type { AdminClassDetail, AdminClassSummary, AdminSubjectSummary, AdminUserSummary, SchoolInfo, SchoolTeacherCode } from './types'
+import type {
+  AdminClassDetail,
+  AdminClassSummary,
+  AdminSubjectSummary,
+  AdminTeacherSubject,
+  AdminUserSummary,
+  SchoolInfo,
+  SchoolTeacherCode,
+} from './types'
 
 export function getSchool(): Promise<SchoolInfo> {
   return apiFetch<SchoolInfo>('/api/admin/school')
@@ -24,10 +32,15 @@ export function createSubject(name: string): Promise<void> {
   })
 }
 
-export function createClass(name: string, subjectId: number, homeroomTeacherId?: string): Promise<void> {
+export function createClass(
+  name: string,
+  subjectId: number,
+  homeroomTeacherId?: string,
+  grade?: number,
+): Promise<void> {
   return apiFetch<void>('/api/admin/classes', {
     method: 'POST',
-    body: JSON.stringify({ name, subjectId, homeroomTeacherId }),
+    body: JSON.stringify({ name, subjectId, homeroomTeacherId, grade }),
   })
 }
 
@@ -43,10 +56,10 @@ export function getClassDetail(classId: number): Promise<AdminClassDetail> {
   return apiFetch<AdminClassDetail>(`/api/admin/classes/${classId}`)
 }
 
-export function updateClass(classId: number, name: string, subjectId: number): Promise<void> {
+export function updateClass(classId: number, name: string, subjectId: number, grade?: number): Promise<void> {
   return apiFetch<void>(`/api/admin/classes/${classId}`, {
     method: 'PUT',
-    body: JSON.stringify({ name, subjectId }),
+    body: JSON.stringify({ name, subjectId, grade }),
   })
 }
 
@@ -65,4 +78,27 @@ export function removeTeacherFromClass(classId: number, teacherId: string, subje
   return apiFetch<void>(`/api/admin/classes/${classId}/teachers/${teacherId}/subjects/${subjectId}`, {
     method: 'DELETE',
   })
+}
+
+export function setHomeroomTeacher(classId: number, teacherId: string): Promise<void> {
+  return apiFetch<void>(`/api/admin/classes/${classId}/homeroom`, {
+    method: 'PUT',
+    body: JSON.stringify({ teacherId }),
+  })
+}
+
+export function getTeacherSubjects(teacherId: string): Promise<AdminTeacherSubject[]> {
+  return apiFetch<AdminTeacherSubject[]>(`/api/admin/teachers/${teacherId}/subjects`)
+}
+
+export function assignSubjectToTeacher(teacherId: string, subjectId: number): Promise<void> {
+  return apiFetch<void>(`/api/admin/teachers/${teacherId}/subjects/${subjectId}`, { method: 'POST' })
+}
+
+export function removeSubjectFromTeacher(teacherId: string, subjectId: number): Promise<void> {
+  return apiFetch<void>(`/api/admin/teachers/${teacherId}/subjects/${subjectId}`, { method: 'DELETE' })
+}
+
+export function deleteSubject(subjectId: number): Promise<void> {
+  return apiFetch<void>(`/api/admin/subjects/${subjectId}`, { method: 'DELETE' })
 }

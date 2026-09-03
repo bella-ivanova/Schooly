@@ -5,8 +5,8 @@ import type { NavItem } from '../components/shell/navItem'
 
 const navItems: NavItem[] = [
   { label: 'Classes', to: '/app/school-admin' },
-  { label: 'Subjects', disabled: true },
-  { label: 'Users', disabled: true },
+  { label: 'Subjects', to: '/app/school-admin/subjects' },
+  { label: 'Staff & Students', to: '/app/school-admin/staff' },
   { label: 'Settings', active: true },
 ]
 </script>
