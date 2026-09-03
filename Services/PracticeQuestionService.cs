@@ -6,11 +6,14 @@ public class PracticeQuestionService
 {
     private readonly IChatService _chat;
     private readonly LanguageDetectionService _languageDetector;
+    private readonly ILogger<PracticeQuestionService> _logger;
 
-    public PracticeQuestionService(IChatService chat, LanguageDetectionService languageDetector)
+    public PracticeQuestionService(IChatService chat, LanguageDetectionService languageDetector,
+                                   ILogger<PracticeQuestionService> logger)
     {
         _chat = chat;
         _languageDetector = languageDetector;
+        _logger = logger;
     }
 
     public async Task<List<string>> GenerateAsync(string originalQuestion, string aiResponse)
@@ -25,6 +28,7 @@ public class PracticeQuestionService
             "Reply ONLY with a JSON array of 3 strings, no explanation, no markdown:\n" +
             "[\"question 1\", \"question 2\", \"question 3\"]";
 
+        string? response = null;
         try
         {
             var languageName = _languageDetector.DetectLanguageName(originalQuestion);
@@ -32,18 +36,16 @@ public class PracticeQuestionService
                 ? $"Generate the questions entirely in {languageName}."
                 : "Generate the questions in the same language as the student's original question.";
 
-            var response = await _chat.OneShotAsync(
+            response = await _chat.OneShotAsync(
                 "You are a school tutor generating practice questions. " + languageInstruction,
                 userPrompt);
 
-            var json = response.Trim();
-            if (json.StartsWith("```"))
-            {
-                var nl   = json.IndexOf('\n');
-                var last = json.LastIndexOf("```");
-                if (nl >= 0 && last > nl)
-                    json = json[(nl + 1)..last].Trim();
-            }
+            var trimmed = response.Trim();
+            var start = trimmed.IndexOf('[');
+            var end   = trimmed.LastIndexOf(']');
+            if (start < 0 || end <= start)
+                throw new JsonException("No JSON array found in model response.");
+            var json = trimmed[start..(end + 1)];
 
             using var doc = JsonDocument.Parse(json);
             return doc.RootElement.EnumerateArray()
@@ -51,8 +53,11 @@ public class PracticeQuestionService
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .ToList();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex,
+                "Failed to parse practice questions JSON for question {Question} (response length {ResponseLength})",
+                originalQuestion, response?.Length ?? 0);
             return new List<string>();
         }
     }

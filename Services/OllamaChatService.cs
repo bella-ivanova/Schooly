@@ -52,7 +52,7 @@ public class OllamaChatService : IChatService
             Model    = _model,
             Messages = tempMessages,
             Stream   = false,
-            Options  = new RequestOptions { Temperature = (float)Temperature }
+            Options  = new RequestOptions { Temperature = (float)Temperature, NumPredict = 512 }
         };
 
         var sb = new System.Text.StringBuilder();
