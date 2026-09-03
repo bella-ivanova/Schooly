@@ -53,6 +53,9 @@ Returns every distinct student across every class the teacher teaches (homeroom 
 **When a teacher calls `GET /api/teacher/students/{studentId}`:**
 Returns that one student's detail (same shape as the list above) if they belong to at least one of the teacher's classes; 404 otherwise.
 
+**When a teacher calls `GET /api/teacher/subjects`:**
+Returns the caller's own distinct `TeacherSubject` names. 403 if the caller is not a Teacher (checked directly against the JWT `role` claim, not the shared Teacher-or-SchoolAdmin helper the rest of this controller uses).
+
 **When a non-teacher or non-school-admin calls any teacher endpoint:**
 Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middleware.
 
@@ -60,13 +63,13 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 Returns all classes in the caller's school (derived from `ApplicationUser.SchoolId` on the authenticated user) with the homeroom teacher's username and enrolled student count.
 
 **When a school admin calls `POST /api/admin/classes`:**
-Creates a new class in the caller's school, tagged with the given `subjectId` (required — must belong to the caller's school). An optional `homeroomTeacherId` may be supplied; if provided, the teacher must belong to the same school.
+Creates a new class in the caller's school, tagged with the given `subjectId` (required — must belong to the caller's school). An optional `homeroomTeacherId` may be supplied; if provided, the teacher must belong to the same school. An optional `grade` (1–12) may also be supplied; a value outside that range is rejected.
 
 **When a school admin calls `GET /api/admin/classes/{classId}`:**
 Returns the class's name, subject tag, homeroom teacher, full student roster, and teacher-subject assignments. 404 if the class doesn't belong to the caller's school.
 
 **When a school admin calls `PUT /api/admin/classes/{classId}`:**
-Renames the class and/or retags its `subjectId` (both required in the request body). The subject must belong to the caller's school.
+Renames the class and/or retags its `subjectId` (both required in the request body); also accepts the same optional `grade` (1–12) as create. The subject must belong to the caller's school.
 
 **When a school admin calls `PUT /api/admin/classes/{classId}/homeroom`:**
 Sets the homeroom teacher for the specified class. The teacher must belong to the same school as the caller.
@@ -89,8 +92,14 @@ Adds an existing subject to the teacher's teaching list. Rejected if the subject
 **When a school admin calls `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}`:**
 Removes a subject from the teacher's teaching list.
 
+**When a school admin calls `GET /api/admin/teachers/{teacherId}/subjects`:**
+Returns that teacher's current subject-qualification list (`{subjectId, subjectName}[]`). 404-equivalent error if the teacher doesn't belong to the caller's school.
+
 **When a school admin calls `GET /api/admin/subjects`:**
 Returns all subjects registered for the caller's school.
+
+**When a school admin calls `DELETE /api/admin/subjects/{subjectId}`:**
+Deletes the subject if it belongs to the caller's school and is not currently assigned to any class or teacher; otherwise rejects with an error explaining which.
 
 **When a school admin calls `GET /api/admin/users`:**
 Returns all users in the caller's school with their role, grade, and class information.
@@ -165,13 +174,17 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [x] `GET /api/admin/subjects` / `POST /api/admin/subjects` list and create subjects for the caller's school; POST rejects duplicate names within the school
 - [x] `POST /api/admin/teachers/{teacherId}/subjects/{subjectId}` adds a subject to a teacher's list; rejects duplicates and cross-school subjects
 - [x] `DELETE /api/admin/teachers/{teacherId}/subjects/{subjectId}` removes a subject from a teacher's list
+- [x] `GET /api/admin/teachers/{teacherId}/subjects` returns that teacher's current subject list; rejects a teacher not in the caller's school
+- [x] `DELETE /api/admin/subjects/{subjectId}` deletes a subject only if unused by any class or teacher in the caller's school
 - [x] `GET /api/admin/users` returns all users in the caller's school with role, grade, and class info
 - [x] Non-SchoolAdmin JWT receives 403 on all `/api/admin` endpoints; unauthenticated requests receive 401
+- [x] `GET /api/teacher/subjects` returns the calling teacher's own distinct subject list; 403 for a non-Teacher JWT
 - [x] `POST /api/global-admin/schools` registers a new School entity (`{ name: string }`); rejects duplicate names
 - [x] `GET /api/global-admin/users` returns all users across all schools with id, username, fullName, role, grade, and class name
 - [x] `GET /api/global-admin/classes` returns all classes across all schools with id, name, homeroom teacher username, and student count
-- [x] `POST /api/global-admin/classes` creates a class for any school — body: `{ schoolId: int, name: string, subjectId: int, homeroomTeacherId?: string }`
+- [x] `POST /api/global-admin/classes` creates a class for any school — body: `{ schoolId: int, name: string, subjectId: int, homeroomTeacherId?: string, grade?: int }`; `grade` outside 1–12 is rejected
 - [x] `DELETE /api/global-admin/classes/{classId}` deletes a class and unlinks all its students
+- [x] `GET /api/global-admin/subjects` returns every school-scoped subject across all schools, each with its owning `schoolId`/`schoolName`
 - [x] `POST /api/global-admin/subjects` creates a subject for a given school — body: `{ schoolId: int, name: string }`; rejects duplicates within the same school
 - [x] `DELETE /api/global-admin/subjects/{subjectId}` deletes a subject by ID
 - [x] `POST /api/global-admin/classes/{classId}/students` assigns a student (by userId) to a class; rejects non-students
