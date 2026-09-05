@@ -109,20 +109,30 @@ builder.Services.AddHttpClient("mathocr", c => c.Timeout = Timeout.InfiniteTimeS
 builder.Services.AddHttpClient("zhipuai", c => c.Timeout = Timeout.InfiniteTimeSpan);
 
 // ── LLM / RAG services ────────────────────────────────────────────────────
-var ollamaModel  = builder.Configuration["Llm:OllamaModel"]      ?? "todorov/bggpt";
-var embedModel   = builder.Configuration["Llm:OllamaEmbedModel"]  ?? "nomic-embed-text-v2-moe";
-var visionModel  = builder.Configuration["Llm:OllamaVisionModel"] ?? "minicpm-v";
+var ollamaModel    = builder.Configuration["Llm:OllamaModel"]          ?? "todorov/bggpt";
+var embedModel     = builder.Configuration["Llm:OllamaEmbedModel"]     ?? "nomic-embed-text-v2-moe";
+var visionModel    = builder.Configuration["Llm:OllamaVisionModel"]    ?? "minicpm-v";
+var reasoningModel = builder.Configuration["Llm:OllamaReasoningModel"] ?? "qwen3.5:9b";
 var qdrantHost   = builder.Configuration["Qdrant:Host"]           ?? "localhost";
 var qdrantPort   = int.TryParse(builder.Configuration["Qdrant:Port"], out var qp) ? qp : 6334;
 
 // IChatService is Scoped so each request gets a fresh conversation history.
 builder.Services.AddScoped<IChatService>(_ => new OllamaChatService(ollamaModel));
+// Second, independent OllamaChatService instance pointed at the STEM reasoning model.
+// Registered under its own concrete type, never IChatService — DI keys registrations by
+// declared service type, so this cannot collide with the IChatService registration above
+// (BgGPT): consumers wanting Qwen ask for OllamaChatService by concrete type; consumers
+// wanting BgGPT ask for IChatService. Lower temperature: JSON-schema-following benefits
+// from more deterministic output.
+builder.Services.AddScoped<OllamaChatService>(_ => new OllamaChatService(reasoningModel) { Temperature = 0.2 });
 builder.Services.AddScoped<EmbeddingService>(_ => new EmbeddingService(embedModel));
 builder.Services.AddScoped<QdrantService>(_ => new QdrantService(qdrantHost, qdrantPort));
 builder.Services.AddScoped<OCRService>(sp =>
     new OCRService(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ocr"), visionModel));
 builder.Services.AddScoped<MathOcrService>(sp =>
     new MathOcrService(sp.GetRequiredService<IHttpClientFactory>().CreateClient("mathocr")));
+builder.Services.AddScoped<StemSubjectClassifier>();
+builder.Services.AddScoped<StemAnswerPipelineService>();
 // RAGService must be Scoped — _currentGrade and _temporaryChunks are per-request state.
 builder.Services.AddScoped<RAGService>();
 builder.Services.AddScoped<SubjectResolutionService>();
@@ -250,6 +260,22 @@ if (args.Length > 0 && args[0] == "reingest-grade")
         await ragService.DeleteGradeFileAsync(reingestGrade, fileKey);
 
     await ragService.IngestGradePDFsAsync(reingestGrade);
+    return;
+}
+
+// Args-gated diagnostic entry point — never reachable via HTTP, same CLI-only pattern as
+// reingest-grade/diagnose-retrieval. Runs the STEM structured-handoff pipeline (Qwen
+// reasoning -> BgGPT narration) against a fixture of sample questions and logs the JSON
+// Qwen produced (or its prose fallback) alongside BgGPT's final narration, plus the
+// malformed-JSON retry rate. Usage:
+//   dotnet run -- test-stem-pipeline [path-to-question-set.json]
+if (args.Length > 0 && args[0] == "test-stem-pipeline")
+{
+    var fixturePath = args.Length >= 2 ? args[1] : Path.Combine("TestData", "StemFixtures", "sample-questions.json");
+    using var stemScope = app.Services.CreateScope();
+    var stemRag        = stemScope.ServiceProvider.GetRequiredService<RAGService>();
+    var stemClassifier = stemScope.ServiceProvider.GetRequiredService<StemSubjectClassifier>();
+    await StemPipelineTestRunner.RunAsync(stemRag, stemClassifier, fixturePath);
     return;
 }
 

@@ -15,7 +15,17 @@ public class OllamaChatService : IChatService
     public OllamaChatService(string model)
     {
         _model = model;
-        _ollama = new OllamaApiClient("http://localhost:11434");
+        // OllamaApiClient's string-uri constructor builds an HttpClient with .NET's default
+        // 100s timeout, which a `think: true` reasoning call can legitimately exceed (a
+        // measured single call took 112s). Local Ollama inference is exactly the class of
+        // slow local integration this codebase already gives an infinite timeout (see
+        // Program.cs's "mathocr"/"zhipuai" named HttpClients) — match that convention here.
+        var httpClient = new HttpClient
+        {
+            BaseAddress = new Uri("http://localhost:11434"),
+            Timeout     = Timeout.InfiniteTimeSpan
+        };
+        _ollama = new OllamaApiClient(httpClient, model);
     }
 
     // Clears history and sets a system prompt.
@@ -83,6 +93,62 @@ public class OllamaChatService : IChatService
         var reply = fullResponse.ToString();
         _messages.Add(new Message { Role = ChatRole.Assistant, Content = reply });
         return reply;
+    }
+
+    // One-shot call exposing ChatRequest.Think/Format for reasoning-model callers (the STEM
+    // pipeline's Qwen calls) that OneShotAsync intentionally doesn't expose. Fresh temp
+    // message list like OneShotAsync — never touches _messages/history.
+    //
+    // Also surfaces DoneReason/EvalCount/PromptEvalCount from the stream's final
+    // ChatDoneResponseStream chunk — added while diagnosing why Content sometimes comes
+    // back empty under think:true+jsonFormat:true: without these, an empty Content is
+    // indistinguishable from "model produced nothing" vs. "ran out of room mid-thinking,
+    // before any content token was ever emitted" (DoneReason "length" points at the latter).
+    //
+    // numCtx matters as much as numPredict here and is easy to miss: NumPredict only caps
+    // the *generation*, but the total context window (prompt + generation) is a separate,
+    // smaller Ollama-side default (observed ~4096) when NumCtx isn't set explicitly. A large
+    // RAG-context prompt can leave too little of that window for a `think: true` trace plus
+    // JSON content — confirmed empirically: identical EvalCount across repeated runs with
+    // different random content pointed at a fixed context-window ceiling, not natural
+    // completion, since the (deterministic) prompt was consuming the rest of the window.
+    public async Task<(string Content, string? Thinking, string? DoneReason, int EvalCount)> OneShotReasoningAsync(
+        string systemPrompt, string userMessage, bool think = false, bool jsonFormat = false,
+        int numPredict = 512, int? numCtx = null)
+    {
+        var tempMessages = new List<Message>
+        {
+            new Message { Role = ChatRole.System, Content = systemPrompt },
+            new Message { Role = ChatRole.User,   Content = userMessage  }
+        };
+
+        var request = new ChatRequest
+        {
+            Model    = _model,
+            Messages = tempMessages,
+            Stream   = false,
+            Think    = think,
+            Format   = jsonFormat ? "json" : null,
+            Options  = new RequestOptions { Temperature = (float)Temperature, NumPredict = numPredict, NumCtx = numCtx }
+        };
+
+        var contentSb  = new System.Text.StringBuilder();
+        var thinkingSb = new System.Text.StringBuilder();
+        string? doneReason = null;
+        int evalCount = 0;
+
+        await foreach (var token in _ollama.ChatAsync(request))
+        {
+            contentSb.Append(token?.Message?.Content);
+            thinkingSb.Append(token?.Message?.Thinking);
+            if (token is OllamaSharp.Models.Chat.ChatDoneResponseStream doneToken)
+            {
+                doneReason = doneToken.DoneReason;
+                evalCount  = doneToken.EvalCount;
+            }
+        }
+
+        return (contentSb.ToString(), thinkingSb.Length > 0 ? thinkingSb.ToString() : null, doneReason, evalCount);
     }
 
     // Streams the response token by token so the user sees words appear in real time.

@@ -11,6 +11,8 @@ public class RAGService
     private readonly OCRService? _ocr;
     private readonly MathOcrService? _mathOcr;
     private readonly LanguageDetectionService _languageDetector;
+    private readonly StemSubjectClassifier _stemClassifier;
+    private readonly StemAnswerPipelineService _stemPipeline;
 
     // In-memory store for temporary PDFs loaded during the current chat session only.
     // These are never saved to Qdrant — they disappear when the session ends.
@@ -18,12 +20,16 @@ public class RAGService
 
     private int _currentGrade = 0;
 
-    public RAGService(IChatService chat, EmbeddingService embeddingService, QdrantService qdrant, LanguageDetectionService languageDetector, OCRService? ocr = null, MathOcrService? mathOcr = null)
+    public RAGService(IChatService chat, EmbeddingService embeddingService, QdrantService qdrant,
+        LanguageDetectionService languageDetector, StemSubjectClassifier stemClassifier,
+        StemAnswerPipelineService stemPipeline, OCRService? ocr = null, MathOcrService? mathOcr = null)
     {
         _chat             = chat;
         _embeddingService = embeddingService;
         _qdrant           = qdrant;
         _languageDetector = languageDetector;
+        _stemClassifier   = stemClassifier;
+        _stemPipeline     = stemPipeline;
         _ocr              = ocr;
         _mathOcr          = mathOcr;
     }
@@ -339,11 +345,21 @@ public class RAGService
 
     // HTTP streaming variant of Ask(). Yields tokens as they arrive so ChatController
     // can write them to an SSE response. Chat-log saving is the caller's responsibility.
+    //
+    // Runs RAG context retrieval and STEM subject classification concurrently (two
+    // independent operations — classification only calls _chat.OneShotAsync, which never
+    // touches the shared conversation history) rather than stacking their latencies, then
+    // routes math/physics/chemistry questions through the structured Qwen->BgGPT pipeline
+    // and everything else through the original single-stage path, unchanged.
     public async IAsyncEnumerable<string> AskStreamAsync(string question)
     {
         question = InputSanitizer.SanitizeUserInput(question, maxLength: 2000);
 
-        var context = await GetContextAsync(question);
+        var contextTask = GetContextAsync(question);
+        var subjectTask = _stemClassifier.ClassifyAsync(question);
+        var context = await contextTask;
+        var subject = await subjectTask;
+
         var languageName = _languageDetector.DetectLanguageName(question);
 
         if (string.IsNullOrEmpty(context))
@@ -354,6 +370,22 @@ public class RAGService
             yield break;
         }
 
+        if (subject != StemSubject.None)
+        {
+            await foreach (var token in AskStemStreamAsync(question, context, languageName))
+                yield return token;
+            yield break;
+        }
+
+        await foreach (var token in AskGenericStreamAsync(question, context, languageName))
+            yield return token;
+    }
+
+    // Original single-stage answer path (BgGPT only, given the RAG context directly),
+    // extracted verbatim from what used to be AskStreamAsync's body so it can serve both
+    // non-STEM questions and the STEM pipeline's total-failure safety net below.
+    private async IAsyncEnumerable<string> AskGenericStreamAsync(string question, string context, string? languageName)
+    {
         var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
         var languageInstruction = languageName is not null
             ? $"Respond entirely in {languageName}."
@@ -378,6 +410,81 @@ public class RAGService
 
         await foreach (var token in _chat.StreamTokensAsync(question, apiMsg, sysOverride))
             yield return token;
+    }
+
+    // STEM structured-handoff path: Qwen reasons into structured JSON (or, on failure,
+    // plain prose), then BgGPT narrates the result in the student's language — still
+    // streamed via the same _chat.StreamTokensAsync mechanism AskGenericStreamAsync uses,
+    // so ChatController's SSE framing never has to know this branch exists. If the
+    // reasoning stage fails entirely (structured JSON exhausted AND the prose fallback also
+    // fails), degrades to the generic path rather than surfacing an error — a student should
+    // never see a broken STEM answer.
+    private async IAsyncEnumerable<string> AskStemStreamAsync(string question, string context, string? languageName)
+    {
+        var languageInstruction = languageName is not null
+            ? $"Respond entirely in {languageName}."
+            : "Respond in the same language the student used in their question.";
+
+        var result = await _stemPipeline.SolveAsync(question, context);
+        var (narrationSystemPrompt, narrationUserContent) = BuildNarrationPrompt(result, question, languageInstruction);
+
+        if (narrationSystemPrompt == null)
+        {
+            await foreach (var token in AskGenericStreamAsync(question, context, languageName))
+                yield return token;
+            yield break;
+        }
+
+        await foreach (var token in _chat.StreamTokensAsync(question, narrationUserContent, narrationSystemPrompt))
+            yield return token;
+    }
+
+    // Non-streaming diagnostic variant of the STEM pipeline, used only by the CLI test
+    // harness (dotnet run -- test-stem-pipeline) so it can log the complete Qwen JSON/prose
+    // alongside BgGPT's full narrated answer for a question. Uses _chat.OneShotAsync (fresh
+    // history each call) rather than the streaming/history-appending path, so running many
+    // unrelated fixture questions in one process doesn't contaminate each other's context.
+    // Not used by any HTTP endpoint.
+    public async Task<(StemReasoningResult Reasoning, string Narration)> AskStemDiagnosticAsync(string question)
+    {
+        question = InputSanitizer.SanitizeUserInput(question, maxLength: 2000);
+        var context = await GetContextAsync(question);
+        var languageName = _languageDetector.DetectLanguageName(question);
+        var languageInstruction = languageName is not null
+            ? $"Respond entirely in {languageName}."
+            : "Respond in the same language the student used in their question.";
+
+        var result = await _stemPipeline.SolveAsync(question, context);
+        var (narrationSystemPrompt, narrationUserContent) = BuildNarrationPrompt(result, question, languageInstruction);
+
+        if (narrationSystemPrompt == null)
+            return (result, "[STEM pipeline failed entirely — would degrade to the generic answer path.]");
+
+        var narration = await _chat.OneShotAsync(narrationSystemPrompt, narrationUserContent!);
+        return (result, narration);
+    }
+
+    // Shared by AskStemStreamAsync and AskStemDiagnosticAsync: picks the structured or
+    // fallback-prose narration prompt depending on what Stage 1 produced. Both outputs null
+    // means the reasoning stage failed entirely — the caller must degrade to the generic path.
+    private static (string? SystemPrompt, string? UserContent) BuildNarrationPrompt(
+        StemReasoningResult result, string question, string languageInstruction)
+    {
+        if (result.Structured != null)
+        {
+            return (
+                StemAnswerPipelineService.BuildStructuredNarrationSystemPrompt(result.Structured.QuestionType, languageInstruction),
+                StemAnswerPipelineService.BuildNarrationUserContent(result.Structured, question));
+        }
+
+        if (result.FallbackProse != null)
+        {
+            return (
+                StemAnswerPipelineService.BuildFallbackNarrationSystemPrompt(languageInstruction),
+                StemAnswerPipelineService.BuildFallbackNarrationUserContent(result.FallbackProse, question));
+        }
+
+        return (null, null);
     }
 
     // Used locally for temporary chunk similarity (Qdrant handles this for permanent chunks)

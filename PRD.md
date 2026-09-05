@@ -14,6 +14,9 @@ The system embeds the query, searches Qdrant filtered to grades 1 through N (whe
 **When the LLM response contains a `<STEREO>…</STEREO>` block:**
 The system extracts the JSON scene description and returns it as a structured `scene` field alongside the text response so the frontend can render an interactive 3D geometry visualisation. The frontend fetches the rendered visualisation via `POST /api/chat/scene-html`, which takes that extracted scene JSON and returns standalone Three.js HTML (`StereometryHtmlBuilder.Build`) for display in a sandboxed `<iframe srcdoc>`.
 
+**When a student's message is classified as math, physics, or chemistry:**
+A one-shot classifier call resolves the subject before the main answer is generated. If it resolves to one of those three subjects, the answer goes through a two-stage pipeline instead of the default single-model path: a reasoning model (`qwen3.5:9b`) solves the problem using the retrieved RAG context and emits a structured JSON answer (never prose shown to the student), and the production chat model (`todorov/bggpt`) then narrates that JSON into fluent Bulgarian, reproducing every number, unit, and formula exactly rather than re-deriving or translating them. If the reasoning model's structured output can't be parsed after retries, a plain-prose fallback from the same reasoning model is narrated instead; if that also fails, the request degrades to the default single-model path rather than surfacing an error. This is entirely internal to `POST /api/chat/message` — the request/response shape and SSE frame contract below are identical regardless of which path served the answer, and every other subject is unaffected. See `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section for the full mechanism.
+
 **When a student deletes a chat session (`DELETE /api/chat/sessions/{id}`):**
 The session and its messages are removed if the caller owns it; 404 otherwise. Used by the chat UI's "Past Chats" list.
 
@@ -152,6 +155,7 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [x] `POST /api/chat/message` exists, requires a valid JWT, and streams the LLM response
 - [x] RAG context is grade-filtered: a grade-8 student never receives chunks from grade-9 or higher material
 - [x] When the LLM output contains a `<STEREO>` block, the response includes a structured `scene` field with the extracted JSON; the text field contains the response with the block removed
+- [x] A math/physics/chemistry question is routed through the Qwen structured-reasoning pipeline before BgGPT narrates the answer, with the resulting numbers/formulas verified to match what the reasoning stage produced; a non-STEM question's answer is unaffected; both confirmed via `dotnet run -- test-stem-pipeline` (`StemPipelineTestRunner.cs`) rather than a live browser session — see `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section
 - [x] Off-curriculum questions produce a polite refusal message, not a hallucinated answer
 - [x] `POST /api/chat/upload` accepts a PDF, ingests it into a session-scoped temporary store, and affects all subsequent `/api/chat/message` calls in that session
 - [x] Every chat exchange writes two rows to `chat_messages` — one with `role = "user"`, one with `role = "assistant"` — both with a populated `subject_id` and `topic`
@@ -248,7 +252,7 @@ Embedding and LLM services handle UTF-8 natively. The only preprocessing require
 
 ## Environment Prerequisites
 
-The behavioral specification below assumes a working local LLM/OCR pipeline. Before testing: pull the Ollama models referenced by `Llm:OllamaModel`/`Llm:OllamaVisionModel`/`Llm:OllamaEmbedModel` (currently `todorov/bggpt`, `minicpm-v`, and `nomic-embed-text-v2-moe` — see `ollama list`), and start the `pix2text` container (`docker compose up -d pix2text`). See `README.md`'s "Local Environment Prerequisites" section.
+The behavioral specification below assumes a working local LLM/OCR pipeline. Before testing: pull the Ollama models referenced by `Llm:OllamaModel`/`Llm:OllamaVisionModel`/`Llm:OllamaEmbedModel`/`Llm:OllamaReasoningModel` (currently `todorov/bggpt`, `minicpm-v`, `nomic-embed-text-v2-moe`, and `qwen3.5:9b` — see `ollama list`), and start the `pix2text` container (`docker compose up -d pix2text`). See `README.md`'s "Local Environment Prerequisites" section.
 
 ---
 

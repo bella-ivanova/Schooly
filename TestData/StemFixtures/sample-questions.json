@@ -1,0 +1,46 @@
+{
+  "questions": [
+    {
+      "id": "math-numeric-01",
+      "question": "Реши уравнението: 2x² - 5x + 2 = 0",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "math-conceptual-01",
+      "question": "Какво е ирационално число?",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "physics-numeric-01",
+      "question": "Тяло се движи равномерно със скорост 20 m/s в продължение на 5 секунди. Каква е изминатата дистанция?",
+      "grade": 10,
+      "expectedSubject": "Physics"
+    },
+    {
+      "id": "physics-conceptual-01",
+      "question": "Обясни какво гласи законът за запазване на енергията.",
+      "grade": 10,
+      "expectedSubject": "Physics"
+    },
+    {
+      "id": "chemistry-numeric-01",
+      "question": "Колко грама вода (H2O) се получават при пълното изгаряне на 2 mol водород (H2)?",
+      "grade": 10,
+      "expectedSubject": "Chemistry"
+    },
+    {
+      "id": "chemistry-conceptual-01",
+      "question": "Какво е химична връзка?",
+      "grade": 10,
+      "expectedSubject": "Chemistry"
+    },
+    {
+      "id": "negative-control-01",
+      "question": "Кой е авторът на романа 'Под игото'?",
+      "grade": 10,
+      "expectedSubject": "None"
+    }
+  ]
+}
