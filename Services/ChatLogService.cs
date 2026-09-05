@@ -10,12 +10,24 @@ public class ChatLogService
     private readonly AppDbContext _db;
     private readonly IChatService _chat;
     private readonly SubjectResolutionService _subjects;
+    private readonly ILogger<ChatLogService> _logger;
 
-    public ChatLogService(AppDbContext db, IChatService chat, SubjectResolutionService subjects)
+    // Low temperature for this call only: this is a categorical subject/topic judgment
+    // that should be stable on similar input, not fluent prose — same fix applied to
+    // StemSubjectClassifier.ClassifyAsync (see CLAUDE.md's "STEM Structured-Handoff
+    // Pipeline" section) after the default 0.7 was shown to flip an identical question's
+    // classification between runs. _chat is the shared, Scoped IChatService (BgGPT)
+    // instance also used to stream the actual answer earlier in the same request
+    // (ChatController calls this only after AskStreamAsync has finished), so the original
+    // temperature is restored in `finally` rather than left low.
+    private const double ClassificationTemperature = 0.1;
+
+    public ChatLogService(AppDbContext db, IChatService chat, SubjectResolutionService subjects, ILogger<ChatLogService> logger)
     {
         _db       = db;
         _chat     = chat;
         _subjects = subjects;
+        _logger   = logger;
     }
 
     public async Task SaveMessageAsync(string userId, int sessionId, string role, string content,
@@ -41,9 +53,12 @@ public class ChatLogService
 
     public async Task<(string subject, string topic)> DetectSubjectTopicAsync(string question)
     {
+        var originalTemperature = _chat.Temperature;
         try
         {
             question = InputSanitizer.SanitizeUserInput(question, maxLength: 2000);
+            _chat.Temperature = ClassificationTemperature;
+
             var response = await _chat.OneShotAsync(
                 "You are a concise classifier. The user message is a student question. " +
                 "Reply ONLY with a JSON object and nothing else: " +
@@ -64,9 +79,14 @@ public class ChatLogService
             var topic     = doc.RootElement.GetProperty("topic").GetString()   ?? "Unknown";
             return (subject, topic);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Chat subject/topic classification failed for question {Question}", question);
             return ("Unknown", "Unknown");
+        }
+        finally
+        {
+            _chat.Temperature = originalTemperature;
         }
     }
 
