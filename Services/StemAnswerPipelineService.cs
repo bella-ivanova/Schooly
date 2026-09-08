@@ -197,6 +197,18 @@ public class StemAnswerPipelineService
         "instead. Both form a right triangle with the pyramid's height, but they are not " +
         "interchangeable — picking the wrong horizontal leg is a common error to avoid.";
 
+    // Added to shrink the think:true reasoning trace's wall-clock time: Qwen otherwise tends
+    // to explore multiple approaches and re-verify already-confirmed steps, which is where
+    // most of the ~112s single-call time (see OllamaChatService.cs) goes. Deliberately
+    // worded to not discourage the GeometryDisambiguationNote's segment-identification step
+    // above, which is a required correctness check, not the redundant re-checking this note
+    // targets.
+    public const string EfficientReasoningNote =
+        " Reason efficiently: pick one valid solution approach and follow it through in a " +
+        "single pass. Do not restart with a different method, do not re-verify a step you " +
+        "have already confirmed is correct, and do not keep analyzing once you have reached " +
+        "a complete, correct result — state your reasoning once, then finalize your answer.";
+
     private const string Stage1SystemPrompt =
         "You are a math/physics/chemistry problem-solving engine. You will receive textbook context " +
         "and a student's question. Solve the problem step by step using standard mathematical/ " +
@@ -213,13 +225,15 @@ public class StemAnswerPipelineService
         "Use \"numeric\" when the question asks to calculate/solve for a value; use \"conceptual\" when it " +
         "asks to explain/define/describe a concept. Keep formulas in plain notation, not LaTeX. Base " +
         "your solution on the provided textbook context where relevant; if the context is insufficient, " +
-        "still solve using standard curriculum methods." + GeometryDisambiguationNote + " Do not write " +
+        "still solve using standard curriculum methods." + GeometryDisambiguationNote +
+        EfficientReasoningNote + " Do not write " +
         "explanatory prose in Bulgarian or any other language — this output is machine-parsed, not " +
         "shown to the student.";
 
     private const string FallbackSystemPrompt =
         "You are a math/physics/chemistry tutor. Solve the student's problem step by step using the " +
         "provided textbook context and standard curriculum methods." + GeometryDisambiguationNote +
+        EfficientReasoningNote +
         " Show the formula, the worked steps, and the final answer with its unit. Write clearly in " +
         "English; another module will translate your answer.";
 }

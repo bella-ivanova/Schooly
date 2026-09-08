@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace StudyAssistant.Services;
@@ -26,6 +27,7 @@ public static class StemPipelineTestRunner
         int routedToStem = 0, structuredOk = 0, fallbackUsed = 0, totalFailures = 0;
         int retrySum = 0, questionsWithRetries = 0;
         int subjectMismatches = 0;
+        long elapsedMsSum = 0;
 
         foreach (var q in fixture.Questions)
         {
@@ -45,7 +47,11 @@ public static class StemPipelineTestRunner
             }
 
             routedToStem++;
+            var sw = Stopwatch.StartNew();
             var (reasoning, narration) = await rag.AskStemDiagnosticAsync(q.Question);
+            sw.Stop();
+            elapsedMsSum += sw.ElapsedMilliseconds;
+            Console.WriteLine($"Elapsed: {sw.ElapsedMilliseconds}ms");
 
             retrySum += reasoning.RetryCount;
             if (reasoning.RetryCount > 0) questionsWithRetries++;
@@ -85,6 +91,8 @@ public static class StemPipelineTestRunner
             Console.WriteLine($"Total pipeline failures (degraded to generic path): {totalFailures}/{routedToStem}");
             var avgRetries = retrySum / (double)routedToStem;
             Console.WriteLine($"Malformed-JSON retry rate: {questionsWithRetries}/{routedToStem} questions needed at least one retry (avg {avgRetries:F2} retries/question).");
+            var avgElapsedMs = elapsedMsSum / (double)routedToStem;
+            Console.WriteLine($"Elapsed time: {elapsedMsSum}ms total, {avgElapsedMs:F0}ms avg/question across {routedToStem} STEM-routed questions.");
         }
     }
 }
