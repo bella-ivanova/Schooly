@@ -400,6 +400,7 @@ public class RAGService
             "Students know all prerequisites for concepts present in their grade material.\n" +
             "Keep simple answers short; provide detailed explanations for complex topics.\n" +
             "Only say 'This is not covered in your current grade.' if the subject is entirely absent from the material.\n" +
+            StemAnswerPipelineService.GeometryDisambiguationNote + "\n" +
             languageInstruction;
 
         var apiMsg =

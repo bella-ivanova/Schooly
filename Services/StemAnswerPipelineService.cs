@@ -177,6 +177,26 @@ public class StemAnswerPipelineService
         "\n--- End of draft ---\n\n" +
         "<student_question>\n" + question + "\n</student_question>";
 
+    // Added 2026-09-05 after a reported wrong answer for a regular-pyramid lateral-edge
+    // problem: neither Qwen nor BgGPT has any way to distinguish the lateral edge from the
+    // slant height/apothem of a lateral face without being told, since both are "the
+    // hypotenuse of a right triangle with the height" and only differ in which base segment
+    // forms the other leg. Public so RAGService.AskGenericStreamAsync can reuse the exact
+    // same wording for the non-STEM/fallback path (same pattern as the Stage-2 narration
+    // builders below being shared statics) — the fallback path uses BgGPT directly with no
+    // structured reasoning stage, so it needs this hint just as much as Qwen does, if not
+    // more, going by the garbled free-form construction BgGPT produced without it. Scoped to
+    // solid geometry only — doesn't touch any other subject's prompt behavior.
+    public const string GeometryDisambiguationNote =
+        " For solid-geometry (pyramid/frustum) problems, first state in words exactly which " +
+        "segment is being asked for before choosing a formula: the LATERAL EDGE runs from the " +
+        "apex to a BASE VERTEX, so its horizontal leg is half of the base polygon's DIAGONAL " +
+        "(for a square base of side a, that diagonal-half is a*sqrt(2)/2) — this is a different " +
+        "segment from the SLANT HEIGHT / APOTHEM OF A LATERAL FACE, which runs from the apex to " +
+        "the MIDPOINT of a base EDGE, using half the base edge (a/2) as its horizontal leg " +
+        "instead. Both form a right triangle with the pyramid's height, but they are not " +
+        "interchangeable — picking the wrong horizontal leg is a common error to avoid.";
+
     private const string Stage1SystemPrompt =
         "You are a math/physics/chemistry problem-solving engine. You will receive textbook context " +
         "and a student's question. Solve the problem step by step using standard mathematical/ " +
@@ -193,12 +213,13 @@ public class StemAnswerPipelineService
         "Use \"numeric\" when the question asks to calculate/solve for a value; use \"conceptual\" when it " +
         "asks to explain/define/describe a concept. Keep formulas in plain notation, not LaTeX. Base " +
         "your solution on the provided textbook context where relevant; if the context is insufficient, " +
-        "still solve using standard curriculum methods. Do not write explanatory prose in Bulgarian or " +
-        "any other language — this output is machine-parsed, not shown to the student.";
+        "still solve using standard curriculum methods." + GeometryDisambiguationNote + " Do not write " +
+        "explanatory prose in Bulgarian or any other language — this output is machine-parsed, not " +
+        "shown to the student.";
 
     private const string FallbackSystemPrompt =
         "You are a math/physics/chemistry tutor. Solve the student's problem step by step using the " +
-        "provided textbook context and standard curriculum methods. Show the formula, the worked " +
-        "steps, and the final answer with its unit. Write clearly in English; another module will " +
-        "translate your answer.";
+        "provided textbook context and standard curriculum methods." + GeometryDisambiguationNote +
+        " Show the formula, the worked steps, and the final answer with its unit. Write clearly in " +
+        "English; another module will translate your answer.";
 }
