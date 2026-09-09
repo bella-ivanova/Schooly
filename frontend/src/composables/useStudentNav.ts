@@ -27,6 +27,7 @@ export function useStudentNav() {
       to: `/app/student/chat/${s.id}`,
     })),
     { label: 'All Chats', to: '/app/student/chats' },
+    { label: '3D Model Generator', to: '/app/student/stereo-models' },
     { label: 'Settings', to: '/app/student/settings' },
   ])
 

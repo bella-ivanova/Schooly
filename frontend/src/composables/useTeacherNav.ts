@@ -27,6 +27,7 @@ export function useTeacherNav() {
       to: `/app/teacher/chat/${s.id}`,
     })),
     { label: 'All Chats', to: '/app/teacher/chats' },
+    { label: '3D Model Generator', to: '/app/teacher/stereo-models' },
     { label: 'Classes', to: '/app/teacher/classes' },
     { label: 'Students', to: '/app/teacher/students' },
     { label: 'Settings', to: '/app/teacher/settings' },

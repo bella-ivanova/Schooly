@@ -15,6 +15,7 @@ public class RAGService
     private readonly LanguageDetectionService _languageDetector;
     private readonly StemSubjectClassifier _stemClassifier;
     private readonly StemAnswerPipelineService _stemPipeline;
+    private readonly StereoModelGenerationService _stereoGen;
     private readonly ILogger<RAGService> _logger;
 
     // In-memory store for temporary PDFs loaded during the current chat session only.
@@ -25,7 +26,7 @@ public class RAGService
 
     public RAGService(IChatService chat, EmbeddingService embeddingService, QdrantService qdrant,
         LanguageDetectionService languageDetector, StemSubjectClassifier stemClassifier,
-        StemAnswerPipelineService stemPipeline, ILogger<RAGService> logger,
+        StemAnswerPipelineService stemPipeline, StereoModelGenerationService stereoGen, ILogger<RAGService> logger,
         OCRService? ocr = null, MathOcrService? mathOcr = null)
     {
         _chat             = chat;
@@ -34,6 +35,7 @@ public class RAGService
         _languageDetector = languageDetector;
         _stemClassifier   = stemClassifier;
         _stemPipeline     = stemPipeline;
+        _stereoGen        = stereoGen;
         _logger           = logger;
         _ocr              = ocr;
         _mathOcr          = mathOcr;
@@ -441,7 +443,7 @@ public class RAGService
         // below, well after this task is awaited.
         var isStereometry = StereometryDetector.IsStereometryQuestion(question);
         var sceneTask = isStereometry
-            ? GenerateStereoBlockAsync(question, context)
+            ? _stereoGen.GenerateSceneAsync(question, context)
             : Task.FromResult<string?>(null);
 
         var result = await _stemPipeline.SolveAsync(question, context);
@@ -461,80 +463,6 @@ public class RAGService
 
         if (scene != null)
             yield return $"\n<STEREO>{scene}</STEREO>";
-    }
-
-    private const int SceneGenerationMaxRetries = 2; // up to 2 retries on invalid JSON (3 attempts total)
-
-    // Generates only the <STEREO> scene JSON for a stereometry question, independent
-    // of Qwen's numeric/conceptual answer — run concurrently with the STEM reasoning
-    // stage (see AskStemStreamAsync above). Reuses the same instruction/schema the
-    // generic path appends inline. Fails open: a broken or slow scene call must never
-    // affect the actual answer.
-    //
-    // The system prompt deliberately lets the model briefly work the problem in prose
-    // before the <STEREO> block (ExtractSceneJson discards everything outside the tags
-    // anyway) rather than instructing it to "produce ONLY the scene, no other text" —
-    // tested directly against Ollama first: the "ONLY the scene" framing left the model
-    // with nowhere to derive coordinates from, and it answered by copying the
-    // instruction's own worked example verbatim into the tags instead of computing one
-    // for the actual question; letting it reason first produced a correct,
-    // question-specific scene instead. numCtx is set explicitly (matching
-    // StemAnswerPipelineService.ReasoningNumCtx) for the same reason it mattered there —
-    // this call includes the same potentially-large RAG context, and NumCtx left unset
-    // defaults to Ollama's much smaller ~4096 window (see the STEM pipeline's
-    // Fixed 2026-09-04/05 note).
-    //
-    // Retries on invalid JSON, same shape as StemAnswerPipelineService.TryStructuredAsync:
-    // direct testing against Ollama showed the *same* prompt/config produced a valid,
-    // question-specific JSON scene on one call and a bogus XML-tag-styled block (would
-    // fail to parse in the viewer) on another at the same temperature — inherent sampling
-    // variance, not something a single attempt can be trusted to avoid.
-    private async Task<string?> GenerateStereoBlockAsync(string question, string context)
-    {
-        var systemPrompt =
-            "You are a school tutor helping visualize 3D geometry for a student's " +
-            "solid-geometry question. Briefly work through the problem, identifying the " +
-            "shape and key measurements, then follow the instructions below to describe " +
-            "the 3D scene.\n" + StereometryService.Instruction;
-
-        var userMessage =
-            "--- Textbook Material ---\n" +
-            context +
-            "\n--- End of Material ---\n\n" +
-            "<student_question>\n" + question + "\n</student_question>";
-
-        for (int attempt = 0; attempt <= SceneGenerationMaxRetries; attempt++)
-        {
-            try
-            {
-                var raw = await _chat.OneShotAsync(systemPrompt, userMessage, numPredict: 1536, numCtx: 16384);
-                var sceneJson = StereometryService.ExtractSceneJson(raw);
-
-                if (sceneJson != null)
-                {
-                    JsonDocument.Parse(sceneJson).Dispose(); // throws JsonException if malformed
-                    return sceneJson;
-                }
-
-                _logger.LogWarning(
-                    "STEREO scene generation attempt {Attempt}/{Max} produced no <STEREO> block for {Question}",
-                    attempt + 1, SceneGenerationMaxRetries + 1, question);
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogWarning(ex,
-                    "STEREO scene generation attempt {Attempt}/{Max} produced malformed JSON for {Question}",
-                    attempt + 1, SceneGenerationMaxRetries + 1, question);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Concurrent STEREO scene generation failed for question {Question}", question);
-                return null;
-            }
-        }
-
-        _logger.LogWarning("STEREO scene generation exhausted all attempts for {Question}", question);
-        return null;
     }
 
     // Non-streaming diagnostic variant of the STEM pipeline, used only by the CLI test

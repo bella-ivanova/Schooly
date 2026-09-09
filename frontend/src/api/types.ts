@@ -111,6 +111,26 @@ export interface SceneHtmlResponse {
   html: string
 }
 
+// ── Stereo model generator (Student + Teacher) ──────────────────────────
+
+export interface GenerateStereoModelResponse {
+  id: number
+  scene: string
+}
+
+export interface SavedStereoModelSummary {
+  id: number
+  question: string
+  createdAt: string
+}
+
+export interface SavedStereoModelDetail {
+  id: number
+  question: string
+  scene: string
+  createdAt: string
+}
+
 // ── Student dashboard ────────────────────────────────────────────────────
 
 export interface WeakSpot {

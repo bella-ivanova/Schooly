@@ -133,6 +133,7 @@ builder.Services.AddScoped<MathOcrService>(sp =>
     new MathOcrService(sp.GetRequiredService<IHttpClientFactory>().CreateClient("mathocr")));
 builder.Services.AddScoped<StemSubjectClassifier>();
 builder.Services.AddScoped<StemAnswerPipelineService>();
+builder.Services.AddScoped<StereoModelGenerationService>();
 // RAGService must be Scoped — _currentGrade and _temporaryChunks are per-request state.
 builder.Services.AddScoped<RAGService>();
 builder.Services.AddScoped<SubjectResolutionService>();
@@ -143,6 +144,7 @@ builder.Services.AddScoped<SchoolAdminService>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<PracticeQuestionService>();
 builder.Services.AddScoped<ExamService>();
+builder.Services.AddScoped<StereoModelService>();
 // Stateless after AddAllLanguages() loads its embedded n-gram profiles — safe to share.
 builder.Services.AddSingleton<LanguageDetectionService>();
 

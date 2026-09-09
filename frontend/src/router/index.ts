@@ -63,6 +63,18 @@ const router = createRouter({
       meta: { roles: ['student'] },
     },
     {
+      path: '/app/student/stereo-models',
+      name: 'student-stereo-models',
+      component: () => import('../views/StudentStereoModelsView.vue'),
+      meta: { roles: ['student'] },
+    },
+    {
+      path: '/app/student/stereo-models/:id',
+      name: 'student-stereo-model-detail',
+      component: () => import('../views/StudentStereoModelDetailView.vue'),
+      meta: { roles: ['student'] },
+    },
+    {
       path: '/app/student/settings',
       name: 'student-settings',
       component: () => import('../views/StudentSettingsView.vue'),
@@ -108,6 +120,18 @@ const router = createRouter({
       path: '/app/teacher/students/:studentId',
       name: 'teacher-student-detail',
       component: () => import('../views/TeacherStudentDetailView.vue'),
+      meta: { roles: ['teacher'] },
+    },
+    {
+      path: '/app/teacher/stereo-models',
+      name: 'teacher-stereo-models',
+      component: () => import('../views/TeacherStereoModelsView.vue'),
+      meta: { roles: ['teacher'] },
+    },
+    {
+      path: '/app/teacher/stereo-models/:id',
+      name: 'teacher-stereo-model-detail',
+      component: () => import('../views/TeacherStereoModelDetailView.vue'),
       meta: { roles: ['teacher'] },
     },
     {

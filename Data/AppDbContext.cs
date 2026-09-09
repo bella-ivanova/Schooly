@@ -20,6 +20,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<PasswordResetCode> PasswordResetCodes { get; set; }
     public DbSet<SavedExam> SavedExams { get; set; }
+    public DbSet<SavedStereoModel> SavedStereoModels { get; set; }
     public DbSet<SchoolTeacherCode> SchoolTeacherCodes { get; set; }
     public DbSet<RateLimitEntry> RateLimitEntries { get; set; }
 
@@ -206,6 +207,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         {
             b.Property(e => e.UserId).IsRequired().HasMaxLength(450);
             b.Property(e => e.Topic).IsRequired().HasMaxLength(300);
+            b.HasIndex(e => new { e.UserId, e.CreatedAt });
+
+            b.HasOne(e => e.User)
+             .WithMany()
+             .HasForeignKey(e => e.UserId)
+             .IsRequired()
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SavedStereoModel>(b =>
+        {
+            b.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+            b.Property(e => e.Question).IsRequired().HasMaxLength(2000);
             b.HasIndex(e => new { e.UserId, e.CreatedAt });
 
             b.HasOne(e => e.User)
