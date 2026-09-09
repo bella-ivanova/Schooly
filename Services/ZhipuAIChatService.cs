@@ -40,7 +40,10 @@ public class ZhipuAIChatService : IChatService
             _messages.Add(new ChatMsg(role == "assistant" ? "assistant" : "user", content));
     }
 
-    public async Task<string> OneShotAsync(string systemPrompt, string userMessage)
+    // numCtx has no equivalent in ZhipuAI's OpenAI-compatible request body (context
+    // window is server/model-side there, not a per-request field) — accepted only to
+    // satisfy the shared interface; this implementation is unregistered/unused today.
+    public async Task<string> OneShotAsync(string systemPrompt, string userMessage, int numPredict = 512, int? numCtx = null)
     {
         var body = JsonSerializer.Serialize(new
         {
@@ -51,6 +54,7 @@ public class ZhipuAIChatService : IChatService
             },
             stream      = false,
             temperature = Temperature,
+            max_tokens  = numPredict,
         });
 
         using var request = new HttpRequestMessage(HttpMethod.Post, BaseUrl)

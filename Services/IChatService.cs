@@ -4,7 +4,7 @@ public interface IChatService
 {
     double Temperature { get; set; }
     void SetSystemPrompt(string prompt);
-    Task<string> OneShotAsync(string systemPrompt, string userMessage);
+    Task<string> OneShotAsync(string systemPrompt, string userMessage, int numPredict = 512, int? numCtx = null);
     Task StreamMessageAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null);
     Task<string> StreamMessageFilteredAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null);
     IAsyncEnumerable<string> StreamTokensAsync(string newUserMessage, string? apiMessage = null, string? systemPromptOverride = null);

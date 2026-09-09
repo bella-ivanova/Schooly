@@ -314,7 +314,97 @@ manual test, only by rerunning the same fixture repeatedly and noticing inconsis
   parameter count of this specific pulled tag isn't confirmed) sequentially per STEM question
   was not observed to cause swap thrashing during testing on this machine, but wasn't
   specifically stress-tested for it either — watch `ollama ps` during heavier concurrent use
-  if STEM-question latency becomes a complaint.
+  if STEM-question latency becomes a complaint. The stereometry fix below is the first place
+  both models are deliberately invoked *at the same time* rather than sequentially for a
+  single question — worth watching first if this risk ever materializes.
+- **Fixed 2026-09-08: stereometry questions never rendered the 3D viewer on the web chat
+  path at all.** Root cause: `StereometryDetector.IsStereometryQuestion` and
+  `StereometryService.Instruction` (the "append a `<STEREO>...</STEREO>` scene JSON block"
+  prompt text) were both dead code — confirmed via `grep`, zero call sites anywhere in the
+  app. This wiring only ever existed in the now-deleted CLI console mode
+  (`RAGService.Ask` + `OllamaChatService.StreamMessageFilteredAsync` +
+  `VisualisationService`); when the app moved to the ASP.NET Core Web API, the new
+  `AskStreamAsync` never carried the instruction over, and the later STEM refactor
+  (`AskGenericStreamAsync`) extracted that same, already-broken prompt body verbatim. So
+  `ChatController.cs`'s `StereometryService.ExtractSceneJson(fullResponse.ToString())` call
+  was always looking for a block nothing had ever asked the model to produce — `scene` was
+  `null` in the "done" SSE frame unconditionally. Since `StemSubjectClassifier` buckets
+  "geometry" under `math` (see above), most real stereometry questions are routed into the
+  STEM pipeline rather than the generic path, and per explicit product decision they must
+  keep going through it (for Qwen's stronger numeric/geometric reasoning) rather than being
+  routed around it just to reach the generic path's prompt. Fix, in two parts:
+  - `AskGenericStreamAsync` (non-STEM-classified stereometry questions, and the STEM
+    total-failure degrade-to-generic path) now appends `StereometryService.Instruction` to
+    its system prompt when `StereometryDetector.IsStereometryQuestion(question)` — one BgGPT
+    call producing narration plus a trailing scene block, same shape the original CLI feature
+    used.
+  - `AskStemStreamAsync` (the STEM path) does **not** append the instruction to the
+    narration prompt Qwen's JSON drives — `StemAnswer`'s schema has no field for a 3D scene,
+    and BgGPT's narration-from-JSON prompt is deliberately narrow ("do not introduce new
+    facts"). Instead, a new `RAGService.GenerateStereoBlockAsync` helper makes a *separate*
+    one-shot BgGPT call (`_chat.OneShotAsync`, reusing `StereometryService.Instruction`
+    verbatim) that produces only the scene JSON, independent of Qwen's solved answer. This
+    call is started *before* `await _stemPipeline.SolveAsync(...)` and only awaited
+    afterward, so it runs **concurrently with Qwen's `think: true` reasoning call** (a
+    directly-measured single such call took 112 seconds — see above — during which BgGPT was
+    previously sitting completely idle). This is safe because Qwen's reasoning
+    (`StemAnswerPipelineService`'s injected `_reasoningChat`) and BgGPT (`RAGService`'s
+    injected `_chat`) are already two independent `OllamaChatService` instances with separate
+    `_messages`/`Temperature` state — no shared mutable state is touched concurrently, and
+    the scene task is always awaited before BgGPT's narration call starts, so `_chat` never
+    has two in-flight calls at once. Once both finish, the generated block is spliced onto
+    the end of the narration token stream as one final chunk
+    (`\n<STEREO>{scene}</STEREO>`) rather than being requested from the same call that
+    narrates.
+  - `IChatService.OneShotAsync` gained optional `numPredict` (default `512`, unchanged for
+    every existing caller) and `numCtx` (default `null`, i.e. Ollama's own default) parameters
+    so this new scene-only call could request `numPredict: 1536, numCtx: 16384` — headroom a
+    JSON blob with several vertices/edges/faces/helpers needs beyond the default, and (for
+    `numCtx`) protection against the exact same context-window ceiling already diagnosed for
+    Qwen below, since this call carries the same potentially-large RAG `context` string. Both
+    are no-ops for `ZhipuAIChatService` (unregistered/unused; `numPredict` maps to `max_tokens`
+    in its request body, `numCtx` has no equivalent there).
+  - `GenerateStereoBlockAsync`'s system prompt deliberately lets the model briefly reason in
+    prose before the `<STEREO>` block (`ExtractSceneJson` discards everything outside the tags
+    anyway) rather than instructing "produce ONLY the scene, no other text" — tested directly
+    against Ollama first: the "ONLY the scene" framing left the model nowhere to derive
+    coordinates from, and it answered by copying the instruction's own worked example verbatim
+    into the tags instead of computing one for the actual question; letting it reason first
+    (mirroring how the instruction was originally written to be used — narrate, then append)
+    produced a correct, question-specific scene instead.
+  - Even with that fix, direct repeated testing against Ollama showed the *same* prompt/config
+    could still produce a bogus, non-JSON block (an XML-tag-styled scene that would fail to
+    parse in the viewer) on one call and a valid, schema-correct JSON scene on another —
+    inherent sampling variance at BgGPT's default temperature, not something a single attempt
+    can be trusted to avoid. `GenerateStereoBlockAsync` now validates the extracted block via
+    `JsonDocument.Parse` and retries up to `SceneGenerationMaxRetries = 2` times (3 attempts
+    total) on a missing/malformed block, the same shape as
+    `StemAnswerPipelineService.TryStructuredAsync`'s JSON retry loop. Observed live: a
+    real end-to-end run needed 2 failed attempts before a 3rd succeeded — confirming the retry
+    was not just defensive but load-bearing.
+  - Turning the instruction back on meant the model would start actually emitting
+    `<STEREO>...</STEREO>` blocks, which would otherwise show up as raw visible JSON in the
+    chat bubble and get persisted into chat history verbatim. `StereometryService` gained
+    `StripSceneBlock` (removes the block before the "assistant" message is saved via
+    `ChatLogService.SaveMessageAsync`) and `StereoStreamFilter` (a small stateful class using
+    the same look-ahead-buffer technique as `StreamMessageFilteredAsync`, now used by
+    `ChatController.SendMessage` to withhold the block from the SSE `token` frames sent to
+    the client while still accumulating the raw text for `ExtractSceneJson`/persistence).
+  - Verified end-to-end against the real running app (`stereo_verify_test`, Grade 10, a
+    right-prism diagonal question hitting real Grade 10 Math RAG context): STEM routing
+    preserved (BgGPT's narration read like the structured-numeric narration branch and
+    reproduced the correct answer, `2·√17` cm), the "done" frame's `scene` field contained
+    valid JSON with exactly the expected `vertices/edges/faces/helpers/angles/camera` keys, no
+    `<STEREO>`/JSON substring appeared in any `token` SSE frame, and the persisted
+    `ChatMessages` row was clean prose. One open observation: total request latency (~7
+    minutes, including 2 failed scene-generation retries) did not clearly show the scene-
+    generation and Qwen calls overlapping in wall-clock time on this machine — consistent with
+    the "Known, unresolved risk" note above about this being a single-GPU/16GB machine where
+    concurrent Ollama requests may serialize rather than truly parallelize regardless of how
+    the application dispatches them. The code correctly starts both calls concurrently
+    (verified by reading `AskStemStreamAsync`); whether that yields a wall-clock speedup is an
+    Ollama-server/hardware concern (`OLLAMA_NUM_PARALLEL`, available VRAM), not an application
+    bug.
 
 ## Definition of Done
 

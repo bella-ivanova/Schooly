@@ -237,9 +237,13 @@ public static class StereometryHtmlBuilder
           }
 
           // ── Vertex label sprites ─────────────────────────────────────
-          for (const [label, pos] of Object.entries(SCENE.vertices || {})) {
+          // Must use V (already shifted to centre the base at the origin), not the
+          // raw SCENE.vertices coordinates — every edge/face/helper above reads from
+          // V, so a label built from the unshifted coordinates would sit offset from
+          // its own vertex by the exact recentring shift.
+          for (const [label, v] of Object.entries(V)) {
             const sp = makeVertexSprite(label);
-            sp.position.set(pos[0], pos[1], pos[2]);
+            sp.position.copy(v);
             pivot.add(sp);
           }
 

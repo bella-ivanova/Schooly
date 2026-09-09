@@ -62,4 +62,59 @@ public static class StereometryService
         var match = Regex.Match(llmResponse, @"<STEREO>([\s\S]*?)</STEREO>", RegexOptions.IgnoreCase);
         return match.Success ? match.Groups[1].Value.Trim() : null;
     }
+
+    // ── Removes the <STEREO>...</STEREO> block so persisted/logged chat text
+    //    never stores the raw scene JSON alongside the narration ─────────────
+    public static string StripSceneBlock(string llmResponse) =>
+        Regex.Replace(llmResponse, @"<STEREO>([\s\S]*?)</STEREO>", "", RegexOptions.IgnoreCase).TrimEnd();
+}
+
+// ── Suppresses a <STEREO>...</STEREO> block from a live token stream ──────
+// so the student never sees the raw scene JSON while it's still being
+// accumulated for extraction elsewhere. Same look-ahead-buffer technique as
+// OllamaChatService.StreamMessageFilteredAsync, adapted to hand back the
+// safe-to-display text instead of writing to Console.
+public class StereoStreamFilter
+{
+    private const string OpenTag = "<STEREO>";
+
+    private readonly System.Text.StringBuilder _buffer = new();
+    private bool _suppressing;
+
+    // Feed the next raw chunk; returns whatever part of it is safe to display now.
+    public string Feed(string chunk)
+    {
+        if (_suppressing) return "";
+
+        _buffer.Append(chunk);
+        var buf = _buffer.ToString();
+        var idx = buf.IndexOf(OpenTag, StringComparison.Ordinal);
+
+        if (idx >= 0)
+        {
+            _suppressing = true;
+            var visible = buf[..idx];
+            _buffer.Clear();
+            return visible;
+        }
+
+        // Hold back the last (OpenTag.Length - 1) chars in case they're the
+        // start of a tag split across chunks.
+        var safeLen = buf.Length - (OpenTag.Length - 1);
+        if (safeLen <= 0) return "";
+
+        var safe = buf[..safeLen];
+        _buffer.Remove(0, safeLen);
+        return safe;
+    }
+
+    // Call once after the stream ends: releases any buffered text that was
+    // being held back but never turned out to be the start of a <STEREO> tag.
+    public string Flush()
+    {
+        if (_suppressing) return "";
+        var remaining = _buffer.ToString();
+        _buffer.Clear();
+        return remaining;
+    }
 }

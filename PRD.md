@@ -17,6 +17,8 @@ The system extracts the JSON scene description and returns it as a structured `s
 **When a student's message is classified as math, physics, or chemistry:**
 A one-shot classifier call resolves the subject before the main answer is generated. If it resolves to one of those three subjects, the answer goes through a two-stage pipeline instead of the default single-model path: a reasoning model (`qwen3.5:9b`) solves the problem using the retrieved RAG context and emits a structured JSON answer (never prose shown to the student), and the production chat model (`todorov/bggpt`) then narrates that JSON into fluent Bulgarian, reproducing every number, unit, and formula exactly rather than re-deriving or translating them. If the reasoning model's structured output can't be parsed after retries, a plain-prose fallback from the same reasoning model is narrated instead; if that also fails, the request degrades to the default single-model path rather than surfacing an error. This is entirely internal to `POST /api/chat/message` — the request/response shape and SSE frame contract below are identical regardless of which path served the answer, and every other subject is unaffected. See `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section for the full mechanism.
 
+If the question is additionally detected as solid-geometry (stereometry), a separate one-shot call to the production chat model generates the `<STEREO>` scene JSON described below — started before the reasoning model's call is awaited so the two run concurrently, then appended once both finish. This still produces the same `scene` field in the same "done" frame shape as any other stereometry question; the two-stage pipeline is not bypassed for stereometry.
+
 **When a student deletes a chat session (`DELETE /api/chat/sessions/{id}`):**
 The session and its messages are removed if the caller owns it; 404 otherwise. Used by the chat UI's "Past Chats" list.
 
@@ -154,7 +156,7 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 
 - [x] `POST /api/chat/message` exists, requires a valid JWT, and streams the LLM response
 - [x] RAG context is grade-filtered: a grade-8 student never receives chunks from grade-9 or higher material
-- [x] When the LLM output contains a `<STEREO>` block, the response includes a structured `scene` field with the extracted JSON; the text field contains the response with the block removed
+- [x] When the LLM output contains a `<STEREO>` block, the response includes a structured `scene` field with the extracted JSON; the text field contains the response with the block removed. Fixed 2026-09-08 (previously always `null` in practice — the web chat path never actually instructed the model to emit one; confirmed via a live end-to-end run, not just code inspection — see `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section)
 - [x] A math/physics/chemistry question is routed through the Qwen structured-reasoning pipeline before BgGPT narrates the answer, with the resulting numbers/formulas verified to match what the reasoning stage produced; a non-STEM question's answer is unaffected; both confirmed via `dotnet run -- test-stem-pipeline` (`StemPipelineTestRunner.cs`) rather than a live browser session — see `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section
 - [x] Off-curriculum questions produce a polite refusal message, not a hallucinated answer
 - [x] `POST /api/chat/upload` accepts a PDF, ingests it into a session-scoped temporary store, and affects all subsequent `/api/chat/message` calls in that session
@@ -228,7 +230,7 @@ PdfPig plain-text extraction runs on every page by default (fast, no OCR/languag
 Ingestion chunks each PDF page independently (`PDFLoader.ChunkPages`) rather than treating the whole document as one string, so a single ~400-char chunk never mixes content from two different pages — including a page's Pix2Text formula block, which is guaranteed to be chunked from that same page's own prose, never an adjacent page's. Pages with under 20 characters of cleaned text (a blank divider page, or a page whose only content was a bare page number) are skipped rather than merged into a neighboring page. Each stored chunk's Qdrant payload records its 1-indexed source page (`page`) for provenance.
 
 **Malformed `<STEREO>` block from LLM**
-If the regex extraction in `StereometryService.ExtractSceneJson()` finds no valid JSON, the `scene` field is `null` in the response. The text response is always returned regardless.
+If the regex extraction in `StereometryService.ExtractSceneJson()` finds no valid JSON, the `scene` field is `null` in the response. The text response is always returned regardless. For STEM-routed (math/physics/chemistry) stereometry questions specifically, the scene-generation call retries up to 3 total attempts on invalid/missing JSON before giving up — direct testing showed the same prompt could non-deterministically produce a non-JSON block, so a single attempt could not be trusted.
 
 **Qdrant returns zero results**
 The LLM is still called, but with an empty context block and the curriculum-restriction system prompt. The expected output is a refusal, not an attempt to answer from training data.

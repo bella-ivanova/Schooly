@@ -49,7 +49,7 @@ public class OllamaChatService : IChatService
 
     // Sends a single message with a completely fresh history so the call never
     // bleeds into (or is contaminated by) the ongoing conversation state.
-    public async Task<string> OneShotAsync(string systemPrompt, string userMessage)
+    public async Task<string> OneShotAsync(string systemPrompt, string userMessage, int numPredict = 512, int? numCtx = null)
     {
         var tempMessages = new List<Message>
         {
@@ -62,7 +62,7 @@ public class OllamaChatService : IChatService
             Model    = _model,
             Messages = tempMessages,
             Stream   = false,
-            Options  = new RequestOptions { Temperature = (float)Temperature, NumPredict = 512 }
+            Options  = new RequestOptions { Temperature = (float)Temperature, NumPredict = numPredict, NumCtx = numCtx }
         };
 
         var sb = new System.Text.StringBuilder();

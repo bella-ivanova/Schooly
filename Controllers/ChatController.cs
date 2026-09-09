@@ -87,11 +87,24 @@ public class ChatController : ControllerBase
         await HttpContext.Response.Body.FlushAsync();
 
         var fullResponse = new StringBuilder();
+        var streamFilter = new StereoStreamFilter();
 
         await foreach (var token in _rag.AskStreamAsync(req.Message))
         {
             fullResponse.Append(token);
-            var payload = JsonSerializer.Serialize(new { token });
+            var visible = streamFilter.Feed(token);
+            if (visible.Length > 0)
+            {
+                var payload = JsonSerializer.Serialize(new { token = visible });
+                await HttpContext.Response.WriteAsync($"data: {payload}\n\n");
+                await HttpContext.Response.Body.FlushAsync();
+            }
+        }
+
+        var trailing = streamFilter.Flush();
+        if (trailing.Length > 0)
+        {
+            var payload = JsonSerializer.Serialize(new { token = trailing });
             await HttpContext.Response.WriteAsync($"data: {payload}\n\n");
             await HttpContext.Response.Body.FlushAsync();
         }
@@ -101,7 +114,7 @@ public class ChatController : ControllerBase
         await HttpContext.Response.WriteAsync($"data: {donePayload}\n\n");
         await HttpContext.Response.Body.FlushAsync();
 
-        var answer = fullResponse.ToString();
+        var answer = StereometryService.StripSceneBlock(fullResponse.ToString());
         var (subject, topic) = await _chatLog.DetectSubjectTopicAsync(req.Message);
 
         var schoolId = await _chatSessions.ResolveSchoolIdAsync(userId);
