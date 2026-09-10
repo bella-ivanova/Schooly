@@ -436,31 +436,49 @@ public class RAGService
             ? $"Respond entirely in {languageName}."
             : "Respond in the same language the student used in their question.";
 
-        // Kick off scene generation (BgGPT, _chat) before awaiting Qwen's reasoning
-        // call so the two run concurrently — Qwen's think:true call is slow (~112s
-        // observed) and BgGPT would otherwise sit idle for that entire window. Safe to
-        // share _chat here because nothing else touches it until narration starts
-        // below, well after this task is awaited.
+        // Kick off Qwen's reasoning call first -- it gates the first content the student
+        // sees, so its request should reach Ollama's queue ahead of anything else. Scene
+        // generation (BgGPT, _chat) is started right after, still hoping to overlap with
+        // Qwen's think:true call (~112s observed) where the server allows it, but its
+        // result is NOT awaited here -- the scene block is invisible to the student until
+        // spliced onto the very end of the stream (and filtered out of visible tokens
+        // entirely), so it must never delay narration from starting. Safe to share _chat
+        // between scene generation and narration below: GenerateSceneAsync only ever uses
+        // a fresh per-call temp message list and never touches _chat's shared _messages
+        // history, so it can't race with StreamTokensAsync's history append.
+        var resultTask = _stemPipeline.SolveAsync(question, context);
+
         var isStereometry = StereometryDetector.IsStereometryQuestion(question);
         var sceneTask = isStereometry
             ? _stereoGen.GenerateSceneAsync(question, context)
             : Task.FromResult<string?>(null);
 
-        var result = await _stemPipeline.SolveAsync(question, context);
-        var scene = await sceneTask;
+        var result = await resultTask;
 
         var (narrationSystemPrompt, narrationUserContent) = BuildNarrationPrompt(result, question, languageInstruction);
 
         if (narrationSystemPrompt == null)
         {
+            // Total STEM failure -- degrade to the generic path. sceneTask is deliberately
+            // left un-awaited: GenerateSceneAsync catches every exception internally and
+            // returns null/logs on failure, so there's no unobserved-exception risk, and
+            // its result would be discarded anyway.
             await foreach (var token in AskGenericStreamAsync(question, context, languageName))
                 yield return token;
             yield break;
         }
 
+        // Stream narration to the client as soon as Qwen resolves -- do not wait on
+        // sceneTask first. This is the actual latency fix: previously the scene await sat
+        // here before narration ever started, so a slow (possibly 3x-retried) scene call
+        // delayed the first token the student ever saw.
         await foreach (var token in _chat.StreamTokensAsync(question, narrationUserContent, narrationSystemPrompt))
             yield return token;
 
+        // Only now, after narration has fully streamed, do we need the scene. By this
+        // point sceneTask has had the whole narration-streaming window to finish on its
+        // own, so this await is often near-instant.
+        var scene = await sceneTask;
         if (scene != null)
             yield return $"\n<STEREO>{scene}</STEREO>";
     }

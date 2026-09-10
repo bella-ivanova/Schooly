@@ -8,6 +8,12 @@ public static class StereometryService
     public const string Instruction =
         "At the end of your response, append a JSON block wrapped in <STEREO> and </STEREO> tags " +
         "describing the 3D geometry. Do not explain the JSON.\n" +
+        "CRITICAL: The worked examples below illustrate the JSON FORMAT only. Every coordinate, " +
+        "side length, height, and angle in them belongs to that example's own problem, not to " +
+        "the student's actual question. Never copy a number from an example — first compute the " +
+        "base half-width, half-diagonal, height, and any requested edge/segment length from the " +
+        "actual numbers given in the student's question, then use only those computed values as " +
+        "coordinates.\n" +
         "Format:\n" +
         "{\n" +
         "  \"vertices\": { \"A\":[x,y,z], \"B\":[x,y,z], ... },\n" +
@@ -54,7 +60,11 @@ public static class StereometryService
         "{\"kind\":\"right_angle\",\"corner\":\"N\",\"d1\":\"M\",\"d2\":\"S\",\"size\":0.5,\"color\":\"#aaaaaa\"}," +
         "{\"kind\":\"arc\",\"center\":\"M\",\"from\":\"N\",\"to\":\"S\",\"radius\":1.2,\"color\":\"#ff4444\",\"label\":\"α\"}]," +
         "\"angles\":[{\"face\":\"SAB ∩ основа\",\"value\":\"≈69.4°\",\"color\":\"#ff4444\"}]," +
-        "\"camera\":{\"rotX\":-0.3,\"rotY\":0.5,\"zoom\":1.0}}";
+        "\"camera\":{\"rotX\":-0.3,\"rotY\":0.5,\"zoom\":1.0}}\n" +
+        "REMINDER: the example directly above is for a DIFFERENT pyramid with its OWN side=6/" +
+        "height=8 numbers — its [-3,0,-3]/[0,8,0]/69.4° etc. are not your answer. Recompute every " +
+        "coordinate and angle from the actual side/height/measurements given in the student's " +
+        "question below before you output your <STEREO> block.";
 
     // ── Extracts the JSON between <STEREO> and </STEREO> tags ─────────────
     public static string? ExtractSceneJson(string llmResponse)

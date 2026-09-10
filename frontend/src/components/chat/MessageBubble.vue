@@ -10,6 +10,7 @@ const props = defineProps<{
   topic?: string | null
   scene?: string | null
   streaming?: boolean
+  statusText?: string | null
   practiceQuestions?: string[] | null
   loadingPracticeQuestions?: boolean
 }>()
@@ -29,7 +30,7 @@ const renderedContent = computed(() => renderMarkdown(props.content))
     <div v-else class="bubble assistant-card">
       <p v-if="tag" class="tag">{{ tag }}</p>
       <div class="body" v-html="renderedContent" />
-      <p v-if="streaming && !content" class="typing">•••</p>
+      <p v-if="streaming && !content" class="typing">{{ statusText ?? '•••' }}</p>
 
       <StereometryViewer v-if="scene" :scene="scene" />
 

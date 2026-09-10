@@ -15,6 +15,7 @@ interface DisplayMessage {
   topic?: string | null
   scene?: string | null
   streaming?: boolean
+  statusText?: string
   practiceQuestions?: string[] | null
   loadingPracticeQuestions?: boolean
 }
@@ -117,6 +118,8 @@ async function sendMessage(text: string) {
         if (isNewChat) {
           router.replace(`${props.basePath}/${frame.sessionId}`)
         }
+      } else if (frame.kind === 'status') {
+        assistantMsg.statusText = frame.message
       } else if (frame.kind === 'token') {
         assistantMsg.content += frame.token
         scrollToBottom()
@@ -233,6 +236,7 @@ async function handleDeleteClick() {
           :topic="m.topic"
           :scene="m.scene"
           :streaming="m.streaming"
+          :status-text="m.statusText"
           :practice-questions="m.practiceQuestions"
           :loading-practice-questions="m.loadingPracticeQuestions"
           @request-practice-questions="requestPracticeQuestions(i)"

@@ -14,26 +14,50 @@ namespace StudyAssistant.Controllers;
 [Route("api/chat")]
 public class ChatController : ControllerBase
 {
-    private readonly RAGService         _rag;
-    private readonly RateLimiter        _rateLimiter;
-    private readonly ChatLogService     _chatLog;
-    private readonly ChatSessionService _chatSessions;
-    private readonly IUserRepository    _users;
+    private readonly RAGService              _rag;
+    private readonly RateLimiter             _rateLimiter;
+    private readonly ChatLogService          _chatLog;
+    private readonly ChatSessionService      _chatSessions;
+    private readonly IUserRepository         _users;
+    private readonly LanguageDetectionService _languageDetector;
+
+    // How long to wait with no new token/done frame before emitting a "still working on
+    // it" status frame — long STEM reasoning calls (up to ~112s each, occasionally
+    // several in a row on retry) would otherwise leave the client staring at total
+    // silence for minutes with no indication anything is happening.
+    private static readonly TimeSpan ThinkingHeartbeatInterval = TimeSpan.FromSeconds(4);
+    private static readonly string[] ThinkingMessagesEn =
+    {
+        "Thinking through your question…",
+        "Still working on it…",
+        "Almost there…",
+    };
+    private static readonly string[] ThinkingMessagesBg =
+    {
+        "Обмислям въпроса ти…",
+        "Все още работя по него…",
+        "Почти готово…",
+    };
 
     public ChatController(RAGService rag, RateLimiter rateLimiter, ChatLogService chatLog,
-        ChatSessionService chatSessions, IUserRepository users)
+        ChatSessionService chatSessions, IUserRepository users, LanguageDetectionService languageDetector)
     {
-        _rag          = rag;
-        _rateLimiter  = rateLimiter;
-        _chatLog      = chatLog;
-        _chatSessions = chatSessions;
-        _users        = users;
+        _rag              = rag;
+        _rateLimiter      = rateLimiter;
+        _chatLog          = chatLog;
+        _chatSessions     = chatSessions;
+        _users            = users;
+        _languageDetector = languageDetector;
     }
 
     // POST /api/chat/message
     // Streams the LLM response token-by-token via Server-Sent Events.
     // Frames, in order:
     //   data: {"sessionId":N}\n\n                          — always first
+    //   data: {"status":"..."}\n\n                          — zero or more, interleaved
+    //                                                          anywhere before "done"; fires
+    //                                                          only when >~4s pass with no
+    //                                                          new token ready
     //   data: {"token":"..."}\n\n                           — zero or more
     //   data: {"done":true,"scene":<json or null>}\n\n
     //   data: {"title":"...","subject":"...","classId":N|null,"className":"..."|null}\n\n  — only on the session's first exchange
@@ -89,16 +113,47 @@ public class ChatController : ControllerBase
         var fullResponse = new StringBuilder();
         var streamFilter = new StereoStreamFilter();
 
-        await foreach (var token in _rag.AskStreamAsync(req.Message))
+        var languageName = _languageDetector.DetectLanguageName(req.Message);
+        var thinkingMessages = languageName == "English" ? ThinkingMessagesEn : ThinkingMessagesBg;
+        var heartbeatIndex = 0;
+
+        // Manually pump the enumerator (this is exactly what `await foreach` desugars to)
+        // so each MoveNextAsync() can be raced against a heartbeat timer without RAGService
+        // ever knowing this layer exists. MoveNextAsync() returns a ValueTask<bool>, unsafe
+        // to await twice, so it's converted to a Task<bool> exactly once per iteration and
+        // reused for both the race and the final result read.
+        var enumerator = _rag.AskStreamAsync(req.Message).GetAsyncEnumerator();
+        try
         {
-            fullResponse.Append(token);
-            var visible = streamFilter.Feed(token);
-            if (visible.Length > 0)
+            while (true)
             {
-                var payload = JsonSerializer.Serialize(new { token = visible });
-                await HttpContext.Response.WriteAsync($"data: {payload}\n\n");
-                await HttpContext.Response.Body.FlushAsync();
+                var moveNextTask = enumerator.MoveNextAsync().AsTask();
+
+                while (await Task.WhenAny(moveNextTask, Task.Delay(ThinkingHeartbeatInterval)) != moveNextTask)
+                {
+                    var statusPayload = JsonSerializer.Serialize(
+                        new { status = thinkingMessages[heartbeatIndex % thinkingMessages.Length] });
+                    heartbeatIndex++;
+                    await HttpContext.Response.WriteAsync($"data: {statusPayload}\n\n");
+                    await HttpContext.Response.Body.FlushAsync();
+                }
+
+                if (!await moveNextTask) break;
+
+                var token = enumerator.Current;
+                fullResponse.Append(token);
+                var visible = streamFilter.Feed(token);
+                if (visible.Length > 0)
+                {
+                    var payload = JsonSerializer.Serialize(new { token = visible });
+                    await HttpContext.Response.WriteAsync($"data: {payload}\n\n");
+                    await HttpContext.Response.Body.FlushAsync();
+                }
             }
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
         }
 
         var trailing = streamFilter.Flush();

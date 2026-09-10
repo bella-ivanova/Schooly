@@ -81,6 +81,7 @@ export interface ChatMessageRequest {
 
 export type ChatSseFrame =
   | { kind: 'session'; sessionId: number }
+  | { kind: 'status'; message: string }
   | { kind: 'token'; token: string }
   | { kind: 'done'; scene: string | null }
   | { kind: 'meta'; title: string; subject: string; classId: number | null; className: string | null }
