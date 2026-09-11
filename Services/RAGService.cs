@@ -16,6 +16,7 @@ public class RAGService
     private readonly StemSubjectClassifier _stemClassifier;
     private readonly StemAnswerPipelineService _stemPipeline;
     private readonly StereoModelGenerationService _stereoGen;
+    private readonly StemPipelineOptions _stemOptions;
     private readonly ILogger<RAGService> _logger;
 
     // In-memory store for temporary PDFs loaded during the current chat session only.
@@ -26,7 +27,8 @@ public class RAGService
 
     public RAGService(IChatService chat, EmbeddingService embeddingService, QdrantService qdrant,
         LanguageDetectionService languageDetector, StemSubjectClassifier stemClassifier,
-        StemAnswerPipelineService stemPipeline, StereoModelGenerationService stereoGen, ILogger<RAGService> logger,
+        StemAnswerPipelineService stemPipeline, StereoModelGenerationService stereoGen,
+        StemPipelineOptions stemOptions, ILogger<RAGService> logger,
         OCRService? ocr = null, MathOcrService? mathOcr = null)
     {
         _chat             = chat;
@@ -36,6 +38,7 @@ public class RAGService
         _stemClassifier   = stemClassifier;
         _stemPipeline     = stemPipeline;
         _stereoGen        = stereoGen;
+        _stemOptions      = stemOptions;
         _logger           = logger;
         _ocr              = ocr;
         _mathOcr          = mathOcr;
@@ -379,7 +382,10 @@ public class RAGService
 
         if (subject != StemSubject.None)
         {
-            await foreach (var token in AskStemStreamAsync(question, context, languageName))
+            var stemStream = _stemOptions.DirectAnswer
+                ? AskStemDirectStreamAsync(question, context, languageName)
+                : AskStemStreamAsync(question, context, languageName);
+            await foreach (var token in stemStream)
                 yield return token;
             yield break;
         }
@@ -483,13 +489,78 @@ public class RAGService
             yield return $"\n<STEREO>{scene}</STEREO>";
     }
 
+    // Direct-answer mode (Llm:StemDirectAnswer=true, the default): Qwen reasons AND writes the
+    // final student-facing answer itself, skipping the Stage 2 BgGPT narration hand-off that
+    // AskStemStreamAsync above uses. Same stereo-scene concurrency pattern as above (kicked off
+    // early, only awaited after the answer has fully streamed). Because the answer is a live
+    // stream rather than an already-awaited result, "did the whole thing fail" has to be
+    // checked by pulling the first item manually before yielding anything — C# disallows
+    // `yield return` inside a try block that has a catch clause, so the first MoveNextAsync is
+    // done in its own try/catch, and only the rest of the iteration is a try/finally.
+    private async IAsyncEnumerable<string> AskStemDirectStreamAsync(string question, string context, string? languageName)
+    {
+        var languageInstruction = languageName is not null
+            ? $"Respond entirely in {languageName}."
+            : "Respond in the same language the student used in their question.";
+
+        var isStereometry = StereometryDetector.IsStereometryQuestion(question);
+        var sceneTask = isStereometry
+            ? _stereoGen.GenerateSceneAsync(question, context)
+            : Task.FromResult<string?>(null);
+
+        var enumerator = _stemPipeline.StreamDirectAnswerAsync(question, context, languageInstruction).GetAsyncEnumerator();
+        bool hasFirst = false;
+        bool failedBeforeFirstToken = false;
+        try
+        {
+            hasFirst = await enumerator.MoveNextAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Qwen direct-answer stream failed before any content for {Question}; degrading to generic path.", question);
+            failedBeforeFirstToken = true;
+        }
+
+        if (failedBeforeFirstToken || !hasFirst)
+        {
+            if (!failedBeforeFirstToken)
+                _logger.LogWarning("Qwen direct-answer stream produced no content for {Question}; degrading to generic path.", question);
+            await foreach (var token in AskGenericStreamAsync(question, context, languageName))
+                yield return token;
+            yield break;
+        }
+
+        // A STEM-path failure must never reach the student as an error, same principle as
+        // AskStemStreamAsync above -- but once the first token has already streamed, a
+        // mid-stream failure here is not caught, matching the existing risk profile of every
+        // other streaming call in this codebase (AskGenericStreamAsync/AskStemStreamAsync's
+        // narration call have no mid-stream fallback either).
+        yield return enumerator.Current;
+        try
+        {
+            while (await enumerator.MoveNextAsync())
+                yield return enumerator.Current;
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+
+        var scene = await sceneTask;
+        if (scene != null)
+            yield return $"\n<STEREO>{scene}</STEREO>";
+    }
+
     // Non-streaming diagnostic variant of the STEM pipeline, used only by the CLI test
     // harness (dotnet run -- test-stem-pipeline) so it can log the complete Qwen JSON/prose
     // alongside BgGPT's full narrated answer for a question. Uses _chat.OneShotAsync (fresh
     // history each call) rather than the streaming/history-appending path, so running many
     // unrelated fixture questions in one process doesn't contaminate each other's context.
     // Not used by any HTTP endpoint.
-    public async Task<(StemReasoningResult Reasoning, string Narration)> AskStemDiagnosticAsync(string question)
+    //
+    // Reasoning is null when Llm:StemDirectAnswer routes this call through direct mode -- there
+    // is no Stage-1/Stage-2 split to report in that case, only the final Narration text.
+    public async Task<(StemReasoningResult? Reasoning, string Narration)> AskStemDiagnosticAsync(string question)
     {
         question = InputSanitizer.SanitizeUserInput(question, maxLength: 2000);
         var context = await GetContextAsync(question);
@@ -497,6 +568,14 @@ public class RAGService
         var languageInstruction = languageName is not null
             ? $"Respond entirely in {languageName}."
             : "Respond in the same language the student used in their question.";
+
+        if (_stemOptions.DirectAnswer)
+        {
+            var sb = new System.Text.StringBuilder();
+            await foreach (var chunk in _stemPipeline.StreamDirectAnswerAsync(question, context, languageInstruction))
+                sb.Append(chunk);
+            return (null, sb.Length > 0 ? sb.ToString() : "[Qwen direct-answer stream produced no content.]");
+        }
 
         var result = await _stemPipeline.SolveAsync(question, context);
         var (narrationSystemPrompt, narrationUserContent) = BuildNarrationPrompt(result, question, languageInstruction);

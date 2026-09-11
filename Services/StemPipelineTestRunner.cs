@@ -24,7 +24,7 @@ public static class StemPipelineTestRunner
         Console.WriteLine($"Loaded fixture '{fixturePath}': {fixture.Questions.Count} questions.");
         Console.WriteLine();
 
-        int routedToStem = 0, structuredOk = 0, fallbackUsed = 0, totalFailures = 0;
+        int routedToStem = 0, structuredOk = 0, fallbackUsed = 0, totalFailures = 0, directAnswers = 0;
         int retrySum = 0, questionsWithRetries = 0;
         int subjectMismatches = 0;
         long elapsedMsSum = 0;
@@ -53,30 +53,38 @@ public static class StemPipelineTestRunner
             elapsedMsSum += sw.ElapsedMilliseconds;
             Console.WriteLine($"Elapsed: {sw.ElapsedMilliseconds}ms");
 
-            retrySum += reasoning.RetryCount;
-            if (reasoning.RetryCount > 0) questionsWithRetries++;
-            Console.WriteLine($"Structured JSON retries used: {reasoning.RetryCount}");
-
-            if (reasoning.Structured != null)
+            if (reasoning == null)
             {
-                structuredOk++;
-                var reserialized = JsonSerializer.Serialize(reasoning.Structured, new JsonSerializerOptions { WriteIndented = true });
-                Console.WriteLine("Stage 1 (Qwen, structured JSON):");
-                Console.WriteLine(reserialized);
-            }
-            else if (reasoning.FallbackProse != null)
-            {
-                fallbackUsed++;
-                Console.WriteLine("Stage 1 (Qwen, FALLBACK PROSE — structured JSON was exhausted):");
-                Console.WriteLine(reasoning.FallbackProse);
+                directAnswers++;
+                Console.WriteLine("Direct-answer mode (Llm:StemDirectAnswer=true): Qwen produced the final answer itself — no separate structured/narration stages.");
             }
             else
             {
-                totalFailures++;
-                Console.WriteLine("Stage 1 FAILED ENTIRELY — pipeline degraded to the generic single-stage answer path.");
+                retrySum += reasoning.RetryCount;
+                if (reasoning.RetryCount > 0) questionsWithRetries++;
+                Console.WriteLine($"Structured JSON retries used: {reasoning.RetryCount}");
+
+                if (reasoning.Structured != null)
+                {
+                    structuredOk++;
+                    var reserialized = JsonSerializer.Serialize(reasoning.Structured, new JsonSerializerOptions { WriteIndented = true });
+                    Console.WriteLine("Stage 1 (Qwen, structured JSON):");
+                    Console.WriteLine(reserialized);
+                }
+                else if (reasoning.FallbackProse != null)
+                {
+                    fallbackUsed++;
+                    Console.WriteLine("Stage 1 (Qwen, FALLBACK PROSE — structured JSON was exhausted):");
+                    Console.WriteLine(reasoning.FallbackProse);
+                }
+                else
+                {
+                    totalFailures++;
+                    Console.WriteLine("Stage 1 FAILED ENTIRELY — pipeline degraded to the generic single-stage answer path.");
+                }
             }
 
-            Console.WriteLine("Stage 2 (BgGPT, final Bulgarian narration):");
+            Console.WriteLine(reasoning == null ? "Final answer (Qwen, direct mode):" : "Stage 2 (BgGPT, final Bulgarian narration):");
             Console.WriteLine(narration);
             Console.WriteLine();
         }
@@ -86,6 +94,7 @@ public static class StemPipelineTestRunner
         Console.WriteLine($"Classifier mismatches vs expected subject: {subjectMismatches}/{fixture.Questions.Count}");
         if (routedToStem > 0)
         {
+            Console.WriteLine($"Direct-answer mode (Qwen produced the final answer itself): {directAnswers}/{routedToStem}");
             Console.WriteLine($"Structured JSON succeeded: {structuredOk}/{routedToStem}");
             Console.WriteLine($"Fallback prose used (structured JSON exhausted): {fallbackUsed}/{routedToStem}");
             Console.WriteLine($"Total pipeline failures (degraded to generic path): {totalFailures}/{routedToStem}");

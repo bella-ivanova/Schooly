@@ -299,6 +299,40 @@ public class OllamaChatService : IChatService
         return fullResponse.ToString();
     }
 
+    // Streaming sibling of OneShotReasoningAsync: exposes Think/numPredict/numCtx (which
+    // StreamTokensAsync below does not) for a reasoning-model caller that wants to stream its
+    // own final answer directly rather than hand off structured JSON to another model. Fresh
+    // temp message list each call, same as OneShotAsync/OneShotReasoningAsync — this method
+    // never touches _messages, so the reasoning model keeps no memory across calls here.
+    // Only Content chunks are yielded; Thinking chunks (the think:true reasoning trace) are
+    // silently dropped so they never leak into a caller's visible output stream.
+    public async IAsyncEnumerable<string> StreamReasoningTokensAsync(
+        string systemPrompt, string userMessage, bool think = false, int numPredict = 512, int? numCtx = null)
+    {
+        var tempMessages = new List<Message>
+        {
+            new Message { Role = ChatRole.System, Content = systemPrompt },
+            new Message { Role = ChatRole.User,   Content = userMessage  }
+        };
+
+        var request = new ChatRequest
+        {
+            Model    = _model,
+            Messages = tempMessages,
+            Stream   = true,
+            Think    = think,
+            Options  = new RequestOptions { Temperature = (float)Temperature, NumPredict = numPredict, NumCtx = numCtx }
+        };
+
+        await foreach (var token in _ollama.ChatAsync(request))
+        {
+            if (token == null) continue;
+            var chunk = token.Message?.Content;
+            if (!string.IsNullOrEmpty(chunk))
+                yield return chunk;
+        }
+    }
+
     // Yields tokens as they arrive so HTTP endpoints can stream via SSE.
     // Does not write to Console — callers decide how to surface the output.
     public async IAsyncEnumerable<string> StreamTokensAsync(

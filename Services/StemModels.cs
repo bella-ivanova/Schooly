@@ -16,3 +16,8 @@ public enum StemSubject { None, Math, Physics, Chemistry }
 // success; both null means the whole reasoning stage failed and the caller should degrade
 // to the generic single-stage pipeline.
 public record StemReasoningResult(StemAnswer? Structured, string? FallbackProse, int RetryCount);
+
+// Switch between the two-stage Qwen(JSON)->BgGPT(narration) pipeline and a direct mode where
+// Qwen streams the full final answer itself. Backed by config key Llm:StemDirectAnswer,
+// read once in Program.cs and registered as a singleton so RAGService can branch on it.
+public record StemPipelineOptions(bool DirectAnswer);

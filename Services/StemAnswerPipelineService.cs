@@ -131,6 +131,29 @@ public class StemAnswerPipelineService
         "\n--- End of Material ---\n\n" +
         "<student_question>\n" + question + "\n</student_question>";
 
+    // ---- Direct-answer mode (Llm:StemDirectAnswer): Qwen reasons AND writes the final
+    // student-facing answer itself, skipping the Stage 2 BgGPT narration hand-off entirely.
+    // Kept as an addition alongside SolveAsync/TryStructuredAsync/TryFallbackProseAsync rather
+    // than replacing them, so the original split pipeline stays reachable byte-for-byte via
+    // the config switch. ----
+
+    // Opposite framing from Stage1SystemPrompt/FallbackSystemPrompt below: those two tell
+    // Qwen its output is machine-parsed / will be translated by another module. This one
+    // tells Qwen its output IS the final answer shown to the student.
+    public static string BuildDirectAnswerSystemPrompt(string languageInstruction) =>
+        "You are a school tutor answering a math/physics/chemistry question for a student. Think " +
+        "through the problem carefully, then write your final answer as the complete response shown " +
+        "directly to the student — this is not an internal step, and no other module will rewrite or " +
+        "translate it. Show the formula, the worked steps, and the final answer with its unit where " +
+        "applicable; for conceptual questions, give a clear, accurate explanation." +
+        GeometryDisambiguationNote + EfficientReasoningNote + " " + languageInstruction;
+
+    public IAsyncEnumerable<string> StreamDirectAnswerAsync(string question, string context, string languageInstruction) =>
+        _reasoningChat.StreamReasoningTokensAsync(
+            BuildDirectAnswerSystemPrompt(languageInstruction),
+            BuildStage1UserMessage(question, context),
+            think: true, numPredict: ReasoningNumPredict, numCtx: ReasoningNumCtx);
+
     // ---- Stage 2 (BgGPT narration) prompt builders — static so RAGService and the CLI
     // test harness share exactly one source of truth for these prompts. ----
 

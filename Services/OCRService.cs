@@ -5,6 +5,16 @@ namespace StudyAssistant.Services;
 
 public class OCRService
 {
+    // A thinking-capable vision model (e.g. qwen3.5:9b) otherwise burns its default ~4096-token
+    // context window on its internal reasoning trace before ever emitting a Content token, the
+    // same empty-Content failure already root-caused for the STEM pipeline's OneShotReasoningAsync
+    // (see StemAnswerPipelineService.cs) -- confirmed directly against this model: the identical
+    // request without `think: false` + explicit options returned empty Content while its Thinking
+    // field showed it had correctly read the image. think:false is a no-op for non-thinking models
+    // like minicpm-v, so this is safe regardless of which model Llm:OllamaVisionModel points at.
+    private const int NumPredict = 4096;
+    private const int NumCtx = 8192;
+
     private readonly HttpClient _httpClient;
     private readonly string _model;
 
@@ -27,10 +37,12 @@ public class OCRService
         {
             role = "user",
             content = "Extract all text exactly as written, including all math formulas and symbols.",
-            images = new[] { base64Image }  
+            images = new[] { base64Image }
         }
     },
-    stream = false
+    stream = false,
+    think = false,
+    options = new { num_predict = NumPredict, num_ctx = NumCtx }
     };
 
         var content = new StringContent(

@@ -113,6 +113,10 @@ var ollamaModel    = builder.Configuration["Llm:OllamaModel"]          ?? "todor
 var embedModel     = builder.Configuration["Llm:OllamaEmbedModel"]     ?? "nomic-embed-text-v2-moe";
 var visionModel    = builder.Configuration["Llm:OllamaVisionModel"]    ?? "minicpm-v";
 var reasoningModel = builder.Configuration["Llm:OllamaReasoningModel"] ?? "qwen3.5:9b";
+// Switch for the STEM pipeline: true (default) = Qwen reasons AND writes the final answer
+// itself; false = the original Qwen(JSON)->BgGPT(narration) split pipeline. Startup-time only
+// (like every other Llm:* config value here) — flip it and restart dotnet run to take effect.
+var stemDirectAnswer = builder.Configuration.GetValue<bool>("Llm:StemDirectAnswer", true);
 var qdrantHost   = builder.Configuration["Qdrant:Host"]           ?? "localhost";
 var qdrantPort   = int.TryParse(builder.Configuration["Qdrant:Port"], out var qp) ? qp : 6334;
 
@@ -134,6 +138,7 @@ builder.Services.AddScoped<MathOcrService>(sp =>
 builder.Services.AddScoped<StemSubjectClassifier>();
 builder.Services.AddScoped<StemAnswerPipelineService>();
 builder.Services.AddScoped<StereoModelGenerationService>();
+builder.Services.AddSingleton(new StemPipelineOptions(stemDirectAnswer));
 // RAGService must be Scoped — _currentGrade and _temporaryChunks are per-request state.
 builder.Services.AddScoped<RAGService>();
 builder.Services.AddScoped<SubjectResolutionService>();
