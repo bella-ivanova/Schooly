@@ -80,7 +80,7 @@ One account per role, all under "Test School" (`SchoolId` 3), password `TestPass
 | Admin | `test.admin@studyassist.test` |
 | SchoolAdmin | `test.schooladmin@studyassist.test` |
 | Teacher | `test.teacher@studyassist.test` |
-| Student | `test.student@studyassist.test` (grade 9, class A) |
+| Student | `test.student@studyassist.test` (grade 10, class A) |
 
 The Admin role has no self-service/API path to create — it was bootstrapped by registering as a student, then a direct Postgres `UPDATE "AspNetUsers" SET "Role" = 'Admin'`. Everything else (SchoolAdmin promotion, teacher registration code, teacher/student registration) went through the real API. These exist only in the local dev DB — not seeded by migrations, so a fresh DB won't have them.
 

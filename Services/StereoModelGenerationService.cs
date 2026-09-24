@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace StudyAssistant.Services;
 
@@ -75,26 +76,63 @@ public class StereoModelGenerationService
             "\n--- End of Material ---\n\n" +
             "<student_question>\n" + question + "\n</student_question>";
 
+        // Fixed 2026-09-24: a cube cross-section question ("сечение през средите на шест ръба")
+        // failed all 3 attempts with doneReason "length", evalCount 8192 and empty Content — Qwen
+        // spent the whole NumPredict budget on its think:true trace (~20k chars) before emitting a
+        // single Content token, and retrying the identical think:true call just failed the same way
+        // (23-minute chat response, no scene). Raising NumPredict would only make an already
+        // ~8-minute attempt longer and need a bigger NumCtx on a 16GB machine, so once thinking has
+        // exhausted the budget, the remaining attempts run with think:false instead — the prompt
+        // already asks the model to briefly work the problem before the <STEREO> block, so it
+        // reasons in visible Content (discarded by ExtractSceneJson) rather than the hidden trace.
+        // The switch triggers on any "length" stop, not only empty Content: a rerun of the same
+        // question ran out mid-way through some visible prose (1903 chars, no <STEREO> block), which
+        // is just as unrecoverable. A bare think:false retry then produced a wrong section (4 of the
+        // 6 "hexagon" points on one cube face), so the tail of the truncated attempt's own working
+        // is passed along as <earlier_analysis> — it usually ends where the coordinates were being
+        // derived, so the fast attempt builds on it instead of re-solving from scratch.
+        const int PriorAnalysisMaxChars = 8000;
+        var useThinking = true;
+        string? priorAnalysis = null;
+
         for (int attempt = 0; attempt <= SceneGenerationMaxRetries; attempt++)
         {
             try
             {
+                var attemptMessage = priorAnalysis == null
+                    ? userMessage
+                    : userMessage +
+                      "\n\n<earlier_analysis>\n" + priorAnalysis + "\n</earlier_analysis>\n" +
+                      "The above is your own earlier, unfinished working on this question. Reuse its " +
+                      "correct conclusions instead of re-deriving them, then output the <STEREO> block. " +
+                      "Still follow the COORDINATE SYSTEM rules exactly: base in the plane y = 0, " +
+                      "centred at x = 0, z = 0.";
+
                 var (raw, thinking, doneReason, evalCount) = await _chat.OneShotReasoningAsync(
-                    systemPrompt, userMessage, think: true, jsonFormat: false,
+                    systemPrompt, attemptMessage, think: useThinking, jsonFormat: false,
                     numPredict: ReasoningNumPredict, numCtx: ReasoningNumCtx);
                 var sceneJson = StereometryService.ExtractSceneJson(raw);
 
                 if (sceneJson != null)
                 {
                     JsonDocument.Parse(sceneJson).Dispose(); // throws JsonException if malformed
-                    return sceneJson;
+                    return RemoveCopiedExampleAngle(sceneJson, question);
                 }
 
                 _logger.LogWarning(
-                    "STEREO scene generation attempt {Attempt}/{Max} produced no <STEREO> block for {Question}. " +
+                    "STEREO scene generation attempt {Attempt}/{Max} (think: {Think}) produced no <STEREO> block for {Question}. " +
                     "Content length: {Len}, thinking length: {ThinkLen}, doneReason: {DoneReason}, evalCount: {EvalCount}",
-                    attempt + 1, SceneGenerationMaxRetries + 1, question,
+                    attempt + 1, SceneGenerationMaxRetries + 1, useThinking, question,
                     raw.Length, thinking?.Length ?? 0, doneReason ?? "(none)", evalCount);
+
+                if (useThinking && doneReason == "length")
+                {
+                    useThinking = false;
+                    var working = (thinking ?? "") + "\n" + raw;
+                    priorAnalysis = working.Length > PriorAnalysisMaxChars
+                        ? working[^PriorAnalysisMaxChars..]
+                        : working;
+                }
             }
             catch (JsonException ex)
             {
@@ -111,5 +149,43 @@ public class StereoModelGenerationService
 
         _logger.LogWarning("STEREO scene generation exhausted all attempts for {Question}", question);
         return null;
+    }
+
+    // Safety net for StereometryService.Instruction's worked-example angle leaking into the
+    // legend: a hexagonal-pyramid height question (no angle asked) came back with the example's
+    // exact "SAB ∩ основа ≈69.4°" entry (true face angle there: ≈40.9°), despite the prompt's
+    // don't-copy wording. Drops any angle entry containing 69.4 unless the question itself uses
+    // the example's own side 6/height 8 numbers. Fails open: returns the scene unchanged on any
+    // parse problem.
+    private string RemoveCopiedExampleAngle(string sceneJson, string question)
+    {
+        if (question.Contains('6') && question.Contains('8')) return sceneJson;
+
+        try
+        {
+            if (JsonNode.Parse(sceneJson) is not JsonObject scene ||
+                scene["angles"] is not JsonArray angles)
+                return sceneJson;
+
+            var copied = angles
+                .Where(a => a?["value"]?.ToString().Contains("69.4") == true)
+                .ToList();
+            if (copied.Count == 0) return sceneJson;
+
+            foreach (var entry in copied) angles.Remove(entry);
+            _logger.LogInformation(
+                "Removed {Count} angle entr(y/ies) copied from the prompt example for {Question}",
+                copied.Count, question);
+
+            return scene.ToJsonString(new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not check scene angles for copied example values");
+            return sceneJson;
+        }
     }
 }

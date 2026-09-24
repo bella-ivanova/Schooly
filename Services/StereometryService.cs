@@ -45,7 +45,9 @@ public static class StereometryService
         "- faces: each relevant face as an ordered polygon. Give each a distinct color.\n" +
         "- helpers: 'dashed' for altitude/projection lines; 'dot' for special points; " +
         "'arc' to mark the angle itself visually; 'right_angle' for 90° marks.\n" +
-        "- angles: one entry per key angle in the problem — these drive the legend and face-toggle buttons.\n" +
+        "- angles: one entry ONLY for each angle the student's question asks about (or that you actually " +
+        "computed for THIS solid), with its value computed from the question's own numbers — these drive " +
+        "the legend and face-toggle buttons. If the question involves no angle, use \"angles\": [].\n" +
         "- camera.rotX/rotY: choose values that show the relevant geometry clearly from the start.\n" +
         "Example — square pyramid SABCD (base 6, height 8), angle of face SAB with base.\n" +
         "Note: base centred at xz origin, base vertices at y=0, apex S directly above centre:\n" +
@@ -62,7 +64,8 @@ public static class StereometryService
         "\"angles\":[{\"face\":\"SAB ∩ основа\",\"value\":\"≈69.4°\",\"color\":\"#ff4444\"}]," +
         "\"camera\":{\"rotX\":-0.3,\"rotY\":0.5,\"zoom\":1.0}}\n" +
         "REMINDER: the example directly above is for a DIFFERENT pyramid with its OWN side=6/" +
-        "height=8 numbers — its [-3,0,-3]/[0,8,0]/69.4° etc. are not your answer. Recompute every " +
+        "height=8 numbers — its [-3,0,-3]/[0,8,0] coordinates and its \"SAB ∩ основа\" ≈69.4° angle " +
+        "entry are not your answer; never copy that angle entry. Recompute every " +
         "coordinate and angle from the actual side/height/measurements given in the student's " +
         "question below before you output your <STEREO> block.";
 
