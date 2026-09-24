@@ -1,0 +1,166 @@
+{
+  "questions": [
+    {
+      "id": "math-easy-01",
+      "question": "Решете уравнението: 3(x - 2) + 5 = 2x + 7. Намерете x.",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "math-easy-02",
+      "question": "Намерете лицето на правоъгълник със страни 7 cm и 4 cm.",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "math-easy-03-en",
+      "question": "Solve for x: 5x - 3 = 2x + 12.",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "math-hard-01",
+      "question": "Намерете производната на функцията f(x) = 3x^4 - 5x^3 + 2x - 7 и пресметнете f'(1).",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "math-hard-02",
+      "question": "Решете системата уравнения: 2x + 3y = 12 и x - y = 1.",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "math-conceptual-01",
+      "question": "Обяснете каква е разликата между аритметична и геометрична прогресия.",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "math-conceptual-02",
+      "question": "Какво представлява дискриминантата на квадратно уравнение и какво показва тя?",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "physics-easy-01",
+      "question": "Тяло се движи равномерно със скорост 15 m/s. За колко време ще измине разстояние 300 m?",
+      "grade": 10,
+      "expectedSubject": "Physics"
+    },
+    {
+      "id": "physics-easy-02",
+      "question": "Пресметнете кинетичната енергия на тяло с маса 2 kg, движещо се със скорост 4 m/s.",
+      "grade": 10,
+      "expectedSubject": "Physics"
+    },
+    {
+      "id": "physics-easy-03-mixed",
+      "question": "Ако F = m*a и m = 4 kg, a = 2.5 m/s², намерете F.",
+      "grade": 10,
+      "expectedSubject": "Physics"
+    },
+    {
+      "id": "physics-hard-01",
+      "question": "Тяло се хвърля под ъгъл 30° спрямо хоризонта с начална скорост 20 m/s (g = 10 m/s²). Намерете хоризонталния обхват на тялото.",
+      "grade": 10,
+      "expectedSubject": "Physics"
+    },
+    {
+      "id": "physics-hard-02",
+      "question": "Два резистора R1 = 6 Ω и R2 = 3 Ω са свързани паралелно към източник с напрежение U = 12 V. Намерете тока през R1 и тока през R2.",
+      "grade": 10,
+      "expectedSubject": "Physics"
+    },
+    {
+      "id": "physics-hard-03",
+      "question": "Тяло с маса 5 kg се плъзга надолу по наклонена равнина с ъгъл 30° спрямо хоризонта. Коефициентът на триене е μ = 0.2 (g = 10 m/s²). Намерете ускорението на тялото.",
+      "grade": 10,
+      "expectedSubject": "Physics"
+    },
+    {
+      "id": "physics-conceptual-01",
+      "question": "Формулирайте и обяснете втория закон на Нютон.",
+      "grade": 10,
+      "expectedSubject": "Physics"
+    },
+    {
+      "id": "chem-easy-01",
+      "question": "Пресметнете моларната маса на вода (H2O). (H = 1, O = 16)",
+      "grade": 10,
+      "expectedSubject": "Chemistry"
+    },
+    {
+      "id": "chem-easy-02",
+      "question": "Колко мола вещество съдържат 500 cm³ от разтвор с моларна концентрация 2 mol/dm³?",
+      "grade": 10,
+      "expectedSubject": "Chemistry"
+    },
+    {
+      "id": "chem-hard-01",
+      "question": "При реакцията 2H2 + O2 → 2H2O, колко грама вода се получават от 4 g водород (H = 1, O = 16), ако кислородът е в излишък?",
+      "grade": 10,
+      "expectedSubject": "Chemistry"
+    },
+    {
+      "id": "chem-hard-02",
+      "question": "Изчислете масовия процент на кислорода в CO2 (C = 12, O = 16).",
+      "grade": 10,
+      "expectedSubject": "Chemistry"
+    },
+    {
+      "id": "chem-conceptual-01",
+      "question": "Обяснете разликата между йонна и ковалентна химична връзка.",
+      "grade": 10,
+      "expectedSubject": "Chemistry"
+    },
+    {
+      "id": "chem-conceptual-02",
+      "question": "Какво е pH и какво показва той?",
+      "grade": 10,
+      "expectedSubject": "Chemistry"
+    },
+    {
+      "id": "stereo-pyramid-01",
+      "question": "Основният ръб на правилна четириъгълна пирамида е a = 6cm, а височината ѝ е h = 4cm. Намерете дължината на околния ръб l.",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "stereo-pyramid-02",
+      "question": "Основният ръб на правилна четириъгълна пирамида е a = 6cm, а височината ѝ е h = 4cm. Намерете дължината на околния ръб l.",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "stereo-pyramid-03",
+      "question": "Основният ръб на правилна четириъгълна пирамида е a = 6cm, а височината ѝ е h = 4cm. Намерете дължината на околния ръб l.",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "stereo-prism-diagonal-01",
+      "question": "Правилна четириъгълна призма има основен ръб a = 5 cm и височина h = 12 cm. Намерете дължината на диагонала на призмата.",
+      "grade": 10,
+      "expectedSubject": "Math"
+    },
+    {
+      "id": "neg-01",
+      "question": "Кой е авторът на романа \"Под игото\"?",
+      "grade": 10,
+      "expectedSubject": "None"
+    },
+    {
+      "id": "neg-02",
+      "question": "Опишете основните причини за избухването на Първата световна война.",
+      "grade": 10,
+      "expectedSubject": "None"
+    },
+    {
+      "id": "edge-bare-topic-01",
+      "question": "Алгебра",
+      "grade": 10,
+      "expectedSubject": "Math"
+    }
+  ]
+}

@@ -40,10 +40,11 @@ public class ZhipuAIChatService : IChatService
             _messages.Add(new ChatMsg(role == "assistant" ? "assistant" : "user", content));
     }
 
-    // numCtx has no equivalent in ZhipuAI's OpenAI-compatible request body (context
-    // window is server/model-side there, not a per-request field) — accepted only to
-    // satisfy the shared interface; this implementation is unregistered/unused today.
-    public async Task<string> OneShotAsync(string systemPrompt, string userMessage, int numPredict = 512, int? numCtx = null)
+    // numCtx and jsonFormat have no equivalent wired up in ZhipuAI's OpenAI-compatible
+    // request body here (context window is server/model-side there, not a per-request
+    // field, and response_format is not set) — both accepted only to satisfy the shared
+    // interface; this implementation is unregistered/unused today.
+    public async Task<string> OneShotAsync(string systemPrompt, string userMessage, int numPredict = 512, int? numCtx = null, bool jsonFormat = false)
     {
         var body = JsonSerializer.Serialize(new
         {

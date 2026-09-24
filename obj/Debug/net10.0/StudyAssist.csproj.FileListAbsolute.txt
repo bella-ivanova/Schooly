@@ -225,3 +225,6 @@
 /Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/LanguageDetection.dll
 /Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/TestData/RetrievalFixtures/grade10-math-v1.json
 /Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/TestData/StemFixtures/sample-questions.json
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/TestData/StemFixtures/heavy-load-v1.json
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/TestData/StemFixtures/heavy-load-v2.json
+/Users/Bella/Documents/StudyAssist/bin/Debug/net10.0/TestData/StemFixtures/pyramid-classifier-repro.json
