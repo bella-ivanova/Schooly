@@ -41,8 +41,15 @@ public static class StereometryService
         "Rules:\n" +
         "- vertices: ALL labeled points including auxiliary ones (midpoints M, feet of altitudes N/H, etc.) " +
         "with exact computed coordinates.\n" +
-        "- edges: only the solid edges of the main shape (not helpers or diagonals).\n" +
-        "- faces: each relevant face as an ordered polygon. Give each a distinct color.\n" +
+        "- ALWAYS draw the whole solid named in the question — every vertex and every edge of the cube, " +
+        "prism, pyramid, etc. — even when the question is only about a cross-section, a diagonal, an " +
+        "inscribed figure or a single segment. That section/segment goes ON TOP of the solid (as a face " +
+        "or helpers), never instead of it. A cross-section drawn without its solid is wrong.\n" +
+        "- edges: all edges of the solid itself (not helpers, diagonals, or cross-section sides).\n" +
+        "- faces: each relevant face as an ordered polygon. Give each a distinct color. Every face must " +
+        "be flat — all its points in one plane. A cross-section is ONE face listing all its points in " +
+        "order around the polygon (not just dashed helper lines); check that those points really lie " +
+        "in one plane before you output them.\n" +
         "- helpers: 'dashed' for altitude/projection lines; 'dot' for special points; " +
         "'arc' to mark the angle itself visually; 'right_angle' for 90° marks.\n" +
         "- angles: one entry ONLY for each angle the student's question asks about (or that you actually " +

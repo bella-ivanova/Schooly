@@ -14,6 +14,8 @@ interface DisplayMessage {
   subject?: string | null
   topic?: string | null
   scene?: string | null
+  scenePending?: boolean
+  sceneRequested?: boolean
   streaming?: boolean
   statusText?: string
   practiceQuestions?: string[] | null
@@ -83,6 +85,7 @@ async function initSession(id: number | undefined) {
       content: m.content,
       subject: m.subject,
       topic: m.topic,
+      scene: m.scene ?? null,
     }))
     const match = sessions.find((s) => s.id === id)
     if (match) {
@@ -105,8 +108,10 @@ async function sendMessage(text: string) {
   if (streaming.value) return
 
   messages.value.push({ role: 'user', content: text })
-  const assistantMsg: DisplayMessage = { role: 'assistant', content: '', streaming: true }
-  messages.value.push(assistantMsg)
+  messages.value.push({ role: 'assistant', content: '', streaming: true })
+  // Mutate through the reactive proxy, not the raw object pushed above, so every
+  // token/scene update re-renders on its own.
+  const assistantMsg = messages.value[messages.value.length - 1]!
   streaming.value = true
   scrollToBottom()
 
@@ -120,11 +125,15 @@ async function sendMessage(text: string) {
         }
       } else if (frame.kind === 'status') {
         assistantMsg.statusText = frame.message
+      } else if (frame.kind === 'scenePending') {
+        assistantMsg.scenePending = true
+        assistantMsg.sceneRequested = true
       } else if (frame.kind === 'token') {
         assistantMsg.content += frame.token
         scrollToBottom()
       } else if (frame.kind === 'done') {
         assistantMsg.scene = frame.scene
+        assistantMsg.scenePending = false
         assistantMsg.streaming = false
       } else if (frame.kind === 'meta') {
         sessionTitle.value = frame.title
@@ -135,6 +144,7 @@ async function sendMessage(text: string) {
     }
   } catch {
     assistantMsg.content = assistantMsg.content || 'Something went wrong while generating a response. Please try again.'
+    assistantMsg.scenePending = false
     assistantMsg.streaming = false
   } finally {
     streaming.value = false
@@ -235,6 +245,8 @@ async function handleDeleteClick() {
           :subject="m.subject"
           :topic="m.topic"
           :scene="m.scene"
+          :scene-pending="m.scenePending"
+          :scene-requested="m.sceneRequested"
           :streaming="m.streaming"
           :status-text="m.statusText"
           :practice-questions="m.practiceQuestions"

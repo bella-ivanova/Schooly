@@ -20,6 +20,7 @@ public class ChatController : ControllerBase
     private readonly ChatSessionService      _chatSessions;
     private readonly IUserRepository         _users;
     private readonly LanguageDetectionService _languageDetector;
+    private readonly ILogger<ChatController> _logger;
 
     // How long to wait with no new token/done frame before emitting a "still working on
     // it" status frame — long STEM reasoning calls (up to ~112s each, occasionally
@@ -40,7 +41,8 @@ public class ChatController : ControllerBase
     };
 
     public ChatController(RAGService rag, RateLimiter rateLimiter, ChatLogService chatLog,
-        ChatSessionService chatSessions, IUserRepository users, LanguageDetectionService languageDetector)
+        ChatSessionService chatSessions, IUserRepository users, LanguageDetectionService languageDetector,
+        ILogger<ChatController> logger)
     {
         _rag              = rag;
         _rateLimiter      = rateLimiter;
@@ -48,6 +50,7 @@ public class ChatController : ControllerBase
         _chatSessions     = chatSessions;
         _users            = users;
         _languageDetector = languageDetector;
+        _logger           = logger;
     }
 
     // POST /api/chat/message
@@ -58,6 +61,10 @@ public class ChatController : ControllerBase
     //                                                          anywhere before "done"; fires
     //                                                          only when >~4s pass with no
     //                                                          new token ready
+    //   data: {"scenePending":true}\n\n                     — at most once, as soon as RAGService
+    //                                                          has classified the question as
+    //                                                          stereometry; the scene itself only
+    //                                                          arrives in "done", after the answer
     //   data: {"token":"..."}\n\n                           — zero or more
     //   data: {"done":true,"scene":<json or null>}\n\n
     //   data: {"title":"...","subject":"...","classId":N|null,"className":"..."|null}\n\n  — only on the session's first exchange
@@ -116,6 +123,16 @@ public class ChatController : ControllerBase
         var languageName = _languageDetector.DetectLanguageName(req.Message);
         var thinkingMessages = languageName == "English" ? ThinkingMessagesEn : ThinkingMessagesBg;
         var heartbeatIndex = 0;
+        var scenePendingSent = false;
+
+        // RAGService sets SceneExpected mid-stream, once stereometry classification finishes.
+        async Task SendScenePendingIfKnownAsync()
+        {
+            if (scenePendingSent || _rag.SceneExpected != true) return;
+            scenePendingSent = true;
+            await HttpContext.Response.WriteAsync("data: {\"scenePending\":true}\n\n");
+            await HttpContext.Response.Body.FlushAsync();
+        }
 
         // Manually pump the enumerator (this is exactly what `await foreach` desugars to)
         // so each MoveNextAsync() can be raced against a heartbeat timer without RAGService
@@ -131,6 +148,7 @@ public class ChatController : ControllerBase
 
                 while (await Task.WhenAny(moveNextTask, Task.Delay(ThinkingHeartbeatInterval)) != moveNextTask)
                 {
+                    await SendScenePendingIfKnownAsync();
                     var statusPayload = JsonSerializer.Serialize(
                         new { status = thinkingMessages[heartbeatIndex % thinkingMessages.Length] });
                     heartbeatIndex++;
@@ -139,6 +157,7 @@ public class ChatController : ControllerBase
                 }
 
                 if (!await moveNextTask) break;
+                await SendScenePendingIfKnownAsync();
 
                 var token = enumerator.Current;
                 fullResponse.Append(token);
@@ -165,6 +184,9 @@ public class ChatController : ControllerBase
         }
 
         var scene = StereometryService.ExtractSceneJson(fullResponse.ToString());
+        if (_rag.SceneExpected == true && scene == null)
+            _logger.LogWarning("Stereometry question produced no 3D scene (session {SessionId}): {Question}",
+                session.Id, req.Message);
         var donePayload = JsonSerializer.Serialize(new { done = true, scene });
         await HttpContext.Response.WriteAsync($"data: {donePayload}\n\n");
         await HttpContext.Response.Body.FlushAsync();
@@ -175,7 +197,7 @@ public class ChatController : ControllerBase
         var schoolId = await _chatSessions.ResolveSchoolIdAsync(userId);
 
         await _chatLog.SaveMessageAsync(userId, session.Id, "user",      req.Message, subject, topic, schoolId);
-        await _chatLog.SaveMessageAsync(userId, session.Id, "assistant", answer,      subject, topic, schoolId);
+        await _chatLog.SaveMessageAsync(userId, session.Id, "assistant", answer,      subject, topic, schoolId, scene);
 
         if (isFirstExchange)
         {
@@ -229,7 +251,8 @@ public class ChatController : ControllerBase
             content   = m.Content,
             subject   = m.Subject?.Name,
             topic     = m.Topic,
-            timestamp = m.Timestamp
+            timestamp = m.Timestamp,
+            scene     = m.SceneJson
         });
         return Ok(response);
     }

@@ -18,4 +18,5 @@ public class ChatMessage
     [MaxLength(100)]
     public string Topic { get; set; } = "";       // e.g. "Стереометрия"
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public string? SceneJson { get; set; }        // <STEREO> scene for an assistant answer, null otherwise
 }

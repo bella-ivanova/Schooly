@@ -33,6 +33,8 @@ export async function* streamChatMessage(
       yield { kind: 'session', sessionId: data.sessionId as number }
     } else if ('status' in data) {
       yield { kind: 'status', message: data.status as string }
+    } else if ('scenePending' in data) {
+      yield { kind: 'scenePending' }
     } else if ('done' in data) {
       yield { kind: 'done', scene: (data.scene as string | null) ?? null }
     } else if ('title' in data) {

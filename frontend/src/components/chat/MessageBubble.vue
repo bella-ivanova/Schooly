@@ -9,6 +9,8 @@ const props = defineProps<{
   subject?: string | null
   topic?: string | null
   scene?: string | null
+  scenePending?: boolean
+  sceneRequested?: boolean
   streaming?: boolean
   statusText?: string | null
   practiceQuestions?: string[] | null
@@ -33,6 +35,8 @@ const renderedContent = computed(() => renderMarkdown(props.content))
       <p v-if="streaming && !content" class="typing">{{ statusText ?? '•••' }}</p>
 
       <StereometryViewer v-if="scene" :scene="scene" />
+      <p v-else-if="scenePending && content" class="scene-note">Building 3D model…</p>
+      <p v-else-if="sceneRequested && !streaming" class="scene-note">Couldn't build a 3D model for this question.</p>
 
       <template v-if="!streaming">
         <button
@@ -136,6 +140,12 @@ const renderedContent = computed(() => renderMarkdown(props.content))
 .typing {
   margin: 4px 0 0;
   letter-spacing: 3px;
+  color: var(--muted);
+}
+
+.scene-note {
+  margin: 12px 0 0;
+  font-size: 13px;
   color: var(--muted);
 }
 

@@ -94,6 +94,7 @@ public class StereoModelGenerationService
         const int PriorAnalysisMaxChars = 8000;
         var useThinking = true;
         string? priorAnalysis = null;
+        string? rejectionFeedback = null;
 
         for (int attempt = 0; attempt <= SceneGenerationMaxRetries; attempt++)
         {
@@ -106,7 +107,12 @@ public class StereoModelGenerationService
                       "The above is your own earlier, unfinished working on this question. Reuse its " +
                       "correct conclusions instead of re-deriving them, then output the <STEREO> block. " +
                       "Still follow the COORDINATE SYSTEM rules exactly: base in the plane y = 0, " +
-                      "centred at x = 0, z = 0.";
+                      "centred at x = 0, z = 0. The earlier working may focus on one part of the " +
+                      "figure (e.g. only the cross-section points) — the scene must still contain the " +
+                      "whole solid: all of its vertices and edges, with that part drawn on top of it.";
+                if (rejectionFeedback != null)
+                    attemptMessage += "\n\nYour previous <STEREO> block for this question was rejected: " +
+                                      rejectionFeedback + " Recompute the coordinates and output a corrected block.";
 
                 var (raw, thinking, doneReason, evalCount) = await _chat.OneShotReasoningAsync(
                     systemPrompt, attemptMessage, think: useThinking, jsonFormat: false,
@@ -116,7 +122,17 @@ public class StereoModelGenerationService
                 if (sceneJson != null)
                 {
                     JsonDocument.Parse(sceneJson).Dispose(); // throws JsonException if malformed
-                    return RemoveCopiedExampleAngle(sceneJson, question);
+
+                    sceneJson = RemoveDuplicateFaces(sceneJson);
+                    var problem = FindGeometryProblem(sceneJson);
+                    if (problem == null)
+                        return RemoveCopiedExampleAngle(sceneJson, question);
+
+                    _logger.LogWarning(
+                        "STEREO scene generation attempt {Attempt}/{Max} was geometrically invalid for {Question}: {Problem}",
+                        attempt + 1, SceneGenerationMaxRetries + 1, question, problem);
+                    rejectionFeedback = problem;
+                    continue;
                 }
 
                 _logger.LogWarning(
@@ -149,6 +165,154 @@ public class StereoModelGenerationService
 
         _logger.LogWarning("STEREO scene generation exhausted all attempts for {Question}", question);
         return null;
+    }
+
+    // Objective check run on every parsed scene, so a geometrically impossible one is retried
+    // instead of shown. Added 2026-09-25 after a cube cross-section question returned a
+    // "regular hexagon" with three of its six points on the same cube face — not planar, so not
+    // a section at all. Checks only what is unambiguous for any solid: every face with 4+
+    // points must be flat. Tolerance is relative to the scene's size so rounded coordinates
+    // (1.732 for √3) never trip it. Returns a short description of the first problem, or null.
+    private static string? FindGeometryProblem(string sceneJson)
+    {
+        if (JsonNode.Parse(sceneJson) is not JsonObject scene ||
+            scene["vertices"] is not JsonObject vertices)
+            return null;
+
+        var points = new Dictionary<string, (double X, double Y, double Z)>();
+        foreach (var (name, value) in vertices)
+        {
+            if (value is JsonArray { Count: >= 3 } p &&
+                TryNumber(p[0], out var x) && TryNumber(p[1], out var y) && TryNumber(p[2], out var z))
+                points[name] = (x, y, z);
+        }
+        if (points.Count == 0) return null;
+
+        var extent = new[]
+        {
+            points.Values.Max(p => p.X) - points.Values.Min(p => p.X),
+            points.Values.Max(p => p.Y) - points.Values.Min(p => p.Y),
+            points.Values.Max(p => p.Z) - points.Values.Min(p => p.Z),
+        }.Max();
+        var tolerance = Math.Max(0.05, extent * 0.02);
+
+        if (scene["faces"] is not JsonArray faces) return null;
+        foreach (var face in faces)
+        {
+            if (face?["pts"] is not JsonArray pts || pts.Count < 4) continue;
+            var facePoints = pts
+                .Select(n => n?.ToString())
+                .Where(n => n != null && points.ContainsKey(n))
+                .Select(n => points[n!])
+                .ToList();
+            if (facePoints.Count < 4) continue;
+
+            var label = face["label"]?.ToString() ?? string.Join("", pts.Select(n => n?.ToString()));
+            var deviation = MaxDistanceFromPlane(facePoints);
+            if (deviation == null)
+                continue; // all points collinear — degenerate but harmless to render
+            if (deviation > tolerance)
+                return $"face \"{label}\" ({string.Join(", ", pts.Select(n => n?.ToString()))}) is not flat — " +
+                       $"its points do not lie in one plane (off by up to {deviation:0.##}).";
+        }
+
+        // A section is sometimes drawn only as a closed loop of line/dashed helpers instead of
+        // a face. Any such loop (every point on it touching exactly two segments of the loop,
+        // 4+ points) must be flat too.
+        if (scene["helpers"] is JsonArray helpers)
+        {
+            var adjacency = new Dictionary<string, HashSet<string>>();
+            foreach (var h in helpers)
+            {
+                var kind = h?["kind"]?.ToString();
+                if (kind != "line" && kind != "dashed") continue;
+                var (from, to) = (h!["from"]?.ToString(), h["to"]?.ToString());
+                if (from == null || to == null || from == to ||
+                    !points.ContainsKey(from) || !points.ContainsKey(to)) continue;
+                (adjacency.TryGetValue(from, out var f) ? f : adjacency[from] = new()).Add(to);
+                (adjacency.TryGetValue(to, out var t) ? t : adjacency[to] = new()).Add(from);
+            }
+
+            var visited = new HashSet<string>();
+            foreach (var start in adjacency.Keys)
+            {
+                if (!visited.Add(start)) continue;
+                var component = new List<string> { start };
+                var queue = new Queue<string>([start]);
+                while (queue.Count > 0)
+                    foreach (var next in adjacency[queue.Dequeue()])
+                        if (visited.Add(next)) { component.Add(next); queue.Enqueue(next); }
+
+                if (component.Count < 4 || component.Any(n => adjacency[n].Count != 2)) continue;
+
+                var deviation = MaxDistanceFromPlane(component.Select(n => points[n]).ToList());
+                if (deviation > tolerance)
+                    return $"the closed outline {string.Join("-", component)} drawn with helper lines is not flat — " +
+                           $"its points do not lie in one plane (off by up to {deviation:0.##}).";
+            }
+        }
+        return null;
+    }
+
+    // Plane through the first three non-collinear points; returns the largest distance of any
+    // point from it, or null if every point is collinear.
+    private static double? MaxDistanceFromPlane(List<(double X, double Y, double Z)> pts)
+    {
+        var a = pts[0];
+        for (int i = 1; i < pts.Count; i++)
+        for (int j = i + 1; j < pts.Count; j++)
+        {
+            var (u, v) = (Sub(pts[i], a), Sub(pts[j], a));
+            var n = (X: u.Y * v.Z - u.Z * v.Y, Y: u.Z * v.X - u.X * v.Z, Z: u.X * v.Y - u.Y * v.X);
+            var len = Math.Sqrt(n.X * n.X + n.Y * n.Y + n.Z * n.Z);
+            if (len < 1e-9) continue;
+            return pts.Max(p =>
+            {
+                var d = Sub(p, a);
+                return Math.Abs(d.X * n.X + d.Y * n.Y + d.Z * n.Z) / len;
+            });
+        }
+        return null;
+
+        static (double X, double Y, double Z) Sub((double X, double Y, double Z) p, (double X, double Y, double Z) q) =>
+            (p.X - q.X, p.Y - q.Y, p.Z - q.Z);
+    }
+
+    private static bool TryNumber(JsonNode? node, out double value)
+    {
+        value = 0;
+        return node is JsonValue v && v.TryGetValue(out value);
+    }
+
+    // Drops faces listing the same set of points as an earlier face (seen in practice: a cube's
+    // base re-listed as "дясна страна"). Cosmetic, so fixed silently rather than retried.
+    // Fails open: returns the scene unchanged on any parse problem.
+    private string RemoveDuplicateFaces(string sceneJson)
+    {
+        try
+        {
+            if (JsonNode.Parse(sceneJson) is not JsonObject scene ||
+                scene["faces"] is not JsonArray faces)
+                return sceneJson;
+
+            var seen = new HashSet<string>();
+            var duplicates = faces
+                .Where(f => f?["pts"] is JsonArray pts &&
+                            !seen.Add(string.Join("|", pts.Select(n => n?.ToString()).OrderBy(n => n))))
+                .ToList();
+            if (duplicates.Count == 0) return sceneJson;
+
+            foreach (var face in duplicates) faces.Remove(face);
+            return scene.ToJsonString(new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not check scene faces for duplicates");
+            return sceneJson;
+        }
     }
 
     // Safety net for StereometryService.Instruction's worked-example angle leaking into the

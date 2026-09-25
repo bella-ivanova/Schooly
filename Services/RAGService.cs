@@ -14,6 +14,7 @@ public class RAGService
     private readonly MathOcrService? _mathOcr;
     private readonly LanguageDetectionService _languageDetector;
     private readonly StemSubjectClassifier _stemClassifier;
+    private readonly StereometryClassifier _stereoClassifier;
     private readonly StemAnswerPipelineService _stemPipeline;
     private readonly StereoModelGenerationService _stereoGen;
     private readonly StemPipelineOptions _stemOptions;
@@ -25,8 +26,14 @@ public class RAGService
 
     private int _currentGrade = 0;
 
+    // Set by AskStreamAsync once stereometry classification has finished: true means a
+    // <STEREO> scene will be generated and appended after the answer. null until known.
+    // ChatController polls this to tell the client a 3D model is on its way.
+    public bool? SceneExpected { get; private set; }
+
     public RAGService(IChatService chat, EmbeddingService embeddingService, QdrantService qdrant,
         LanguageDetectionService languageDetector, StemSubjectClassifier stemClassifier,
+        StereometryClassifier stereoClassifier,
         StemAnswerPipelineService stemPipeline, StereoModelGenerationService stereoGen,
         StemPipelineOptions stemOptions, ILogger<RAGService> logger,
         OCRService? ocr = null, MathOcrService? mathOcr = null)
@@ -36,6 +43,7 @@ public class RAGService
         _qdrant           = qdrant;
         _languageDetector = languageDetector;
         _stemClassifier   = stemClassifier;
+        _stereoClassifier = stereoClassifier;
         _stemPipeline     = stemPipeline;
         _stereoGen        = stereoGen;
         _stemOptions      = stemOptions;
@@ -380,24 +388,32 @@ public class RAGService
             yield break;
         }
 
+        // Must run after the STEM classifier, never alongside it: both temporarily change
+        // Temperature on the same scoped _chat instance. Physics/chemistry questions skip it —
+        // stereometry is always classified as math, and None is kept as a safety net for
+        // solid-geometry questions the STEM classifier misses.
+        var isStereometry = (subject == StemSubject.Math || subject == StemSubject.None)
+            && await _stereoClassifier.IsStereometryAsync(question);
+        SceneExpected = isStereometry;
+
         if (subject != StemSubject.None)
         {
             var stemStream = _stemOptions.DirectAnswer
-                ? AskStemDirectStreamAsync(question, context, languageName)
-                : AskStemStreamAsync(question, context, languageName);
+                ? AskStemDirectStreamAsync(question, context, languageName, isStereometry)
+                : AskStemStreamAsync(question, context, languageName, isStereometry);
             await foreach (var token in stemStream)
                 yield return token;
             yield break;
         }
 
-        await foreach (var token in AskGenericStreamAsync(question, context, languageName))
+        await foreach (var token in AskGenericStreamAsync(question, context, languageName, isStereometry))
             yield return token;
     }
 
     // Original single-stage answer path (BgGPT only, given the RAG context directly),
     // extracted verbatim from what used to be AskStreamAsync's body so it can serve both
     // non-STEM questions and the STEM pipeline's total-failure safety net below.
-    private async IAsyncEnumerable<string> AskGenericStreamAsync(string question, string context, string? languageName)
+    private async IAsyncEnumerable<string> AskGenericStreamAsync(string question, string context, string? languageName, bool isStereometry)
     {
         var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
         var languageInstruction = languageName is not null
@@ -416,7 +432,7 @@ public class RAGService
             StemAnswerPipelineService.GeometryDisambiguationNote + "\n" +
             languageInstruction;
 
-        if (StereometryDetector.IsStereometryQuestion(question))
+        if (isStereometry)
             sysOverride += "\n" + StereometryService.Instruction;
 
         var apiMsg =
@@ -436,7 +452,7 @@ public class RAGService
     // reasoning stage fails entirely (structured JSON exhausted AND the prose fallback also
     // fails), degrades to the generic path rather than surfacing an error — a student should
     // never see a broken STEM answer.
-    private async IAsyncEnumerable<string> AskStemStreamAsync(string question, string context, string? languageName)
+    private async IAsyncEnumerable<string> AskStemStreamAsync(string question, string context, string? languageName, bool isStereometry)
     {
         var languageInstruction = languageName is not null
             ? $"Respond entirely in {languageName}."
@@ -454,7 +470,6 @@ public class RAGService
         // history, so it can't race with StreamTokensAsync's history append.
         var resultTask = _stemPipeline.SolveAsync(question, context);
 
-        var isStereometry = StereometryDetector.IsStereometryQuestion(question);
         var sceneTask = isStereometry
             ? _stereoGen.GenerateSceneAsync(question, context)
             : Task.FromResult<string?>(null);
@@ -469,7 +484,7 @@ public class RAGService
             // left un-awaited: GenerateSceneAsync catches every exception internally and
             // returns null/logs on failure, so there's no unobserved-exception risk, and
             // its result would be discarded anyway.
-            await foreach (var token in AskGenericStreamAsync(question, context, languageName))
+            await foreach (var token in AskGenericStreamAsync(question, context, languageName, isStereometry))
                 yield return token;
             yield break;
         }
@@ -497,13 +512,12 @@ public class RAGService
     // checked by pulling the first item manually before yielding anything — C# disallows
     // `yield return` inside a try block that has a catch clause, so the first MoveNextAsync is
     // done in its own try/catch, and only the rest of the iteration is a try/finally.
-    private async IAsyncEnumerable<string> AskStemDirectStreamAsync(string question, string context, string? languageName)
+    private async IAsyncEnumerable<string> AskStemDirectStreamAsync(string question, string context, string? languageName, bool isStereometry)
     {
         var languageInstruction = languageName is not null
             ? $"Respond entirely in {languageName}."
             : "Respond in the same language the student used in their question.";
 
-        var isStereometry = StereometryDetector.IsStereometryQuestion(question);
         var sceneTask = isStereometry
             ? _stereoGen.GenerateSceneAsync(question, context)
             : Task.FromResult<string?>(null);
@@ -525,7 +539,7 @@ public class RAGService
         {
             if (!failedBeforeFirstToken)
                 _logger.LogWarning("Qwen direct-answer stream produced no content for {Question}; degrading to generic path.", question);
-            await foreach (var token in AskGenericStreamAsync(question, context, languageName))
+            await foreach (var token in AskGenericStreamAsync(question, context, languageName, isStereometry))
                 yield return token;
             yield break;
         }

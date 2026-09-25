@@ -7,11 +7,13 @@ namespace StudyAssistant.Services;
 public class StereoModelService
 {
     private readonly StereoModelGenerationService _generator;
+    private readonly StereometryClassifier _classifier;
     private readonly AppDbContext _db;
 
-    public StereoModelService(StereoModelGenerationService generator, AppDbContext db)
+    public StereoModelService(StereoModelGenerationService generator, StereometryClassifier classifier, AppDbContext db)
     {
         _generator = generator;
+        _classifier = classifier;
         _db = db;
     }
 
@@ -22,7 +24,7 @@ public class StereoModelService
         if (string.IsNullOrWhiteSpace(sanitized))
             return (null, null, "Please enter a question.");
 
-        if (!StereometryDetector.IsStereometryQuestion(sanitized))
+        if (!await _classifier.IsStereometryAsync(sanitized))
             return (null, null, "This doesn't look like a 3D geometry question. Describe a solid shape (pyramid, prism, cone, cylinder…) and its measurements.");
 
         var scene = await _generator.GenerateSceneAsync(sanitized);

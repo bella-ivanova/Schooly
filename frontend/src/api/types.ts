@@ -83,6 +83,7 @@ export type ChatSseFrame =
   | { kind: 'session'; sessionId: number }
   | { kind: 'status'; message: string }
   | { kind: 'token'; token: string }
+  | { kind: 'scenePending' }
   | { kind: 'done'; scene: string | null }
   | { kind: 'meta'; title: string; subject: string; classId: number | null; className: string | null }
 
@@ -102,6 +103,7 @@ export interface ChatSessionMessage {
   subject: string | null
   topic: string | null
   timestamp: string
+  scene?: string | null
 }
 
 export interface ChatUploadResponse {

@@ -31,7 +31,7 @@ public class ChatLogService
     }
 
     public async Task SaveMessageAsync(string userId, int sessionId, string role, string content,
-        string detectedSubject = "Unknown", string topic = "Unknown", int? schoolId = null)
+        string detectedSubject = "Unknown", string topic = "Unknown", int? schoolId = null, string? sceneJson = null)
     {
         int? subjectId = await _subjects.GetOrCreateSubjectIdAsync(detectedSubject, schoolId);
 
@@ -44,6 +44,7 @@ public class ChatLogService
             SubjectId = subjectId,
             Topic     = topic,
             Timestamp = DateTime.UtcNow,
+            SceneJson = sceneJson,
         });
         await _db.SaveChangesAsync();
 

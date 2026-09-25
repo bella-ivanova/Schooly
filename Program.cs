@@ -136,6 +136,7 @@ builder.Services.AddScoped<OCRService>(sp =>
 builder.Services.AddScoped<MathOcrService>(sp =>
     new MathOcrService(sp.GetRequiredService<IHttpClientFactory>().CreateClient("mathocr")));
 builder.Services.AddScoped<StemSubjectClassifier>();
+builder.Services.AddScoped<StereometryClassifier>();
 builder.Services.AddScoped<StemAnswerPipelineService>();
 builder.Services.AddScoped<StereoModelGenerationService>();
 builder.Services.AddSingleton(new StemPipelineOptions(stemDirectAnswer));
