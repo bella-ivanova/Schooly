@@ -60,12 +60,13 @@ public static class StereometryHtmlBuilder
           const xzCz = vList.reduce((s, v) => s + v.z, 0) / vList.length;
           vList.forEach(v => { v.x -= xzCx; v.y -= minY; v.z -= xzCz; });
 
-          // Centroid after shift — this is the true rotation centre.
-          const rotCx = vList.reduce((s, v) => s + v.x, 0) / vList.length;
-          const rotCy = vList.reduce((s, v) => s + v.y, 0) / vList.length;
-          const rotCz = vList.reduce((s, v) => s + v.z, 0) / vList.length;
-          const modelMidY = rotCy;
+          // Bounding-box centre after shift — the rotation centre. A vertex
+          // average would sit too low on e.g. a pyramid (4 base vertices, 1 apex).
+          const bbMid = axis => (vList.reduce((m, v) => Math.min(m, v[axis]), Infinity)
+                               + vList.reduce((m, v) => Math.max(m, v[axis]), -Infinity)) / 2;
+          const rotCx = bbMid('x'), rotCy = bbMid('y'), rotCz = bbMid('z');
 
+          // Radius of the sphere around the rotation centre holding every vertex.
           let maxDist = 1;
           vList.forEach(v => {
             const d = Math.sqrt((v.x-rotCx)**2 + (v.y-rotCy)**2 + (v.z-rotCz)**2);
@@ -93,18 +94,24 @@ public static class StereometryHtmlBuilder
           scene.add(fillLight);
 
           // ── Pivot group ─────────────────────────────────────────────
+          // pivot sits at the world origin and is what rotates; content is
+          // offset so the model's bounding-box centre lands on that origin.
           const pivot = new THREE.Group();
-          pivot.position.set(-rotCx, -rotCy, -rotCz);
+          const content = new THREE.Group();
+          content.position.set(-rotCx, -rotCy, -rotCz);
+          pivot.add(content);
           scene.add(pivot);
 
-          // Subtle grid
-          scene.add(new THREE.GridHelper(Math.max(20, maxDist * 5), 12, 0x141618, 0x111315));
+          // Subtle grid, kept below the bounding sphere so it never cuts the model
+          const grid = new THREE.GridHelper(Math.max(20, maxDist * 5), 12, 0x141618, 0x111315);
+          grid.position.y = -maxDist;
+          scene.add(grid);
 
           // ── Skeleton edges ──────────────────────────────────────────
           const edgeMat = new THREE.LineBasicMaterial({ color: 0x888780 });
           for (const [a, b] of (SCENE.edges || [])) {
             if (!V[a] || !V[b]) continue;
-            pivot.add(new THREE.Line(
+            content.add(new THREE.Line(
               new THREE.BufferGeometry().setFromPoints([V[a].clone(), V[b].clone()]),
               edgeMat
             ));
@@ -155,7 +162,7 @@ public static class StereometryHtmlBuilder
               }
             }
 
-            pivot.add(grp);
+            content.add(grp);
             faceGroups.push({ group: grp, face, pal, faceColor });
           }
 
@@ -169,13 +176,13 @@ public static class StereometryHtmlBuilder
                 const mat = new THREE.LineDashedMaterial({ color: h.color || 0xffffff, dashSize: 0.3, gapSize: 0.15 });
                 const ln  = new THREE.Line(geo, mat);
                 ln.computeLineDistances();
-                pivot.add(ln);
+                content.add(ln);
                 break;
               }
 
               case 'line': {
                 if (!V[h.from] || !V[h.to]) break;
-                pivot.add(new THREE.Line(
+                content.add(new THREE.Line(
                   new THREE.BufferGeometry().setFromPoints([V[h.from].clone(), V[h.to].clone()]),
                   new THREE.LineBasicMaterial({ color: h.color || 0xffffff })
                 ));
@@ -189,7 +196,7 @@ public static class StereometryHtmlBuilder
                   new THREE.MeshBasicMaterial({ color: h.color || 0xffffff })
                 );
                 dot.position.copy(V[h.at]);
-                pivot.add(dot);
+                content.add(dot);
                 break;
               }
 
@@ -204,7 +211,7 @@ public static class StereometryHtmlBuilder
                   const dir = d1.clone().lerp(d2, i / 32).normalize();
                   arcPts.push(cen.clone().add(dir.multiplyScalar(r)));
                 }
-                pivot.add(new THREE.Line(
+                content.add(new THREE.Line(
                   new THREE.BufferGeometry().setFromPoints(arcPts),
                   new THREE.LineBasicMaterial({ color: h.color || 0xffffff })
                 ));
@@ -212,7 +219,7 @@ public static class StereometryHtmlBuilder
                   const midDir = d1.clone().lerp(d2, 0.5).normalize();
                   const sp = makeTextSprite(h.label, h.color || '#ffffff');
                   sp.position.copy(cen.clone().add(midDir.multiplyScalar(r * 1.75)));
-                  pivot.add(sp);
+                  content.add(sp);
                 }
                 break;
               }
@@ -223,7 +230,7 @@ public static class StereometryHtmlBuilder
                 const sz = h.size !== undefined ? h.size : Math.max(0.2, maxDist * 0.07);
                 const e1 = V[h.d1].clone().sub(corner).normalize().multiplyScalar(sz);
                 const e2 = V[h.d2].clone().sub(corner).normalize().multiplyScalar(sz);
-                pivot.add(new THREE.Line(
+                content.add(new THREE.Line(
                   new THREE.BufferGeometry().setFromPoints([
                     corner.clone().add(e1),
                     corner.clone().add(e1).add(e2),
@@ -244,7 +251,7 @@ public static class StereometryHtmlBuilder
           for (const [label, v] of Object.entries(V)) {
             const sp = makeVertexSprite(label);
             sp.position.copy(v);
-            pivot.add(sp);
+            content.add(sp);
           }
 
           // ── Sprite factories ─────────────────────────────────────────
@@ -292,7 +299,8 @@ public static class StereometryHtmlBuilder
           const initRotY = camCfg.rotY !== undefined ? camCfg.rotY :  0.55;
           const initZoom = camCfg.zoom !== undefined ? camCfg.zoom :  1.0;
           let rotX = initRotX, rotY = initRotY, zoom = initZoom;
-          const baseD = 24;
+          // Same viewing angle as before; distance is fitted to the model below.
+          const camDir = new THREE.Vector3(0.7, 0.5, 1.0).normalize();
 
           function resetView() { rotX = initRotX; rotY = initRotY; zoom = initZoom; }
 
@@ -458,9 +466,13 @@ public static class StereometryHtmlBuilder
             requestAnimationFrame(loop);
             pivot.rotation.x = rotX;
             pivot.rotation.y = rotY;
-            const d = baseD * zoom;
-            camera.position.set(d * 0.7, d * 0.5, d * 1.0);
-            camera.lookAt(0, modelMidY, 0);
+            // Fit the bounding sphere into the narrower field of view (+15% margin)
+            // so no rotation can push part of the model out of frame at zoom 1.
+            const vHalf = THREE.MathUtils.degToRad(camera.fov / 2);
+            const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+            const fitDist = maxDist / Math.sin(Math.min(vHalf, hHalf)) * 1.15;
+            camera.position.copy(camDir).multiplyScalar(fitDist * zoom);
+            camera.lookAt(0, 0, 0);
             renderer.render(scene, camera);
           })();
         })();

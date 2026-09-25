@@ -53,7 +53,7 @@ function formatDate(iso: string) {
         <h1 class="page-title">{{ model.question }}</h1>
         <p class="page-subtitle">Generated {{ formatDate(model.createdAt) }}</p>
       </div>
-      <StereometryViewer :scene="model.scene" />
+      <StereometryViewer :scene="model.scene" fill />
     </template>
   </div>
 </template>
@@ -63,7 +63,8 @@ function formatDate(iso: string) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 1400px;
+  /* fill the shell's scroll area (100vh minus its 40px top/bottom padding) so the viewer can take the rest */
+  height: calc(100vh - 80px);
 }
 
 .back-link {
@@ -82,11 +83,7 @@ function formatDate(iso: string) {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  position: sticky;
-  top: -40px;
-  z-index: 2;
-  padding: 4px 0 12px;
-  background: var(--paper);
+  padding: 4px 0 0;
 }
 
 .page-title {

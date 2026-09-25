@@ -4,6 +4,7 @@ import * as chatApi from '../../api/chat'
 
 const props = defineProps<{
   scene: string
+  fill?: boolean
 }>()
 
 const html = ref<string | null>(null)
@@ -22,7 +23,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="stereo-viewer">
+  <div class="stereo-viewer" :class="{ fill }">
     <div v-if="loading" class="stereo-state">Loading 3D viewer…</div>
     <div v-else-if="error" class="stereo-state">Could not load the 3D viewer.</div>
     <iframe v-else :srcdoc="html ?? ''" sandbox="allow-scripts" class="stereo-frame" title="3D stereometry viewer" />
@@ -35,6 +36,19 @@ onMounted(async () => {
   border-radius: var(--r-sm);
   overflow: hidden;
   border: 1px solid var(--line);
+}
+
+.stereo-viewer.fill {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 400px;
+  margin-top: 0;
+}
+
+.stereo-viewer.fill .stereo-frame {
+  flex: 1;
+  height: auto;
 }
 
 .stereo-state {
