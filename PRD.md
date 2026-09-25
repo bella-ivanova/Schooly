@@ -12,12 +12,15 @@ The system embeds the query, searches Qdrant filtered to grades 1 through N (whe
 **Response language:** The LLM is instructed to answer in the same language the student used in their question, not a fixed language — this applies to chat answers, mock exams (`POST /api/student/exam`), and practice questions (`POST /api/student/practice-questions`). The app UI itself is in English regardless; response language is independent of UI language. Language is determined by `LanguageDetectionService` (offline n-gram detection) rather than left to the model to infer, since inference alone was unreliable — see `CLAUDE.md`'s Language Policy section for the current implementation and its known limits with mock exam generation.
 
 **When the LLM response contains a `<STEREO>…</STEREO>` block:**
-The system extracts the JSON scene description and returns it as a structured `scene` field alongside the text response so the frontend can render an interactive 3D geometry visualisation. The frontend fetches the rendered visualisation via `POST /api/chat/scene-html`, which takes that extracted scene JSON and returns standalone Three.js HTML (`StereometryHtmlBuilder.Build`) for display in a sandboxed `<iframe srcdoc>`.
+The system extracts the JSON scene description and returns it as a structured `scene` field alongside the text response so the frontend can render an interactive 3D geometry visualisation. The frontend fetches the rendered visualisation via `POST /api/chat/scene-html`, which takes that extracted scene JSON and returns standalone Three.js HTML (`StereometryHtmlBuilder.Build`) for display in a sandboxed `<iframe srcdoc>`. The scene is also saved on the assistant message and returned as `scene` on each message by `GET /api/chat/sessions/{id}/messages`, so the viewer reappears when a chat is reopened. As soon as the question is classified as stereometry, a `{"scenePending":true}` frame tells the frontend a scene is on its way, since it arrives only in the "done" frame after the answer has finished streaming.
 
 **When a student's message is classified as math, physics, or chemistry:**
-A one-shot classifier call resolves the subject before the main answer is generated. If it resolves to one of those three subjects, the answer goes through a two-stage pipeline instead of the default single-model path: a reasoning model (`qwen3.5:9b`) solves the problem using the retrieved RAG context and emits a structured JSON answer (never prose shown to the student), and the production chat model (`todorov/bggpt`) then narrates that JSON into fluent Bulgarian, reproducing every number, unit, and formula exactly rather than re-deriving or translating them. If the reasoning model's structured output can't be parsed after retries, a plain-prose fallback from the same reasoning model is narrated instead; if that also fails, the request degrades to the default single-model path rather than surfacing an error. This is entirely internal to `POST /api/chat/message` — the request/response shape and SSE frame contract below are identical regardless of which path served the answer, and every other subject is unaffected. See `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section for the full mechanism.
+A one-shot classifier call resolves the subject before the main answer is generated. If it resolves to one of those three subjects, the answer comes from a reasoning model (`qwen3.5:9b`) instead of the default single-model path: it reasons over the retrieved RAG context and streams its own final answer to the student (its internal reasoning trace is never sent). If it fails before any text reaches the student, the request degrades to the default single-model path rather than surfacing an error. This direct mode is the default (`Llm:StemDirectAnswer = true`). Setting that key to `false` restores the original two-stage design: Qwen emits a structured JSON answer and the production chat model (`todorov/bggpt`) narrates it into Bulgarian, with a plain-prose Qwen fallback if the JSON can't be parsed after retries. It is no longer the default because testing showed the narration stage could replace a correct Qwen answer with a wrong re-derivation. This is entirely internal to `POST /api/chat/message` — the request/response shape and SSE frame contract below are identical regardless of which path served the answer, and every other subject is unaffected. See `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section for the full mechanism.
 
-If the question is additionally detected as solid-geometry (stereometry), a separate one-shot call to the production chat model generates the `<STEREO>` scene JSON described below — started before the reasoning model's call is awaited so the two run concurrently, then appended once both finish. This still produces the same `scene` field in the same "done" frame shape as any other stereometry question; the two-stage pipeline is not bypassed for stereometry.
+If a math (or unclassified) question is additionally classified as solid geometry (stereometry) by a second one-shot classifier (`StereometryClassifier`), a separate reasoning-model call (`StereoModelGenerationService`) generates the `<STEREO>` scene JSON described above. It starts alongside the answer and is awaited only after the answer has streamed, then delivered in the "done" frame's `scene` field. The answer pipeline is not bypassed for stereometry.
+
+**When a student or teacher uses the 3D Model Generator (`POST /api/stereo-models`, body `{ question }`):**
+The question is sanitised and classified; if it isn't a solid-geometry question, the response is `400` with a readable `error`. Otherwise a scene is generated without solving or narrating the problem, saved as a `SavedStereoModel` for the caller, and returned as `{ id, scene }` (`400` if no valid scene could be produced). `GET /api/stereo-models` lists the caller's saved models (`{ id, question, createdAt }`); `GET /api/stereo-models/{id}` returns one with its `scene`, 404 if it isn't the caller's. Student and Teacher roles only; any other role gets 403.
 
 **When a student deletes a chat session (`DELETE /api/chat/sessions/{id}`):**
 The session and its messages are removed if the caller owns it; 404 otherwise. Used by the chat UI's "Past Chats" list.
@@ -157,7 +160,9 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 - [x] `POST /api/chat/message` exists, requires a valid JWT, and streams the LLM response
 - [x] RAG context is grade-filtered: a grade-8 student never receives chunks from grade-9 or higher material
 - [x] When the LLM output contains a `<STEREO>` block, the response includes a structured `scene` field with the extracted JSON; the text field contains the response with the block removed. Fixed 2026-09-08 (previously always `null` in practice — the web chat path never actually instructed the model to emit one; confirmed via a live end-to-end run, not just code inspection — see `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section)
-- [x] A math/physics/chemistry question is routed through the Qwen structured-reasoning pipeline before BgGPT narrates the answer, with the resulting numbers/formulas verified to match what the reasoning stage produced; a non-STEM question's answer is unaffected; both confirmed via `dotnet run -- test-stem-pipeline` (`StemPipelineTestRunner.cs`) rather than a live browser session — see `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section
+- [x] A math/physics/chemistry question is answered directly by Qwen by default (`Llm:StemDirectAnswer = true`), or through the Qwen-JSON → BgGPT-narration split when that key is `false`; a non-STEM question's answer is unaffected; both modes confirmed via `dotnet run -- test-stem-pipeline` (`StemPipelineTestRunner.cs`), and direct mode also via live SSE requests — see `CLAUDE.md`'s "STEM Structured-Handoff Pipeline" section
+- [x] A stereometry question emits `{"scenePending":true}` before "done"; the scene is saved on the assistant message and returned by `GET /api/chat/sessions/{id}/messages`
+- [x] `POST /api/stereo-models` returns `{ id, scene }` for a stereometry question and 400 for a non-stereometry one; `GET /api/stereo-models[/{id}]` returns only the caller's own saved models (404 otherwise); non-Student/Teacher roles get 403
 - [x] Off-curriculum questions produce a polite refusal message, not a hallucinated answer
 - [x] `POST /api/chat/upload` accepts a PDF, ingests it into a session-scoped temporary store, and affects all subsequent `/api/chat/message` calls in that session
 - [x] Every chat exchange writes two rows to `chat_messages` — one with `role = "user"`, one with `role = "assistant"` — both with a populated `subject_id` and `topic`
@@ -218,7 +223,7 @@ Returns 403 Forbidden. Unauthenticated requests receive 401 from the JWT middlew
 ## Edge Cases
 
 **Math notation in messages or PDFs**
-Pix2Text handles LaTeX at ingest time for formula-heavy textbook PDFs. The LLM must output math in LaTeX notation so the frontend can render it. No special preprocessing of user query text is needed.
+Pix2Text handles LaTeX at ingest time for formula-heavy textbook PDFs. The LLM must output math in LaTeX notation so the frontend can render it; the frontend typesets `$…$`, `$$…$$`, `\(…\)`, and `\[…\]` with KaTeX, and a malformed or half-streamed formula stays visible as plain source rather than breaking the message. No special preprocessing of user query text is needed.
 
 **Grade-1 student**
 RAG searches with an upper bound of grade 1 — no cross-grade content can appear. This is the lower bound of the filter and must not be treated as an edge case that skips filtering.
@@ -230,7 +235,7 @@ PdfPig plain-text extraction runs on every page by default (fast, no OCR/languag
 Ingestion chunks each PDF page independently (`PDFLoader.ChunkPages`) rather than treating the whole document as one string, so a single ~400-char chunk never mixes content from two different pages — including a page's Pix2Text formula block, which is guaranteed to be chunked from that same page's own prose, never an adjacent page's. Pages with under 20 characters of cleaned text (a blank divider page, or a page whose only content was a bare page number) are skipped rather than merged into a neighboring page. Each stored chunk's Qdrant payload records its 1-indexed source page (`page`) for provenance.
 
 **Malformed `<STEREO>` block from LLM**
-If the regex extraction in `StereometryService.ExtractSceneJson()` finds no valid JSON, the `scene` field is `null` in the response. The text response is always returned regardless. For STEM-routed (math/physics/chemistry) stereometry questions specifically, the scene-generation call retries up to 3 total attempts on invalid/missing JSON before giving up — direct testing showed the same prompt could non-deterministically produce a non-JSON block, so a single attempt could not be trusted.
+If no valid scene can be produced, the `scene` field is `null` in the "done" frame, the text answer is still returned, and the chat bubble says no 3D model could be built. Scene generation (`StereoModelGenerationService`) makes up to 3 attempts, retrying on missing or invalid JSON and on non-flat geometry (a face with 4+ points, or a closed helper loop, that isn't planar). If an attempt runs out of generation budget while reasoning, the remaining attempts reason less and are given the truncated attempt's partial working, instead of repeating a call that would fail the same way.
 
 **Qdrant returns zero results**
 The LLM is still called, but with an empty context block and the curriculum-restriction system prompt. The expected output is a refusal, not an attempt to answer from training data.
@@ -254,7 +259,7 @@ Embedding and LLM services handle UTF-8 natively. The only preprocessing require
 
 ## Environment Prerequisites
 
-The behavioral specification below assumes a working local LLM/OCR pipeline. Before testing: pull the Ollama models referenced by `Llm:OllamaModel`/`Llm:OllamaVisionModel`/`Llm:OllamaEmbedModel`/`Llm:OllamaReasoningModel` (currently `todorov/bggpt`, `minicpm-v`, `nomic-embed-text-v2-moe`, and `qwen3.5:9b` — see `ollama list`), and start the `pix2text` container (`docker compose up -d pix2text`). See `README.md`'s "Local Environment Prerequisites" section.
+The behavioral specification below assumes a working local LLM/OCR pipeline. Before testing: pull the Ollama models referenced by `Llm:OllamaModel`/`Llm:OllamaVisionModel`/`Llm:OllamaEmbedModel`/`Llm:OllamaReasoningModel` (currently `todorov/bggpt`, `qwen3.5:9b` — used for both vision and reasoning — and `nomic-embed-text-v2-moe`; see `ollama list`), and start the `pix2text` container (`docker compose up -d pix2text`). See `README.md`'s "Local Environment Prerequisites" section.
 
 ---
 
@@ -266,9 +271,11 @@ The backend behavioral spec above is implemented. A frontend scaffold now exists
 
 **Chat SSE frame contract** (`POST /api/chat/message`, `Content-Type: text/event-stream`), documented in code at `Controllers/ChatController.cs` above `SendMessage`, reproduced here so it doesn't require reading the controller:
 - `data: {"sessionId":N}` — always first
-- `data: {"token":"..."}` — zero or more, one per streamed token
+- `data: {"status":"..."}` — zero or more "still working on it" messages, sent anywhere before "done" when ~4s pass with no new token
+- `data: {"scenePending":true}` — at most once, as soon as the question is classified as stereometry
+- `data: {"token":"..."}` — zero or more, one per streamed token (a `<STEREO>` block is never sent as tokens)
 - `data: {"done":true,"scene":<json|null>}` — end of stream; `scene` is the extracted `<STEREO>` JSON or `null`
-- `data: {"title":"...","subject":"..."}` — only sent on the session's first exchange
+- `data: {"title":"...","subject":"...","classId":N|null,"className":"..."|null}` — only sent on the session's first exchange
 
 Note this is a `POST` with a streaming response body, not a plain `GET`-based `EventSource` — the frontend needs a `fetch` + `ReadableStream` consumer (or an SSE library that supports POST), not the browser's native `EventSource`.
 

@@ -138,4 +138,9 @@ function formatDate(iso: string) {
   margin: 0 0 12px;
   padding-left: 22px;
 }
+
+.exam-content :deep(.katex-display) {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
 </style>

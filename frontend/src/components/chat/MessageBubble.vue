@@ -196,4 +196,9 @@ const renderedContent = computed(() => renderMarkdown(props.content))
   font-size: 14px;
   color: var(--ink);
 }
+
+.body :deep(.katex-display) {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
 </style>
