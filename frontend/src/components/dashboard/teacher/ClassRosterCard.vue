@@ -106,7 +106,7 @@ function avatarClass(id: string): string {
 
 .student-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
   gap: 12px;
 }
 
@@ -123,8 +123,10 @@ function avatarClass(id: string): string {
   cursor: pointer;
 }
 
-.student-tile:hover {
-  border-color: var(--green-br);
+@media (hover: hover) and (pointer: fine) {
+  .student-tile:hover {
+    border-color: var(--green-br);
+  }
 }
 
 .student-name {
@@ -156,4 +158,53 @@ function avatarClass(id: string): string {
 .avatar-5 { background: #F6E3D0; color: #A06B33; }
 .avatar-6 { background: #D3ECE6; color: #2E7566; }
 .avatar-7 { background: #F2DCE0; color: #A15066; }
+
+/* feel: lift on desktop hover, press on every device */
+.student-tile {
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .student-tile:hover {
+    border-color: var(--green-br);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+}
+
+.student-tile:active {
+  transform: scale(0.98);
+}
+
+/* one-time stagger on first paint */
+.student-grid > * {
+  animation: rise-in 280ms var(--ease-out) backwards;
+}
+
+.student-grid > :nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.student-grid > :nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.student-grid > :nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.student-grid > :nth-child(5) {
+  animation-delay: 160ms;
+}
+
+.student-grid > :nth-child(6) {
+  animation-delay: 200ms;
+}
+
+.student-grid > :nth-child(n + 7) {
+  animation-delay: 240ms;
+}
 </style>

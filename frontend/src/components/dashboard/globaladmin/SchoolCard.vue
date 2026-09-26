@@ -37,8 +37,10 @@ const createdLabel = computed(() =>
   transition: border-color 0.15s ease;
 }
 
-.school-card:hover {
-  border-color: var(--green-br);
+@media (hover: hover) and (pointer: fine) {
+  .school-card:hover {
+    border-color: var(--green-br);
+  }
 }
 
 .school-name {
@@ -57,5 +59,25 @@ const createdLabel = computed(() =>
   margin-top: 6px;
   font-size: 13px;
   color: var(--ink-2);
+}
+
+/* feel: lift on desktop hover, press on every device */
+.school-card {
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .school-card:hover {
+    border-color: var(--green-br);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+}
+
+.school-card:active {
+  transform: scale(0.98);
 }
 </style>

@@ -49,4 +49,24 @@ defineEmits<{
   font-size: 13px;
   color: var(--muted);
 }
+
+/* feel: lift on desktop hover, press on every device */
+.class-card {
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .class-card:hover {
+    border-color: var(--green-br);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+}
+
+.class-card:active {
+  transform: scale(0.98);
+}
 </style>

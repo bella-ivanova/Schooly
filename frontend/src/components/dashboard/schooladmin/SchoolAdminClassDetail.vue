@@ -207,7 +207,7 @@ onMounted(loadAll)
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 

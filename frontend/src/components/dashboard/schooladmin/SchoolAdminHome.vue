@@ -118,33 +118,35 @@ async function handleCreateClass() {
       </div>
 
       <div class="table-card">
-        <table class="classes-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Grade</th>
-              <th>Subject</th>
-              <th>Homeroom</th>
-              <th>Students</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="cls in filteredClasses" :key="cls.id">
-              <td class="class-name">{{ cls.name }}</td>
-              <td>{{ cls.grade ?? '—' }}</td>
-              <td>{{ cls.subjectName ?? '—' }}</td>
-              <td>{{ cls.homeroomTeacherUsername ?? '—' }}</td>
-              <td>{{ cls.studentCount }}</td>
-              <td class="actions">
-                <button class="edit-link-btn" @click="openClass(cls.id)">View</button>
-              </td>
-            </tr>
-            <tr v-if="filteredClasses.length === 0">
-              <td colspan="6" class="empty">{{ classes.length === 0 ? 'No classes yet.' : 'No classes match this filter.' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="classes-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Grade</th>
+                <th>Subject</th>
+                <th>Homeroom</th>
+                <th>Students</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="cls in filteredClasses" :key="cls.id">
+                <td class="class-name">{{ cls.name }}</td>
+                <td>{{ cls.grade ?? '—' }}</td>
+                <td>{{ cls.subjectName ?? '—' }}</td>
+                <td>{{ cls.homeroomTeacherUsername ?? '—' }}</td>
+                <td>{{ cls.studentCount }}</td>
+                <td class="actions">
+                  <button class="edit-link-btn" @click="openClass(cls.id)">View</button>
+                </td>
+              </tr>
+              <tr v-if="filteredClasses.length === 0">
+                <td colspan="6" class="empty">{{ classes.length === 0 ? 'No classes yet.' : 'No classes match this filter.' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </template>
 
@@ -222,7 +224,7 @@ async function handleCreateClass() {
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 
@@ -244,7 +246,7 @@ async function handleCreateClass() {
 }
 
 .filters > * {
-  min-width: 200px;
+  min-width: min(200px, 100%);
 }
 
 .table-card {
@@ -343,7 +345,7 @@ async function handleCreateClass() {
 }
 
 .create-class-row > * {
-  min-width: 180px;
+  min-width: min(180px, 100%);
 }
 
 .create-btn {
@@ -387,4 +389,34 @@ async function handleCreateClass() {
   opacity: 0.6;
   cursor: default;
 }
+
+/* phones: scroll the table sideways, keep the first column (row identity) pinned */
+.classes-table th:first-child,
+.classes-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.classes-table td:first-child {
+  background: var(--card);
+}
+
+.classes-table th:first-child {
+  background: var(--cream-2);
+}
+
+@media (max-width: 860px) {
+  .classes-table th,
+  .classes-table td {
+    padding: 12px 14px;
+    white-space: nowrap;
+  }
+
+  .classes-table th:first-child,
+  .classes-table td:first-child {
+    box-shadow: 1px 0 0 var(--line);
+  }
+}
+
 </style>

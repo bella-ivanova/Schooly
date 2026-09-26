@@ -167,8 +167,10 @@ async function handleSubmit() {
   transition: background-color 0.15s ease;
 }
 
-.submit-btn:hover:not(:disabled) {
-  background: var(--green-br);
+@media (hover: hover) and (pointer: fine) {
+  .submit-btn:hover:not(:disabled) {
+    background: var(--green-br);
+  }
 }
 
 .submit-btn:disabled {
@@ -183,7 +185,9 @@ async function handleSubmit() {
   text-decoration: none;
 }
 
-.login-link:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .login-link:hover {
+    text-decoration: underline;
+  }
 }
 </style>

@@ -195,8 +195,10 @@ function selectOption(opt: { value: string; label: string }) {
   cursor: pointer;
 }
 
-.search-option:hover {
-  background: var(--cream-2);
+@media (hover: hover) and (pointer: fine) {
+  .search-option:hover {
+    background: var(--cream-2);
+  }
 }
 
 .search-empty {

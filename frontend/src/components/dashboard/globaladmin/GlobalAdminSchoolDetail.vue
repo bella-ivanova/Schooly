@@ -94,46 +94,50 @@ watch(schoolId, load, { immediate: true })
 
       <div class="table-card">
         <div class="section-header"><h2 class="section-title">Classes</h2></div>
-        <table class="detail-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Subject</th>
-              <th>Homeroom</th>
-              <th>Students</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="cls in schoolClasses" :key="cls.id">
-              <td class="row-name">{{ cls.name }}</td>
-              <td>{{ cls.subjectName ?? '—' }}</td>
-              <td>{{ cls.homeroomTeacherUsername ?? '—' }}</td>
-              <td>{{ cls.studentCount }}</td>
-            </tr>
-            <tr v-if="schoolClasses.length === 0">
-              <td colspan="4" class="empty">No classes yet.</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="detail-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Subject</th>
+                <th>Homeroom</th>
+                <th>Students</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="cls in schoolClasses" :key="cls.id">
+                <td class="row-name">{{ cls.name }}</td>
+                <td>{{ cls.subjectName ?? '—' }}</td>
+                <td>{{ cls.homeroomTeacherUsername ?? '—' }}</td>
+                <td>{{ cls.studentCount }}</td>
+              </tr>
+              <tr v-if="schoolClasses.length === 0">
+                <td colspan="4" class="empty">No classes yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="table-card">
         <div class="section-header"><h2 class="section-title">Subjects</h2></div>
-        <table class="detail-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="subject in schoolSubjects" :key="subject.id">
-              <td class="row-name">{{ subject.name }}</td>
-            </tr>
-            <tr v-if="schoolSubjects.length === 0">
-              <td colspan="1" class="empty">No subjects yet.</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="detail-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="subject in schoolSubjects" :key="subject.id">
+                <td class="row-name">{{ subject.name }}</td>
+              </tr>
+              <tr v-if="schoolSubjects.length === 0">
+                <td colspan="1" class="empty">No subjects yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="table-card">
@@ -141,27 +145,29 @@ watch(schoolId, load, { immediate: true })
           <h2 class="section-title">Students</h2>
           <SelectField v-model="gradeFilter" label="Grade" :options="gradeOptions" />
         </div>
-        <table class="detail-table">
-          <thead>
-            <tr>
-              <th>Username</th>
-              <th>Full name</th>
-              <th>Grade</th>
-              <th>Classes</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="user in filteredSchoolStudents" :key="user.id">
-              <td class="row-name">{{ user.username }}</td>
-              <td>{{ user.fullName }}</td>
-              <td>{{ user.grade ?? '—' }}</td>
-              <td>{{ user.classNames.length ? user.classNames.join(', ') : '—' }}</td>
-            </tr>
-            <tr v-if="filteredSchoolStudents.length === 0">
-              <td colspan="4" class="empty">{{ schoolStudents.length === 0 ? 'No students yet.' : 'No students match this filter.' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="detail-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Full name</th>
+                <th>Grade</th>
+                <th>Classes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in filteredSchoolStudents" :key="user.id">
+                <td class="row-name">{{ user.username }}</td>
+                <td>{{ user.fullName }}</td>
+                <td>{{ user.grade ?? '—' }}</td>
+                <td>{{ user.classNames.length ? user.classNames.join(', ') : '—' }}</td>
+              </tr>
+              <tr v-if="filteredSchoolStudents.length === 0">
+                <td colspan="4" class="empty">{{ schoolStudents.length === 0 ? 'No students yet.' : 'No students match this filter.' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="table-card">
@@ -169,25 +175,27 @@ watch(schoolId, load, { immediate: true })
           <h2 class="section-title">Teacher & Admin roster</h2>
           <SelectField v-model="subjectFilter" label="Subject" :options="rosterSubjectOptions" />
         </div>
-        <table class="detail-table">
-          <thead>
-            <tr>
-              <th>Username</th>
-              <th>Full name</th>
-              <th>Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="user in filteredSchoolRoster" :key="user.id">
-              <td class="row-name">{{ user.username }}</td>
-              <td>{{ user.fullName }}</td>
-              <td>{{ user.role }}</td>
-            </tr>
-            <tr v-if="filteredSchoolRoster.length === 0">
-              <td colspan="3" class="empty">{{ schoolRoster.length === 0 ? 'No teachers or admins yet.' : 'No one matches this filter.' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="detail-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Full name</th>
+                <th>Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in filteredSchoolRoster" :key="user.id">
+                <td class="row-name">{{ user.username }}</td>
+                <td>{{ user.fullName }}</td>
+                <td>{{ user.role }}</td>
+              </tr>
+              <tr v-if="filteredSchoolRoster.length === 0">
+                <td colspan="3" class="empty">{{ schoolRoster.length === 0 ? 'No teachers or admins yet.' : 'No one matches this filter.' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </template>
   </div>
@@ -224,7 +232,7 @@ watch(schoolId, load, { immediate: true })
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 
@@ -254,7 +262,7 @@ watch(schoolId, load, { immediate: true })
 }
 
 .section-header.filterable :deep(.field) {
-  min-width: 180px;
+  min-width: min(180px, 100%);
 }
 
 .section-title {
@@ -296,4 +304,34 @@ watch(schoolId, load, { immediate: true })
   text-align: center;
   color: var(--muted);
 }
+
+/* phones: scroll the table sideways, keep the first column (row identity) pinned */
+.detail-table th:first-child,
+.detail-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.detail-table td:first-child {
+  background: var(--card);
+}
+
+.detail-table th:first-child {
+  background: var(--cream-2);
+}
+
+@media (max-width: 860px) {
+  .detail-table th,
+  .detail-table td {
+    padding: 12px 14px;
+    white-space: nowrap;
+  }
+
+  .detail-table th:first-child,
+  .detail-table td:first-child {
+    box-shadow: 1px 0 0 var(--line);
+  }
+}
+
 </style>

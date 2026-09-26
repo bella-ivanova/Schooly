@@ -35,7 +35,7 @@ const renderedContent = computed(() => renderMarkdown(props.content))
       <p v-if="streaming && !content" class="typing">{{ statusText ?? '•••' }}</p>
 
       <StereometryViewer v-if="scene" :scene="scene" />
-      <p v-else-if="scenePending && content" class="scene-note">Building 3D model…</p>
+      <p v-else-if="scenePending && content" class="scene-note pending">Building 3D model…</p>
       <p v-else-if="sceneRequested && !streaming" class="scene-note">Couldn't build a 3D model for this question.</p>
 
       <template v-if="!streaming">
@@ -64,6 +64,8 @@ const renderedContent = computed(() => renderMarkdown(props.content))
 .bubble-row {
   display: flex;
   margin-bottom: 16px;
+  /* once per message on mount — token updates don't remount the row */
+  animation: rise-in 220ms var(--ease-out);
 }
 
 .bubble-row.user {
@@ -141,6 +143,17 @@ const renderedContent = computed(() => renderMarkdown(props.content))
   margin: 4px 0 0;
   letter-spacing: 3px;
   color: var(--muted);
+  animation: breathe 1.4s ease-in-out infinite;
+}
+
+.scene-note.pending {
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .scene-note {
@@ -160,6 +173,12 @@ const renderedContent = computed(() => renderMarkdown(props.content))
   font-weight: 600;
   padding: 9px 14px;
   cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .practice-btn:hover:not(:disabled) {
+    background: var(--green);
+  }
 }
 
 .practice-btn:disabled {
@@ -189,6 +208,7 @@ const renderedContent = computed(() => renderMarkdown(props.content))
 }
 
 .practice-item {
+  animation: rise-in 240ms var(--ease-out) backwards;
   margin: 0;
   padding: 10px 12px;
   border-radius: var(--r-sm);
@@ -197,8 +217,43 @@ const renderedContent = computed(() => renderMarkdown(props.content))
   color: var(--ink);
 }
 
+.practice-item:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.practice-item:nth-child(3) {
+  animation-delay: 100ms;
+}
+
 .body :deep(.katex-display) {
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+@media (max-width: 860px) {
+  .user-bubble {
+    max-width: 88%;
+    padding: 10px 14px;
+  }
+
+  .assistant-card {
+    max-width: 100%;
+    width: 100%;
+    padding: 14px 16px;
+  }
+}
+
+@media (pointer: coarse) {
+  .practice-btn {
+    min-height: var(--tap);
+    padding: 10px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing,
+  .scene-note.pending {
+    animation: none;
+  }
 }
 </style>

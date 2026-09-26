@@ -108,7 +108,7 @@ function formatDate(iso: string) {
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 
@@ -222,8 +222,10 @@ function formatDate(iso: string) {
   color: var(--ink);
 }
 
-.model-row:hover {
-  border-color: var(--green-br);
+@media (hover: hover) and (pointer: fine) {
+  .model-row:hover {
+    border-color: var(--green-br);
+  }
 }
 
 .model-question {
@@ -237,5 +239,24 @@ function formatDate(iso: string) {
   font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
+}
+
+/* feel: lift on desktop hover, press on every device */
+.model-row {
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .model-row:hover {
+    border-color: var(--green-br);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+.model-row:active {
+  transform: scale(0.98);
 }
 </style>

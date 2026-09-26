@@ -75,8 +75,10 @@ function formatDate(iso: string) {
   text-decoration: none;
 }
 
-.back-link:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .back-link:hover {
+    text-decoration: underline;
+  }
 }
 
 .header {
@@ -93,7 +95,7 @@ function formatDate(iso: string) {
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 26px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 

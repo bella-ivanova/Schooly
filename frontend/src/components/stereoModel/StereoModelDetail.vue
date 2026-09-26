@@ -63,8 +63,21 @@ function formatDate(iso: string) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  /* fill the shell's scroll area (100vh minus its 40px top/bottom padding) so the viewer can take the rest */
-  height: calc(100vh - 80px);
+  /* fill the shell's content box (same as ChatView) so the viewer can take the rest */
+  height: 100%;
+  min-height: 480px;
+}
+
+@media (max-width: 860px) {
+  .page-title {
+    font-size: 20px;
+  }
+}
+
+@media (pointer: coarse) {
+  .back-link {
+    padding: 10px 0;
+  }
 }
 
 .back-link {
@@ -75,8 +88,10 @@ function formatDate(iso: string) {
   text-decoration: none;
 }
 
-.back-link:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .back-link:hover {
+    text-decoration: underline;
+  }
 }
 
 .header {
@@ -89,7 +104,7 @@ function formatDate(iso: string) {
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 26px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 

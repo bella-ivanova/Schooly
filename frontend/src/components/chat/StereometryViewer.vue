@@ -64,5 +64,17 @@ onMounted(async () => {
   width: 100%;
   height: 360px;
   border: none;
+  /* drags inside the viewer rotate the model rather than scroll the chat */
+  touch-action: none;
+}
+
+.stereo-viewer.fill {
+  min-height: min(400px, 60dvh);
+}
+
+@media (max-width: 860px) {
+  .stereo-frame {
+    height: min(320px, 50dvh);
+  }
 }
 </style>

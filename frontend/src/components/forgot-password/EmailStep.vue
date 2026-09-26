@@ -58,8 +58,10 @@ function handleSubmit() {
   transition: background-color 0.15s ease;
 }
 
-.submit-btn:hover:not(:disabled) {
-  background: var(--green-br);
+@media (hover: hover) and (pointer: fine) {
+  .submit-btn:hover:not(:disabled) {
+    background: var(--green-br);
+  }
 }
 
 .submit-btn:disabled {

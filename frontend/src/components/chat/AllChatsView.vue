@@ -90,7 +90,7 @@ async function handleDelete(id: number) {
   padding: 4px 0 12px;
   background: var(--paper);
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 

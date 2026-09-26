@@ -59,25 +59,27 @@ async function handleDeleteSubject() {
     <div v-if="loading" class="loading">Loading...</div>
     <template v-else>
       <div class="table-card">
-        <table class="subjects-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="subject in subjects" :key="subject.id">
-              <td class="subject-name">{{ subject.name }}</td>
-              <td class="actions">
-                <button class="link-btn danger" @click="deletingSubject = subject">Delete</button>
-              </td>
-            </tr>
-            <tr v-if="subjects.length === 0">
-              <td colspan="2" class="empty">No subjects yet.</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="subjects-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="subject in subjects" :key="subject.id">
+                <td class="subject-name">{{ subject.name }}</td>
+                <td class="actions">
+                  <button class="link-btn danger" @click="deletingSubject = subject">Delete</button>
+                </td>
+              </tr>
+              <tr v-if="subjects.length === 0">
+                <td colspan="2" class="empty">No subjects yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       <p v-if="deleteError" class="delete-error">{{ deleteError }}</p>
 
@@ -117,7 +119,7 @@ async function handleDeleteSubject() {
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
   position: sticky;
   top: -40px;
@@ -230,7 +232,7 @@ async function handleDeleteSubject() {
 }
 
 .create-row > * {
-  min-width: 200px;
+  min-width: min(200px, 100%);
 }
 
 .create-btn {
@@ -258,4 +260,34 @@ async function handleDeleteSubject() {
   opacity: 0.6;
   cursor: default;
 }
+
+/* phones: scroll the table sideways, keep the first column (row identity) pinned */
+.subjects-table th:first-child,
+.subjects-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.subjects-table td:first-child {
+  background: var(--card);
+}
+
+.subjects-table th:first-child {
+  background: var(--cream-2);
+}
+
+@media (max-width: 860px) {
+  .subjects-table th,
+  .subjects-table td {
+    padding: 12px 14px;
+    white-space: nowrap;
+  }
+
+  .subjects-table th:first-child,
+  .subjects-table td:first-child {
+    box-shadow: 1px 0 0 var(--line);
+  }
+}
+
 </style>

@@ -75,35 +75,37 @@ async function handleSubjectsChanged() {
       </div>
 
       <div class="table-card">
-        <table class="users-table">
-          <thead>
-            <tr>
-              <th>Username</th>
-              <th>Full name</th>
-              <th>Role</th>
-              <th>Grade</th>
-              <th>Classes</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="user in filteredUsers" :key="user.id">
-              <td class="user-name">{{ user.username }}</td>
-              <td>{{ user.fullName }}</td>
-              <td>{{ user.role }}</td>
-              <td>{{ user.grade ?? '—' }}</td>
-              <td>{{ user.classNames.length ? user.classNames.join(', ') : '—' }}</td>
-              <td class="actions">
-                <button v-if="user.role === 'Teacher'" class="link-btn" @click="managingTeacher = user">
-                  Manage subjects
-                </button>
-              </td>
-            </tr>
-            <tr v-if="filteredUsers.length === 0">
-              <td colspan="6" class="empty">No users match this filter.</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Full name</th>
+                <th>Role</th>
+                <th>Grade</th>
+                <th>Classes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in filteredUsers" :key="user.id">
+                <td class="user-name">{{ user.username }}</td>
+                <td>{{ user.fullName }}</td>
+                <td>{{ user.role }}</td>
+                <td>{{ user.grade ?? '—' }}</td>
+                <td>{{ user.classNames.length ? user.classNames.join(', ') : '—' }}</td>
+                <td class="actions">
+                  <button v-if="user.role === 'Teacher'" class="link-btn" @click="managingTeacher = user">
+                    Manage subjects
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="filteredUsers.length === 0">
+                <td colspan="6" class="empty">No users match this filter.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </template>
 
@@ -128,7 +130,7 @@ async function handleSubjectsChanged() {
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
   position: sticky;
   top: -40px;
@@ -149,7 +151,7 @@ async function handleSubjectsChanged() {
 }
 
 .filters > * {
-  min-width: 200px;
+  min-width: min(200px, 100%);
 }
 
 .table-card {
@@ -207,4 +209,34 @@ async function handleSubjectsChanged() {
   text-align: center;
   color: var(--muted);
 }
+
+/* phones: scroll the table sideways, keep the first column (row identity) pinned */
+.users-table th:first-child,
+.users-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.users-table td:first-child {
+  background: var(--card);
+}
+
+.users-table th:first-child {
+  background: var(--cream-2);
+}
+
+@media (max-width: 860px) {
+  .users-table th,
+  .users-table td {
+    padding: 12px 14px;
+    white-space: nowrap;
+  }
+
+  .users-table th:first-child,
+  .users-table td:first-child {
+    box-shadow: 1px 0 0 var(--line);
+  }
+}
+
 </style>

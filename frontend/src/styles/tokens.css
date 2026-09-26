@@ -42,4 +42,27 @@
 
   --font-heading: 'Fredoka', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* motion — strong custom curves; UI motion stays under 300ms */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-press: 140ms;
+  --dur-fast: 180ms;
+  --dur-modal: 240ms;
+
+  /* layout */
+  --gutter: 40px;
+  --tap: 44px;
+  --z-topbar: 40;
+  --z-drawer: 60;
+  --z-modal: 100;
+  --z-popover: 200;
+}
+
+/* keep in sync with the 860px breakpoint in AppShell.vue / AuthShell.vue */
+@media (max-width: 860px) {
+  :root {
+    --gutter: 16px;
+  }
 }

@@ -146,7 +146,9 @@ async function submitNewPassword(newPassword: string) {
   margin-top: 12px;
 }
 
-.back-link:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .back-link:hover {
+    text-decoration: underline;
+  }
 }
 </style>

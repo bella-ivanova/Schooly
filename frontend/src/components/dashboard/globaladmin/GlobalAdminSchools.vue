@@ -102,7 +102,7 @@ async function handleCreateSchool() {
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 
@@ -125,7 +125,7 @@ async function handleCreateSchool() {
 
 .school-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
   gap: 16px;
 }
 
@@ -196,5 +196,34 @@ async function handleCreateSchool() {
 .regen-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* one-time stagger on first paint */
+.school-grid > * {
+  animation: rise-in 280ms var(--ease-out) backwards;
+}
+
+.school-grid > :nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.school-grid > :nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.school-grid > :nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.school-grid > :nth-child(5) {
+  animation-delay: 160ms;
+}
+
+.school-grid > :nth-child(6) {
+  animation-delay: 200ms;
+}
+
+.school-grid > :nth-child(n + 7) {
+  animation-delay: 240ms;
 }
 </style>

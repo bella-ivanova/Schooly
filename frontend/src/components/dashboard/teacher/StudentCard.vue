@@ -51,8 +51,10 @@ function avatarClass(id: string): string {
   font-family: inherit;
 }
 
-.student-card:hover {
-  border-color: var(--green-br);
+@media (hover: hover) and (pointer: fine) {
+  .student-card:hover {
+    border-color: var(--green-br);
+  }
 }
 
 .student-info {
@@ -101,4 +103,24 @@ function avatarClass(id: string): string {
 .avatar-5 { background: #F6E3D0; color: #A06B33; }
 .avatar-6 { background: #D3ECE6; color: #2E7566; }
 .avatar-7 { background: #F2DCE0; color: #A15066; }
+
+/* feel: lift on desktop hover, press on every device */
+.student-card {
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .student-card:hover {
+    border-color: var(--green-br);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+}
+
+.student-card:active {
+  transform: scale(0.98);
+}
 </style>

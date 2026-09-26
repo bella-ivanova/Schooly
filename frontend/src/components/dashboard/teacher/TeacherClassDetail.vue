@@ -129,7 +129,7 @@ async function handleRegenerateJoinCode() {
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 
@@ -141,7 +141,7 @@ async function handleRegenerateJoinCode() {
 
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 16px;
 }
 
@@ -211,5 +211,34 @@ async function handleRegenerateJoinCode() {
 .regen-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* one-time stagger on first paint */
+.detail-grid > * {
+  animation: rise-in 280ms var(--ease-out) backwards;
+}
+
+.detail-grid > :nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.detail-grid > :nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.detail-grid > :nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.detail-grid > :nth-child(5) {
+  animation-delay: 160ms;
+}
+
+.detail-grid > :nth-child(6) {
+  animation-delay: 200ms;
+}
+
+.detail-grid > :nth-child(n + 7) {
+  animation-delay: 240ms;
 }
 </style>

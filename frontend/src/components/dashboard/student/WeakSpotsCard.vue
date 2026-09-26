@@ -71,7 +71,9 @@ defineProps<{
   cursor: pointer;
 }
 
-.cta:hover {
-  background: var(--green-deep);
+@media (hover: hover) and (pointer: fine) {
+  .cta:hover {
+    background: var(--green-deep);
+  }
 }
 </style>

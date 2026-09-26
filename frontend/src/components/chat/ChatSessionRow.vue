@@ -75,8 +75,10 @@ function formatDate(iso: string) {
   overflow: hidden;
 }
 
-.session-row:hover {
-  border-color: var(--green-br);
+@media (hover: hover) and (pointer: fine) {
+  .session-row:hover {
+    border-color: var(--green-br);
+  }
 }
 
 .row-main {
@@ -139,9 +141,11 @@ function formatDate(iso: string) {
   cursor: pointer;
 }
 
-.delete-icon-btn:hover {
-  background: var(--cream-2);
-  color: var(--t-lit);
+@media (hover: hover) and (pointer: fine) {
+  .delete-icon-btn:hover {
+    background: var(--cream-2);
+    color: var(--t-lit);
+  }
 }
 
 .delete-icon-btn.confirming {
@@ -152,5 +156,24 @@ function formatDate(iso: string) {
 .delete-icon-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* feel: lift on desktop hover, press on every device */
+.session-row {
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .session-row:hover {
+    border-color: var(--green-br);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+.session-row:active {
+  transform: scale(0.98);
 }
 </style>

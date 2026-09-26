@@ -67,6 +67,9 @@ function handleFileChange(event: Event) {
         type="text"
         class="composer-input"
         placeholder="Ask a question about your homework…"
+        enterkeyhint="send"
+        autocapitalize="sentences"
+        autocomplete="off"
         :disabled="disabled"
         @keydown.enter="handleSend"
       />
@@ -91,6 +94,19 @@ function handleFileChange(event: Event) {
   border: 1px solid var(--line);
   border-radius: var(--r);
   padding: 8px 10px;
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+
+.composer:focus-within {
+  border-color: var(--green-br);
+  box-shadow: 0 0 0 3px rgba(111, 168, 115, 0.18);
+}
+
+.composer-input:focus-visible {
+  outline: none;
 }
 
 .hidden-input {
@@ -143,6 +159,23 @@ function handleFileChange(event: Event) {
 .send-btn:disabled {
   background: var(--muted-2);
   cursor: default;
+}
+
+@media (pointer: coarse) {
+  .composer {
+    padding: 4px 6px;
+    gap: 6px;
+  }
+
+  .attach-btn,
+  .send-btn {
+    width: var(--tap);
+    height: var(--tap);
+  }
+
+  .send-btn {
+    font-size: 18px;
+  }
 }
 
 .composer-hint,

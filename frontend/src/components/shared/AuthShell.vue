@@ -49,7 +49,7 @@ defineProps<{
 
 <style scoped>
 .auth-page {
-  min-height: 100vh;
+  min-height: 100svh;
   display: flex;
   background: var(--bg);
 }
@@ -57,7 +57,7 @@ defineProps<{
 .auth-card {
   display: flex;
   width: 100%;
-  min-height: 100vh;
+  min-height: 100svh;
   background: var(--card);
 }
 
@@ -161,6 +161,7 @@ defineProps<{
   gap: 16px;
   width: 100%;
   max-width: 400px;
+  animation: rise-in 320ms var(--ease-out) backwards;
 }
 
 .mobile-header {
@@ -210,7 +211,7 @@ defineProps<{
   }
 
   .content-panel {
-    padding: 32px 28px;
+    padding: calc(32px + env(safe-area-inset-top, 0px)) 20px calc(32px + env(safe-area-inset-bottom, 0px));
   }
 
   .heading {

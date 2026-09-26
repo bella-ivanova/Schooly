@@ -133,28 +133,30 @@ async function handleReplaced() {
 
     <template v-if="loadedGrade !== null">
       <div class="table-card">
-        <table class="files-table">
-          <thead>
-            <tr>
-              <th>Source file</th>
-              <th>Subject</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in files" :key="row.fileKey">
-              <td class="file-name">{{ row.fileName }}</td>
-              <td>{{ row.subject }}</td>
-              <td class="actions">
-                <button class="link-btn" @click="replacingFile = row">Replace</button>
-                <button class="link-btn danger" @click="deletingFile = row">Delete</button>
-              </td>
-            </tr>
-            <tr v-if="files.length === 0">
-              <td colspan="3" class="empty">No files ingested for grade {{ loadedGrade }} yet.</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="files-table">
+            <thead>
+              <tr>
+                <th>Source file</th>
+                <th>Subject</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in files" :key="row.fileKey">
+                <td class="file-name">{{ row.fileName }}</td>
+                <td>{{ row.subject }}</td>
+                <td class="actions">
+                  <button class="link-btn" @click="replacingFile = row">Replace</button>
+                  <button class="link-btn danger" @click="deletingFile = row">Delete</button>
+                </td>
+              </tr>
+              <tr v-if="files.length === 0">
+                <td colspan="3" class="empty">No files ingested for grade {{ loadedGrade }} yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="table-card code-card">
@@ -228,7 +230,7 @@ async function handleReplaced() {
 .page-title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: clamp(22px, 5.6vw, 28px);
   color: var(--ink);
 }
 
@@ -333,7 +335,7 @@ async function handleReplaced() {
 }
 
 .create-row > * {
-  min-width: 180px;
+  min-width: min(180px, 100%);
 }
 
 .create-btn {
@@ -394,4 +396,34 @@ async function handleReplaced() {
   opacity: 0.6;
   cursor: default;
 }
+
+/* phones: scroll the table sideways, keep the first column (row identity) pinned */
+.files-table th:first-child,
+.files-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.files-table td:first-child {
+  background: var(--card);
+}
+
+.files-table th:first-child {
+  background: var(--cream-2);
+}
+
+@media (max-width: 860px) {
+  .files-table th,
+  .files-table td {
+    padding: 12px 14px;
+    white-space: nowrap;
+  }
+
+  .files-table th:first-child,
+  .files-table td:first-child {
+    box-shadow: 1px 0 0 var(--line);
+  }
+}
+
 </style>

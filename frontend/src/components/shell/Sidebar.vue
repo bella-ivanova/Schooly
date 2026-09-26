@@ -9,6 +9,8 @@ defineProps<{
   navItems: NavItem[]
 }>()
 
+defineEmits<{ close: [] }>()
+
 const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
@@ -39,6 +41,15 @@ function goHome() {
     >
       <SchoolyMark :size="28" variant="solid" />
       <span class="wordmark">Schooly</span>
+      <button
+        type="button"
+        class="drawer-close"
+        aria-label="Close menu"
+        @click.stop="$emit('close')"
+        @keydown.enter.stop
+      >
+        ×
+      </button>
     </div>
 
     <div class="sidebar-scroll">
@@ -168,8 +179,26 @@ a.nav-item {
   cursor: pointer;
 }
 
-a.nav-item:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.08);
+a.nav-item {
+  transition:
+    background-color var(--dur-fast) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  a.nav-item:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .logout-link:hover {
+    color: var(--white);
+    text-decoration: underline;
+  }
+}
+
+a.nav-item:active:not(.active) {
+  background: rgba(255, 255, 255, 0.14);
+  transform: scale(0.98);
 }
 
 .nav-item.primary {
@@ -219,8 +248,54 @@ a.nav-item:hover:not(.active) {
   cursor: pointer;
 }
 
-.logout-link:hover {
-  color: var(--white);
-  text-decoration: underline;
+.drawer-close {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .nav-item {
+    display: flex;
+    align-items: center;
+    min-height: var(--tap);
+    font-size: 15px;
+  }
+
+  .logout-link {
+    min-height: var(--tap);
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 860px) {
+  .sidebar {
+    padding:
+      calc(20px + env(safe-area-inset-top, 0px)) 16px
+      calc(16px + env(safe-area-inset-bottom, 0px))
+      max(16px, env(safe-area-inset-left, 0px));
+    overscroll-behavior: contain;
+  }
+
+  .sidebar-scroll {
+    overscroll-behavior: contain;
+  }
+
+  .drawer-close {
+    display: grid;
+    place-items: center;
+    margin-left: auto;
+    width: var(--tap);
+    height: var(--tap);
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--white);
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .drawer-close:active {
+    background: rgba(255, 255, 255, 0.14);
+  }
 }
 </style>

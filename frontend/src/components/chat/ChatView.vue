@@ -54,10 +54,34 @@ const confirmingDelete = ref(false)
 const deleting = ref(false)
 let confirmDeleteTimeout: ReturnType<typeof setTimeout> | null = null
 
-const messagesEnd = ref<HTMLElement | null>(null)
+const chatBody = ref<HTMLElement | null>(null)
+// Follow the stream only while the reader is already at the bottom — scrolling
+// up to re-read something shouldn't get yanked back down on every token.
+const pinnedToBottom = ref(true)
+const NEAR_BOTTOM_PX = 80
 
-function scrollToBottom() {
-  nextTick(() => messagesEnd.value?.scrollIntoView({ block: 'end' }))
+function handleBodyScroll() {
+  const el = chatBody.value
+  if (!el) return
+  pinnedToBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
+}
+
+function scrollToBottom(force = false) {
+  if (!force && !pinnedToBottom.value) return
+  // Scroll only the message list — scrollIntoView would also scroll every
+  // ancestor (the app shell included), dragging the sidebar out of place.
+  nextTick(() => {
+    const el = chatBody.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}
+
+function jumpToLatest() {
+  pinnedToBottom.value = true
+  const el = chatBody.value
+  if (!el) return
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  el.scrollTo({ top: el.scrollHeight, behavior: reduce ? 'auto' : 'smooth' })
 }
 
 async function initSession(id: number | undefined) {
@@ -93,7 +117,7 @@ async function initSession(id: number | undefined) {
       sessionSubject.value = match.subject
       sessionClassName.value = match.className
     }
-    scrollToBottom()
+    scrollToBottom(true)
   } catch (err) {
     const apiError = err as ApiError
     loadError.value = apiError.messages?.[0] ?? apiError.message ?? 'Could not load this chat.'
@@ -113,7 +137,7 @@ async function sendMessage(text: string) {
   // token/scene update re-renders on its own.
   const assistantMsg = messages.value[messages.value.length - 1]!
   streaming.value = true
-  scrollToBottom()
+  scrollToBottom(true)
 
   try {
     for await (const frame of chatApi.streamChatMessage(text, currentSessionId.value)) {
@@ -226,13 +250,16 @@ async function handleDeleteClick() {
           :disabled="deleting"
           @click="handleDeleteClick"
         >
-          {{ deleting ? 'Deleting…' : confirmingDelete ? 'Click to confirm' : 'Delete chat' }}
+          {{ deleting ? 'Deleting…' : confirmingDelete ? 'Tap to confirm' : 'Delete chat' }}
         </button>
-        <button v-if="showExamButton" type="button" class="exam-btn" @click="goToExams">Generate mock exam ↗</button>
+        <button v-if="showExamButton" type="button" class="exam-btn" @click="goToExams">
+          <span class="label-long">Generate mock exam ↗</span>
+          <span class="label-short">Mock exam ↗</span>
+        </button>
       </div>
     </header>
 
-    <div class="chat-body">
+    <div ref="chatBody" class="chat-body" @scroll.passive="handleBodyScroll">
       <div v-if="loadingHistory" class="state-msg">Loading…</div>
       <div v-else-if="loadError" class="state-msg error">{{ loadError }}</div>
       <template v-else>
@@ -253,11 +280,19 @@ async function handleDeleteClick() {
           :loading-practice-questions="m.loadingPracticeQuestions"
           @request-practice-questions="requestPracticeQuestions(i)"
         />
-        <div ref="messagesEnd" />
       </template>
     </div>
 
     <div class="chat-footer">
+      <button
+        v-if="!pinnedToBottom && messages.length > 0"
+        type="button"
+        class="jump-btn"
+        aria-label="Jump to latest message"
+        @click="jumpToLatest"
+      >
+        ↓
+      </button>
       <AttachedFileChip v-for="f in attachedFiles" :key="f.filename" :filename="f.filename" :chunks="f.chunks" />
       <p v-if="uploadError" class="upload-error">{{ uploadError }}</p>
       <ChatComposer :disabled="streaming" @send="sendMessage" @attach="handleUpload" />
@@ -338,13 +373,19 @@ async function handleDeleteClick() {
   white-space: nowrap;
 }
 
-.exam-btn:hover {
-  border-color: var(--green-br);
+@media (hover: hover) and (pointer: fine) {
+  .exam-btn:hover {
+    border-color: var(--green-br);
+  }
+
+  .delete-btn:hover:not(.confirming) {
+    border-color: var(--t-lit);
+    color: var(--t-lit);
+  }
 }
 
-.delete-btn:hover {
-  border-color: var(--t-lit);
-  color: var(--t-lit);
+.label-short {
+  display: none;
 }
 
 .delete-btn.confirming {
@@ -360,7 +401,9 @@ async function handleDeleteClick() {
 
 .chat-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 4px;
 }
 
@@ -379,10 +422,75 @@ async function handleDeleteClick() {
 }
 
 .chat-footer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-top: 16px;
+}
+
+.jump-btn {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  translate: -50% 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--ink-2);
+  font-size: 16px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  animation: rise-in 200ms var(--ease-out);
+}
+
+@media (max-width: 860px) {
+  .chat-header {
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
+  .chat-title {
+    font-size: 19px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .label-long {
+    display: none;
+  }
+
+  .label-short {
+    display: inline;
+  }
+
+  .exam-btn,
+  .delete-btn {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .chat-footer {
+    padding-top: 10px;
+  }
+}
+
+@media (pointer: coarse) {
+  .exam-btn,
+  .delete-btn {
+    min-height: 40px;
+  }
+
+  .jump-btn {
+    width: var(--tap);
+    height: var(--tap);
+    top: -52px;
+  }
 }
 
 .upload-error {
