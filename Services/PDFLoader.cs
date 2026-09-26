@@ -53,24 +53,6 @@ public static class PDFLoader
         return pages;
     }
 
-    // OCR a full PDF using Pix2Text — best for pages with math formulas.
-    // Returns one PageText per page, 1-indexed, with LaTeX math inline (e.g. "area is $\pi r^2$").
-    public static async Task<List<PageText>> LoadTextWithMathOcrAsync(string pdfPath, MathOcrService mathOcrService)
-    {
-        var pageImages = GetPageImages(pdfPath);
-        var pages = new List<PageText>();
-
-        for (int i = 0; i < pageImages.Count; i++)
-        {
-            Console.Write($"\r  Math OCR page {i + 1}/{pageImages.Count}...");
-            var pageText = await mathOcrService.ReadPageAsync(pageImages[i]);
-            pages.Add(new PageText(i + 1, pageText));
-        }
-
-        Console.WriteLine();
-        return pages;
-    }
-
     // Original PdfPig text extraction — kept as fallback for simple text-only PDFs.
     // Returns one PageText per page, 1-indexed.
     public static List<PageText> LoadText(string pdfPath)
