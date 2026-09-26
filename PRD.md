@@ -240,9 +240,6 @@ If no valid scene can be produced, the `scene` field is `null` in the "done" fra
 **Qdrant returns zero results**
 The LLM is still called, but with an empty context block and the curriculum-restriction system prompt. The expected output is a refusal, not an attempt to answer from training data.
 
-**ZhipuAI unavailable**
-Not applicable currently: `ZhipuAIChatService` is an implemented but unregistered `IChatService` backend — `Program.cs` wires `OllamaChatService` as the only `IChatService`, and there is no automatic runtime failover between the two. Switching backends today requires editing that DI registration and redeploying; if automatic failover is wanted, it needs to be built.
-
 **Message exceeding LLM context window**
 Long messages are truncated or chunked before submission. The system must not crash or return a 500; it should truncate with a warning log.
 
@@ -314,4 +311,3 @@ The following security controls are in place as of the initial web conversion. F
 
 **Service registration**
 - `RAGService` must be Scoped — its instance fields are per-user state
-- `VisualisationService` is CLI-only and must never be exposed via HTTP
