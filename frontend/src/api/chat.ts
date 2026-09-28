@@ -72,9 +72,10 @@ export function getSceneHtml(scene: string): Promise<string> {
 }
 
 /** Multipart upload — can't use apiFetch, which forces Content-Type: application/json whenever a body is set. */
-export async function uploadChatFile(file: File): Promise<ChatUploadResponse> {
+export async function uploadChatFile(file: File, sessionId?: number): Promise<ChatUploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
+  if (sessionId != null) formData.append('sessionId', String(sessionId))
 
   const response = await fetch(`${API_BASE_URL}/api/chat/upload`, {
     method: 'POST',

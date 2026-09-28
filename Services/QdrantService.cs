@@ -13,6 +13,9 @@ public class QdrantService
     // The name of the collection inside Qdrant — like a table in a database.
     private const string CollectionName = "studyassist";
 
+    // PDFs a user attaches to one chat session (see RAGService.AddSessionPdfAsync).
+    private const string UploadsCollectionName = "chat_uploads";
+
     public QdrantService(string host = "localhost", int port = 6334)
     {
         _client = new QdrantClient(host, port);
@@ -140,6 +143,91 @@ public class QdrantService
         }
 
         return files.ToList();
+    }
+
+    // ── Chat-session PDF uploads ─────────────────────────────────────────────
+    // Kept in their own collection so they never show up in curriculum grade
+    // searches, GetIngestedFilesAsync, or reingest-grade.
+
+    public async Task EnsureUploadsCollectionAsync(uint vectorSize = 768)
+    {
+        var collections = await _client.ListCollectionsAsync();
+        if (!collections.Any(c => c == UploadsCollectionName))
+        {
+            await _client.CreateCollectionAsync(UploadsCollectionName,
+                new VectorParams { Size = vectorSize, Distance = Distance.Cosine });
+            Console.WriteLine($"Created Qdrant collection '{UploadsCollectionName}'.");
+        }
+    }
+
+    public async Task UpsertSessionUploadAsync(
+        string userId, int sessionId, string fileName, List<(string Text, float[] Embedding, int Page)> chunks)
+    {
+        if (chunks.Count == 0) return;
+
+        var points = new List<PointStruct>();
+        foreach (var chunk in chunks)
+        {
+            var dense = new DenseVector();
+            dense.Data.AddRange(chunk.Embedding);
+
+            var point = new PointStruct
+            {
+                Id      = new PointId { Uuid = Guid.NewGuid().ToString() },
+                Vectors = new Vectors { Vector = new Vector { Dense = dense } },
+            };
+
+            point.Payload["userId"]    = userId;
+            point.Payload["sessionId"] = sessionId;
+            point.Payload["fileName"]  = fileName;
+            point.Payload["text"]      = chunk.Text;
+            point.Payload["page"]      = chunk.Page;
+
+            points.Add(point);
+        }
+
+        await _client.UpsertAsync(UploadsCollectionName, points);
+    }
+
+    public async Task<List<SearchResult>> SearchSessionUploadsAsync(
+        float[] queryEmbedding, string userId, int sessionId, int topK = 5, float minScore = 0.1f)
+    {
+        var collections = await _client.ListCollectionsAsync();
+        if (!collections.Any(c => c == UploadsCollectionName))
+            return new List<SearchResult>();
+
+        var results = await _client.SearchAsync(
+            UploadsCollectionName,
+            queryEmbedding,
+            filter:          SessionFilter(userId, sessionId),
+            limit:           (ulong)topK,
+            scoreThreshold:  minScore,
+            payloadSelector: true
+        );
+
+        return results.Select(r => new SearchResult
+        {
+            Text       = r.Payload["text"].StringValue,
+            SourceFile = r.Payload["fileName"].StringValue,
+            Page       = (int)r.Payload["page"].IntegerValue,
+            Score      = r.Score
+        }).ToList();
+    }
+
+    public async Task DeleteSessionUploadsAsync(string userId, int sessionId)
+    {
+        var collections = await _client.ListCollectionsAsync();
+        if (!collections.Any(c => c == UploadsCollectionName)) return;
+
+        await _client.DeleteAsync(UploadsCollectionName, SessionFilter(userId, sessionId));
+    }
+
+    private static Filter SessionFilter(string userId, int sessionId)
+    {
+        var filter = new Filter();
+        filter.Must.Add(Conditions.MatchKeyword("userId", userId));
+        filter.Must.Add(Conditions.Match("sessionId", (long)sessionId));
+        return filter;
     }
 }
 

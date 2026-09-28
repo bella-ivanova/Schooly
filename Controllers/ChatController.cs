@@ -105,6 +105,7 @@ public class ChatController : ControllerBase
         var isFirstExchange = session.Title == null;
 
         _rag.SetGrade(grade);
+        _rag.SetSession(userId, session.Id);
         var priorTurns = await _chatSessions.GetRecentTurnsAsync(session.Id);
         _rag.SeedHistory(priorTurns);
 
@@ -265,6 +266,18 @@ public class ChatController : ControllerBase
         var userId = User.FindFirstValue("sub") ?? "";
         var deleted = await _chatSessions.DeleteAsync(id, userId);
         if (!deleted) return NotFound(new { error = "Session not found" });
+
+        // The session is already gone; leftover upload chunks are unreachable, so a Qdrant
+        // failure here is logged rather than failing the delete.
+        try
+        {
+            await _rag.DeleteSessionUploadsAsync(userId, id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not delete uploaded PDF chunks for session {SessionId}", id);
+        }
+
         return Ok();
     }
 
@@ -279,23 +292,42 @@ public class ChatController : ControllerBase
         return Ok(new { html });
     }
 
-    // POST /api/chat/upload
-    // Ingests a PDF into the session-scoped temporary vector store.
-    // Subsequent /api/chat/message calls in the same session include this content.
+    // POST /api/chat/upload  (multipart: file, optional sessionId)
+    // Stores a PDF's chunks in Qdrant against one chat session; later /api/chat/message
+    // calls with that sessionId retrieve from it. With no sessionId, a new session is
+    // created (a PDF attached before a new chat's first message). Returns { chunks, sessionId }.
     [HttpPost("upload")]
     [Authorize]
     [RequestSizeLimit(52_428_800)] // 50 MB
-    public async Task<IActionResult> UploadPdf(IFormFile file)
+    public async Task<IActionResult> UploadPdf(IFormFile file, [FromForm] int? sessionId)
     {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        if (_rateLimiter.IsGeneralApiThrottled(ip, out _))
+            return StatusCode(429, new { error = "Too many requests" });
+
         if (file == null || file.Length == 0)
             return BadRequest(new { error = "No file provided." });
 
         if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { error = "Only PDF files are accepted." });
 
-        var gradeStr = User.FindFirstValue("grade") ?? "0";
-        var grade    = int.TryParse(gradeStr, out var g) ? g : 0;
-        _rag.SetGrade(grade);
+        var userId = User.FindFirstValue("sub") ?? "";
+
+        ChatSession? session;
+        if (sessionId is int sid)
+        {
+            session = await _chatSessions.GetOwnedAsync(sid, userId);
+            if (session == null) return NotFound(new { error = "Session not found" });
+        }
+        else
+        {
+            session = await _chatSessions.CreateAsync(userId);
+        }
+
+        // A session created just for this upload is removed again if the upload fails,
+        // so a failed attach doesn't leave an empty chat in the sidebar.
+        var createdSession = sessionId is null;
+        var stored = false;
 
         var tempPath = Path.GetTempFileName() + ".pdf";
         try
@@ -303,15 +335,19 @@ public class ChatController : ControllerBase
             await using (var fs = System.IO.File.Create(tempPath))
                 await file.CopyToAsync(fs);
 
-            var chunkCount = await _rag.AddTemporaryPDFAsync(tempPath);
+            var chunkCount = await _rag.AddSessionPdfAsync(tempPath, Path.GetFileName(file.FileName), userId, session.Id);
 
             if (chunkCount == 0)
                 return BadRequest(new { error = "Could not extract text from the uploaded PDF. The file may be image-only or corrupted." });
 
-            return Ok(new { chunks = chunkCount });
+            stored = true;
+            return Ok(new { chunks = chunkCount, sessionId = session.Id });
         }
         finally
         {
+            if (createdSession && !stored)
+                await _chatSessions.DeleteAsync(session.Id, userId);
+
             if (System.IO.File.Exists(tempPath))
                 System.IO.File.Delete(tempPath);
         }

@@ -86,8 +86,9 @@ function jumpToLatest() {
 
 async function initSession(id: number | undefined) {
   // Already have this session's data locally (e.g. we just streamed the first
-  // exchange and updated the URL ourselves) — skip the redundant refetch.
-  if (id === currentSessionId.value && messages.value.length > 0) return
+  // exchange, or a PDF upload created the session, and updated the URL ourselves)
+  // — skip the redundant refetch.
+  if (id === currentSessionId.value && (messages.value.length > 0 || attachedFiles.value.length > 0)) return
 
   messages.value = []
   currentSessionId.value = id
@@ -195,8 +196,14 @@ async function requestPracticeQuestions(index: number) {
 async function handleUpload(file: File) {
   uploadError.value = null
   try {
-    const res = await chatApi.uploadChatFile(file)
+    const res = await chatApi.uploadChatFile(file, currentSessionId.value)
     attachedFiles.value.push({ filename: file.name, chunks: res.chunks })
+    // Uploading into a brand-new chat creates its session server-side; adopt it so the
+    // next message goes to the session the PDF belongs to.
+    if (currentSessionId.value == null) {
+      currentSessionId.value = res.sessionId
+      router.replace(`${props.basePath}/${res.sessionId}`)
+    }
   } catch (err) {
     const apiError = err as ApiError
     uploadError.value = apiError.messages?.[0] ?? apiError.message ?? 'Could not upload file.'

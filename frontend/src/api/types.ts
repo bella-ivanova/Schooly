@@ -108,6 +108,8 @@ export interface ChatSessionMessage {
 
 export interface ChatUploadResponse {
   chunks: number
+  /** The session the PDF was stored against — newly created if none was sent. */
+  sessionId: number
 }
 
 export interface SceneHtmlResponse {

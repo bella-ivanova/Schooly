@@ -3,7 +3,8 @@ using System.Text.Json;
 namespace StudyAssistant.Services;
 
 // IMPORTANT: Register as Scoped, never Singleton.
-// _currentGrade and _temporaryChunks are per-user state; a Singleton would share them across all users.
+// _currentGrade and the upload session (_uploadUserId/_uploadSessionId) are per-request state;
+// a Singleton would share them across all users.
 // When wiring HTTP endpoints, always set _currentGrade from the authenticated user's JWT claims.
 public class RAGService
 {
@@ -20,11 +21,12 @@ public class RAGService
     private readonly StemPipelineOptions _stemOptions;
     private readonly ILogger<RAGService> _logger;
 
-    // In-memory store for temporary PDFs loaded during the current chat session only.
-    // These are never saved to Qdrant — they disappear when the session ends.
-    private readonly List<(string Text, float[] Embedding, string Subject)> _temporaryChunks = new();
-
+    // 0 = no grade (teachers, admins): retrieval searches every grade.
     private int _currentGrade = 0;
+
+    // Chat session whose uploaded PDFs are searched alongside the curriculum. Unset outside chat.
+    private string? _uploadUserId;
+    private int? _uploadSessionId;
 
     // Set by AskStreamAsync once stereometry classification has finished: true means a
     // <STEREO> scene will be generated and appended after the answer. null until known.
@@ -58,6 +60,13 @@ public class RAGService
     {
         _currentGrade = grade;
         Console.WriteLine($"Grade set to {grade}.");
+    }
+
+    // Makes GetContextAsync also search the PDFs uploaded to this chat session.
+    public void SetSession(string userId, int sessionId)
+    {
+        _uploadUserId    = userId;
+        _uploadSessionId = sessionId;
     }
 
     // Seeds prior conversation turns into the underlying chat service before the next
@@ -204,22 +213,28 @@ public class RAGService
         return (true, null, chunkCount);
     }
 
-    // Adds a PDF temporarily for the current chat session only (not saved to Qdrant).
-    public async Task<int> AddTemporaryPDFAsync(string pdfPath, string subject = "")
+    // Stores a PDF the user attached to one chat session. Its chunks live in Qdrant's
+    // chat_uploads collection, so later requests in the same session can retrieve them,
+    // and are removed by DeleteSessionUploadsAsync when the session is deleted.
+    public async Task<int> AddSessionPdfAsync(string pdfPath, string fileName, string userId, int sessionId)
     {
         var pages = PDFLoader.LoadText(pdfPath);
         var chunks = PDFLoader.ChunkPages(pages);
+        if (chunks.Count == 0) return 0;
+
         var embeddings = await _embeddingService.GetDocumentEmbeddingsAsync(chunks.Select(c => c.Text).ToList());
 
-        for (int i = 0; i < chunks.Count; i++)
-            _temporaryChunks.Add((chunks[i].Text, embeddings[i], subject));
+        await _qdrant.EnsureUploadsCollectionAsync();
+        await _qdrant.UpsertSessionUploadAsync(userId, sessionId, fileName,
+            chunks.Select((c, i) => (c.Text, embeddings[i], c.PageNumber)).ToList());
 
-        var label = string.IsNullOrWhiteSpace(subject) ? "" : $" [{subject}]";
-        Console.WriteLine($"Loaded '{Path.GetFileName(pdfPath)}'{label} temporarily — {chunks.Count} chunks.");
+        _logger.LogInformation("Stored '{FileName}' for chat session {SessionId} — {Count} chunks.",
+            fileName, sessionId, chunks.Count);
         return chunks.Count;
     }
 
-    public void ClearTemporaryChunks() => _temporaryChunks.Clear();
+    public Task DeleteSessionUploadsAsync(string userId, int sessionId) =>
+        _qdrant.DeleteSessionUploadsAsync(userId, sessionId);
 
     // Returns the list of ingested file keys for a given grade from Qdrant.
     public async Task<List<string>> GetIngestedFilesAsync(int grade) =>
@@ -240,61 +255,50 @@ public class RAGService
         return true;
     }
 
-    // Returns the raw formatted context string for a query (embedding + Qdrant + temp chunks).
+    // Returns the raw formatted context string for a query (curriculum + this chat session's uploads).
     // Returns empty string if nothing is found or Qdrant is unreachable.
     private async Task<string> GetContextAsync(string query)
     {
-        if (_currentGrade == 0 && _temporaryChunks.Count == 0)
-            return "";
-
         var qEmbeddingList = await _embeddingService.GetQueryEmbeddingsAsync(new List<string> { query });
         if (qEmbeddingList.Count == 0) return "";
         var queryEmbedding = qEmbeddingList[0];
 
-        var combinedChunks = new List<(string Text, string Subject, int Grade)>();
+        var combinedChunks = new List<(string Label, string Text)>();
 
-        if (_currentGrade > 0)
+        try
         {
-            try
+            // No grade (teachers, admins) searches every grade; students see grades 1 → N.
+            var qdrantResults = await _qdrant.SearchAsync(
+                queryEmbedding,
+                topK:        10,
+                minScore:    0.1f,
+                gradeFilter: _currentGrade > 0 ? _currentGrade : null
+            );
+            foreach (var r in qdrantResults)
             {
-                var qdrantResults = await _qdrant.SearchAsync(
-                    queryEmbedding,
-                    topK:        10,
-                    minScore:    0.1f,
-                    gradeFilter: _currentGrade
-                );
-                foreach (var r in qdrantResults)
-                    combinedChunks.Add((r.Text, r.Subject, r.Grade));
+                var label = $"[Grade {r.Grade}";
+                if (!string.IsNullOrWhiteSpace(r.Subject)) label += $" / {r.Subject}";
+                combinedChunks.Add((label + "]", r.Text));
             }
-            catch (Exception ex) when (ex.Message.Contains("Connection refused") || ex.Message.Contains("Unavailable"))
+
+            if (_uploadUserId is not null && _uploadSessionId is int sessionId)
             {
-                Console.WriteLine("\n[Qdrant is not running — answering without textbook context.]");
-                Console.WriteLine("Start it with: docker-compose up qdrant\n");
-                return "";
+                var uploadResults = await _qdrant.SearchSessionUploadsAsync(queryEmbedding, _uploadUserId, sessionId);
+                foreach (var r in uploadResults)
+                    combinedChunks.Add(($"[Uploaded file / {r.SourceFile}]", r.Text));
             }
         }
-
-        if (_temporaryChunks.Count > 0)
+        catch (Exception ex) when (ex.Message.Contains("Connection refused") || ex.Message.Contains("Unavailable"))
         {
-            var tempResults = _temporaryChunks
-                .Select(x => new { x.Text, x.Subject, Score = CosineSimilarity(queryEmbedding, x.Embedding) })
-                .Where(x => x.Score >= 0.1f)
-                .OrderByDescending(x => x.Score)
-                .Take(5)
-                .Select(x => (x.Text, x.Subject, Grade: _currentGrade));
-            combinedChunks.AddRange(tempResults);
+            Console.WriteLine("\n[Qdrant is not running — answering without textbook context.]");
+            Console.WriteLine("Start it with: docker-compose up qdrant\n");
+            return "";
         }
 
         if (combinedChunks.Count == 0)
             return "";
 
-        var formattedChunks = combinedChunks.Select(c =>
-        {
-            var label = $"[Grade {c.Grade}";
-            if (!string.IsNullOrWhiteSpace(c.Subject)) label += $" / {c.Subject}";
-            label += "]";
-            return $"{label}\n{c.Text}";
-        });
+        var formattedChunks = combinedChunks.Select(c => $"{c.Label}\n{c.Text}");
 
         return string.Join("\n\n", formattedChunks);
     }
@@ -333,7 +337,7 @@ public class RAGService
         if (string.IsNullOrEmpty(context))
             return await Send(question, null);
 
-        var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
+        var gradeSentence = _currentGrade > 0 ? $"The student is in Grade {_currentGrade}." : "The user has no grade level set (they may be a teacher).";
         var languageName = _languageDetector.DetectLanguageName(question);
         var languageInstruction = languageName is not null
             ? $"Respond entirely in {languageName}."
@@ -341,7 +345,7 @@ public class RAGService
 
         // System-role: all tutor persona and behavior rules (student cannot override these).
         var systemOverride =
-            $"You are a school tutor. The student is in {gradeLabel}. The textbook excerpts below are from their curriculum (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
+            $"You are a school tutor. {gradeSentence} The textbook excerpts below are from their curriculum (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
             "Each excerpt is labeled with its grade and subject. A unit title may differ from what the student calls the topic — e.g. 'Solving Triangles' covers trigonometry.\n" +
             "IMPORTANT: Base your answer strictly on what is present in the excerpts. Do NOT say a topic is absent unless no related content appears in the excerpts.\n" +
             "Identify the relevant excerpt, then apply its definitions, formulas, and methods step by step.\n" +
@@ -415,13 +419,13 @@ public class RAGService
     // non-STEM questions and the STEM pipeline's total-failure safety net below.
     private async IAsyncEnumerable<string> AskGenericStreamAsync(string question, string context, string? languageName, bool isStereometry)
     {
-        var gradeLabel = _currentGrade > 0 ? $"Grade {_currentGrade}" : "the student's current grade";
+        var gradeSentence = _currentGrade > 0 ? $"The student is in Grade {_currentGrade}." : "The user has no grade level set (they may be a teacher).";
         var languageInstruction = languageName is not null
             ? $"Respond entirely in {languageName}."
             : "Respond in the same language the student used in their question.";
 
         var sysOverride =
-            $"You are a school tutor. The student is in {gradeLabel}. The textbook excerpts below are from their curriculum (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
+            $"You are a school tutor. {gradeSentence} The textbook excerpts below are from their curriculum (content may span multiple grade levels and may be in a different language — translate as needed).\n" +
             "Each excerpt is labeled with its grade and subject. A unit title may differ from what the student calls the topic — e.g. 'Solving Triangles' covers trigonometry.\n" +
             "IMPORTANT: Base your answer strictly on what is present in the excerpts. Do NOT say a topic is absent unless no related content appears in the excerpts.\n" +
             "Identify the relevant excerpt, then apply its definitions, formulas, and methods step by step.\n" +
@@ -622,20 +626,5 @@ public class RAGService
         }
 
         return (null, null);
-    }
-
-    // Used locally for temporary chunk similarity (Qdrant handles this for permanent chunks)
-    private static float CosineSimilarity(float[] a, float[] b)
-    {
-        if (a.Length != b.Length) return 0;
-        float dot = 0, normA = 0, normB = 0;
-        for (int i = 0; i < a.Length; i++)
-        {
-            dot   += a[i] * b[i];
-            normA += a[i] * a[i];
-            normB += b[i] * b[i];
-        }
-        if (normA == 0 || normB == 0) return 0;
-        return dot / (MathF.Sqrt(normA) * MathF.Sqrt(normB));
     }
 }

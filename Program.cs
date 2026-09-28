@@ -140,7 +140,7 @@ builder.Services.AddScoped<StereometryClassifier>();
 builder.Services.AddScoped<StemAnswerPipelineService>();
 builder.Services.AddScoped<StereoModelGenerationService>();
 builder.Services.AddSingleton(new StemPipelineOptions(stemDirectAnswer));
-// RAGService must be Scoped — _currentGrade and _temporaryChunks are per-request state.
+// RAGService must be Scoped — _currentGrade and the upload session are per-request state.
 builder.Services.AddScoped<RAGService>();
 builder.Services.AddScoped<SubjectResolutionService>();
 builder.Services.AddScoped<ChatLogService>();
