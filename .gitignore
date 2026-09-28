@@ -4,6 +4,7 @@ obj/
 .qdrant-initialized
 appsettings.Local.json
 storage/
+snapshots/
 frontend/node_modules/
 frontend/dist/
 frontend/.env.local
